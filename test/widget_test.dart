@@ -29,7 +29,6 @@ void main() {
           body: SubtopicNodeWidget(
             subtopic: subtopic,
             status: ProgressStatus.notStarted,
-            branchColor: Colors.blue,
           ),
         ),
       ),

@@ -229,6 +229,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                                 units: units,
                                 subtopicsByUnit: _subtopicsByUnit,
                                 expandedUnitIds: _expandedUnitIds,
+                                subtopicStatus: subtopicStatus,
                               ),
                             ),
                           ),
@@ -300,7 +301,6 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
             child: SubtopicNodeWidget(
               subtopic: subtopic,
               status: status,
-              branchColor: unit.color,
             ),
           ),
         );
@@ -411,12 +411,14 @@ class _MindmapEdgePainter extends CustomPainter {
     required this.units,
     required this.subtopicsByUnit,
     required this.expandedUnitIds,
+    required this.subtopicStatus,
   });
 
   final Map<String, Offset> positions;
   final List<Unit> units;
   final Map<String, List<Subtopic>> subtopicsByUnit;
   final Set<String> expandedUnitIds;
+  final Map<String, ProgressStatus> subtopicStatus;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -426,13 +428,16 @@ class _MindmapEdgePainter extends CustomPainter {
     for (final unit in units) {
       final unitPos = positions[unit.id];
       if (unitPos == null) continue;
-      _drawCurve(canvas, rootPos, unitPos, unit.color, 4);
+      final subtopicIds = (subtopicsByUnit[unit.id] ?? const []).map((s) => s.id);
+      final unitStatus = aggregateUnitStatus(subtopicIds, subtopicStatus);
+      _drawCurve(canvas, rootPos, unitPos, unitStatus.color, 4);
 
       if (!expandedUnitIds.contains(unit.id)) continue;
       for (final subtopic in subtopicsByUnit[unit.id] ?? const <Subtopic>[]) {
         final subPos = positions[subtopic.id];
         if (subPos == null) continue;
-        _drawCurve(canvas, unitPos, subPos, unit.color.withValues(alpha: 0.6), 2.25);
+        final status = subtopicStatus[subtopic.id] ?? ProgressStatus.notStarted;
+        _drawCurve(canvas, unitPos, subPos, status.color, 2.25);
       }
     }
   }

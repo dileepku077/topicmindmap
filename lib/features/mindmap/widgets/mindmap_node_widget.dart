@@ -36,11 +36,12 @@ class RootNodeWidget extends StatelessWidget {
 }
 
 /// A unit ("branch") node — one of the high-level groups shown up front.
-/// Its fill color is the aggregated practice-test status of every subtopic
-/// underneath it: green once the whole unit is mastered, yellow/red while
-/// still developing or needing practice, grey until attempted. [unit.color]
-/// — the same hue used for this branch's connection lines — survives as a
-/// border so the box still reads as "part of this branch" at a glance.
+/// Every color on this box — fill, border, badge, connecting lines — comes
+/// from a single traffic-signal palette (grey/orange/yellow/light-green/
+/// green) driven by the aggregated practice-test status of every subtopic
+/// underneath it. Deliberately not tinted by the unit's own identity color
+/// anymore: one color channel, not two, keeps "how am I doing on this"
+/// unambiguous at a glance.
 class UnitNodeWidget extends StatelessWidget {
   const UnitNodeWidget({
     super.key,
@@ -57,16 +58,17 @@ class UnitNodeWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final borderColor = Color.lerp(status.color, Colors.black, 0.25)!;
     return Container(
       constraints: const BoxConstraints(maxWidth: 160),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: status.color,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: unit.color, width: 2.5),
+        border: Border.all(color: borderColor, width: 2),
         boxShadow: [
           BoxShadow(
-            color: unit.color.withValues(alpha: 0.3),
+            color: status.color.withValues(alpha: 0.35),
             blurRadius: 8,
             offset: const Offset(0, 3),
           ),
@@ -88,7 +90,7 @@ class UnitNodeWidget extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 6),
-          _CountBadge(count: subtopicCount, color: unit.color),
+          _CountBadge(count: subtopicCount, color: status.color),
           const SizedBox(width: 3),
           Icon(
             collapsed ? Icons.chevron_right : Icons.expand_more,
@@ -127,22 +129,19 @@ class _CountBadge extends StatelessWidget {
   }
 }
 
-/// A subtopic node, revealed once its parent unit is expanded. The border
-/// and status icon reflect this subtopic's own best practice-test score;
-/// [branchColor] (the parent unit's color) tints the background faintly so
-/// it still visually belongs to its branch even though the connecting line
-/// itself carries that color.
+/// A subtopic node, revealed once its parent unit is expanded. Border and
+/// status icon reflect this subtopic's own best practice-test score, on a
+/// plain (untinted) background — the traffic-signal color is the only
+/// color story here too.
 class SubtopicNodeWidget extends StatelessWidget {
   const SubtopicNodeWidget({
     super.key,
     required this.subtopic,
     required this.status,
-    required this.branchColor,
   });
 
   final Subtopic subtopic;
   final ProgressStatus status;
-  final Color branchColor;
 
   @override
   Widget build(BuildContext context) {
@@ -150,10 +149,7 @@ class SubtopicNodeWidget extends StatelessWidget {
       constraints: const BoxConstraints(maxWidth: 140),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Color.alphaBlend(
-          branchColor.withValues(alpha: 0.06),
-          Theme.of(context).colorScheme.surface,
-        ),
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(11),
         border: Border.all(color: status.color, width: 1.5),
         boxShadow: [
