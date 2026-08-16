@@ -59,6 +59,34 @@ $videoHtml
     new ResizeObserver(reportHeight).observe(root);
   }
 
+  // The video starts as a plain thumbnail (not a live iframe) so wheel
+  // input over it still bubbles to the listener below — a real YouTube
+  // iframe is its own cross-origin browsing context, so wheel events over
+  // *that* can never reach us to forward on. Only swap in the real
+  // (scroll-swallowing) iframe once the student explicitly asks to play it.
+  var videoEmbed = document.querySelector('.video-embed[data-video-id]');
+  if (videoEmbed) {
+    videoEmbed.addEventListener('click', function () {
+      var id = videoEmbed.getAttribute('data-video-id');
+      var title = videoEmbed.getAttribute('data-video-title') || 'Video';
+      var iframe = document.createElement('iframe');
+      iframe.src = 'https://www.youtube-nocookie.com/embed/' + id + '?autoplay=1';
+      iframe.title = title;
+      iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+      iframe.allowFullscreen = true;
+      iframe.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;';
+      videoEmbed.textContent = '';
+      videoEmbed.appendChild(iframe);
+      videoEmbed.classList.add('playing');
+    }, { once: true });
+    videoEmbed.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        videoEmbed.click();
+      }
+    });
+  }
+
   // This iframe's own document never scrolls internally (its height
   // always matches its content), so wheel/trackpad input over it would
   // otherwise just vanish instead of scrolling the lesson page. Forward
@@ -108,8 +136,10 @@ String? _youtubeId(String url) {
   return uri.queryParameters['v'];
 }
 
-/// Renders the end-of-lesson "go deeper" card: an embedded, privacy-mode
-/// YouTube player plus a fallback link. Returns an empty string (nothing
+/// Renders the end-of-lesson "go deeper" card: a click-to-play YouTube
+/// thumbnail (see the click handler in buildLessonHtml's script — it swaps
+/// in the real player only once clicked, so an idle video never swallows
+/// scroll input) plus a fallback link. Returns an empty string (nothing
 /// rendered) when [url] is null or isn't a recognizable YouTube link.
 String _buildVideoCard({required String? title, required String? url, required String? source}) {
   if (title == null || url == null) return '';
@@ -118,19 +148,18 @@ String _buildVideoCard({required String? title, required String? url, required S
 
   final safeTitle = _htmlEscape(title);
   final safeSource = source != null ? _htmlEscape(source) : null;
-  final embedSrc = 'https://www.youtube-nocookie.com/embed/$id';
+  final thumbUrl = 'https://img.youtube.com/vi/$id/hqdefault.jpg';
 
   return '''
 <div class="video-card">
   <div class="video-label">Go deeper</div>
-  <div class="video-embed">
-    <iframe
-      src="$embedSrc"
-      title="$safeTitle"
-      loading="lazy"
-      allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-      allowfullscreen
-    ></iframe>
+  <div class="video-embed" data-video-id="$id" data-video-title="$safeTitle" style="background-image:url('$thumbUrl')" role="button" tabindex="0" aria-label="Play video: $safeTitle">
+    <button class="video-play" type="button" tabindex="-1" aria-hidden="true">
+      <svg viewBox="0 0 68 48" width="100%" height="100%">
+        <path d="M66.5,7.7c-0.8-2.9-2.4-5.4-4.7-6.9C58.5-0.9,34,0,34,0S9.5-0.9,6.2,0.8C3.9,2.3,2.3,4.8,1.5,7.7C0,13.2,0,24,0,24s0,10.8,1.5,16.3c0.8,2.9,2.4,5.4,4.7,6.9C9.5,48.9,34,48,34,48s24.5,0.9,27.8-0.8c2.3-1.5,3.9-4,4.7-6.9C68,34.8,68,24,68,24S68,13.2,66.5,7.7z" fill="#1b1b1b" fill-opacity="0.82"/>
+        <path d="M 45,24 27,14 27,34" fill="#fff"/>
+      </svg>
+    </button>
   </div>
   <div class="video-title">$safeTitle</div>
   <a class="video-link" href="$url" target="_blank" rel="noopener noreferrer">
@@ -258,34 +287,36 @@ const _lessonCss = '''
   ::selection { background: rgba(var(--accent-rgb), 0.3); }
 
   .diagram {
-    margin: 1.2em 0;
-    padding: 14px;
+    max-width: 380px;
+    margin: 1.2em auto;
+    padding: 10px;
     border: 1px solid var(--border);
     border-radius: 10px;
     background: var(--surface);
   }
   .diagram svg { display: block; width: 100%; height: auto; }
   .diagram-caption {
-    margin-top: 8px;
-    font-size: 0.85rem;
+    margin-top: 6px;
+    font-size: 0.78rem;
     color: var(--text-2);
     text-align: center;
   }
 
   .video-card {
-    margin: 2em 0 0.5em;
-    padding: 16px;
+    max-width: 380px;
+    margin: 2em auto 0.5em;
+    padding: 12px;
     border: 1px solid var(--border);
     border-radius: 12px;
     background: rgba(var(--accent-rgb), 0.05);
   }
   .video-label {
-    font-size: 0.72rem;
+    font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--accent);
     font-weight: 700;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
   }
   .video-embed {
     position: relative;
@@ -293,7 +324,12 @@ const _lessonCss = '''
     padding-bottom: 56.25%;
     border-radius: 8px;
     overflow: hidden;
-    background: #000;
+    background: #000 center / cover no-repeat;
+    cursor: pointer;
+  }
+  .video-embed[data-video-id]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
   }
   .video-embed iframe {
     position: absolute;
@@ -302,15 +338,31 @@ const _lessonCss = '''
     height: 100%;
     border: 0;
   }
+  .video-play {
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    width: 25%;
+    min-width: 40px;
+    max-width: 68px;
+    aspect-ratio: 68 / 48;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    transition: transform 0.15s ease;
+  }
+  .video-embed:hover .video-play { transform: scale(1.08); }
   .video-title {
-    margin-top: 12px;
+    margin-top: 10px;
+    font-size: 0.92rem;
     font-weight: 600;
     color: var(--text);
   }
   .video-link {
     display: inline-block;
     margin-top: 4px;
-    font-size: 0.88rem;
+    font-size: 0.82rem;
     color: var(--accent);
     text-decoration: none;
   }
