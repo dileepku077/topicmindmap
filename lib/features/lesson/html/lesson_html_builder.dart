@@ -42,6 +42,22 @@ $bodyHtml
   if (window.ResizeObserver) {
     new ResizeObserver(reportHeight).observe(root);
   }
+
+  // This iframe's own document never scrolls internally (its height
+  // always matches its content), so wheel/trackpad input over it would
+  // otherwise just vanish instead of scrolling the lesson page. Forward
+  // it to the parent Flutter page so it can move the outer scroll view.
+  window.addEventListener('wheel', function (e) {
+    window.parent.postMessage(
+      JSON.stringify({
+        type: 'lesson-html-scroll',
+        frameId: ${_jsString(frameId)},
+        deltaY: e.deltaY,
+        deltaX: e.deltaX,
+      }),
+      '*'
+    );
+  }, { passive: true });
 })();
 </script>
 </body>

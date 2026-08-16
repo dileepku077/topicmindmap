@@ -60,11 +60,27 @@ class _HtmlLessonViewState extends State<HtmlLessonView> {
       if (raw is! String) return;
       final data = jsonDecode(raw);
       if (data is! Map) return;
-      if (data['type'] != 'lesson-html-height') return;
       if (data['frameId'] != widget.frameId) return;
-      final newHeight = (data['height'] as num).toDouble();
-      if (mounted && (newHeight - _height).abs() > 0.5) {
-        setState(() => _height = newHeight);
+      if (!mounted) return;
+
+      switch (data['type']) {
+        case 'lesson-html-height':
+          final newHeight = (data['height'] as num).toDouble();
+          if ((newHeight - _height).abs() > 0.5) {
+            setState(() => _height = newHeight);
+          }
+        case 'lesson-html-scroll':
+          // The iframe's own document never scrolls internally, so wheel
+          // input over it would otherwise be swallowed instead of moving
+          // the lesson page — drive the enclosing Scrollable by hand.
+          final position = Scrollable.maybeOf(context)?.position;
+          if (position == null) return;
+          final deltaY = (data['deltaY'] as num).toDouble();
+          final target = (position.pixels + deltaY).clamp(
+            position.minScrollExtent,
+            position.maxScrollExtent,
+          );
+          position.jumpTo(target);
       }
     });
   }
