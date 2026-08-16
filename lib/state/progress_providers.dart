@@ -48,25 +48,18 @@ final subtopicStatusProvider = Provider<Map<String, ProgressStatus>>((ref) {
 double _bestScore(List<PracticeTestResult> results) =>
     results.map((r) => r.scorePercent).reduce((a, b) => a > b ? a : b);
 
-/// Aggregates a unit's overall status from its subtopics' statuses: any
-/// subtopic still needing practice wins (most urgent), else any subtopic
-/// still developing, else mastered only once every attempted subtopic is
-/// mastered, else not started when nothing under the unit has been
-/// attempted yet.
+/// Aggregates a unit's overall status as the least-complete status among
+/// its attempted subtopics (relying on ProgressStatus being declared
+/// worst-to-best, so a lower `index` is less complete) — one subtopic
+/// still struggling keeps the whole unit reading as struggling, and a
+/// unit only reaches "completed" once every attempted subtopic has. Units
+/// with nothing attempted yet stay "not started".
 ProgressStatus aggregateUnitStatus(
   Iterable<String> subtopicIds,
   Map<String, ProgressStatus> subtopicStatus,
 ) {
-  final statuses = subtopicIds
-      .map((id) => subtopicStatus[id])
-      .whereType<ProgressStatus>()
-      .toList();
+  final statuses =
+      subtopicIds.map((id) => subtopicStatus[id]).whereType<ProgressStatus>();
   if (statuses.isEmpty) return ProgressStatus.notStarted;
-  if (statuses.any((s) => s == ProgressStatus.struggling)) {
-    return ProgressStatus.struggling;
-  }
-  if (statuses.every((s) => s == ProgressStatus.mastered)) {
-    return ProgressStatus.mastered;
-  }
-  return ProgressStatus.developing;
+  return statuses.reduce((a, b) => a.index < b.index ? a : b);
 }

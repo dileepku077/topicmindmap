@@ -122,9 +122,10 @@ on conflict (unit_id, code) do update
 -- Sample students & practice test results (local/dev demo data)
 -- ---------------------------------------------------------------------------
 -- Creates two demo student accounts so the mindmap's progress color-coding
--- (green = completed/mastered, yellow = developing, red = needs practice,
--- grey = not started) can be seen end-to-end by actually signing in. Both
--- accounts use the password 'abc123'.
+-- (grey = not started, orange = struggling, yellow = progressing,
+-- light green = nearing completion, green = completed) can be seen
+-- end-to-end by actually signing in. Both accounts use the password
+-- 'abc123'.
 --
 --   a@gmail.com  password: abc123
 --   b@gmail.com  password: abc123
@@ -177,48 +178,53 @@ on conflict (provider, provider_id) do nothing;
 delete from public.practice_test_results
 where student_id in (select id from auth.users where email in ('a@gmail.com', 'b@gmail.com'));
 
--- Student A (a@gmail.com): has fully completed Linear Systems (every
--- subtopic mastered, >=80% correct — the whole branch renders green) and
--- made a good start on Analytic Geometry (some subtopics completed green,
--- others not yet attempted, so that unit shows a mix of green and grey).
--- Quadratic Relations is still developing (yellow). Trigonometry hasn't
--- been touched yet (grey, no rows below).
+-- Progress colors are traffic-signal style, banded by best score per
+-- subtopic: grey (not attempted) / orange <50% (struggling) / yellow
+-- 50-69% (progressing) / light green 70-89% (nearing completion) / green
+-- >=90% (completed). A unit's color is the least-complete band among its
+-- attempted subtopics.
+--
+-- Student A (a@gmail.com): Linear Systems fully completed (every subtopic
+-- >=90% — green branch). Analytic Geometry is close but not quite there
+-- (light green) with a few subtopics still untouched (grey mixed in).
+-- Quadratic Relations is progressing (yellow). Trigonometry hasn't been
+-- touched yet (grey, no rows below).
 with results (student_email, unit_code, subtopic_code, questions_total, questions_correct) as (
   values
     ('a@gmail.com', 'linear-systems', 'solving-by-graphing', 10, 9),
     ('a@gmail.com', 'linear-systems', 'solving-by-substitution', 10, 10),
-    ('a@gmail.com', 'linear-systems', 'solving-by-elimination', 10, 8),
-    ('a@gmail.com', 'linear-systems', 'number-of-solutions', 10, 9),
-    ('a@gmail.com', 'linear-systems', 'linear-system-applications', 10, 10),
-    ('a@gmail.com', 'analytic-geometry', 'length-of-a-line-segment', 10, 9),
-    ('a@gmail.com', 'analytic-geometry', 'midpoint-of-a-line-segment', 10, 10),
+    ('a@gmail.com', 'linear-systems', 'solving-by-elimination', 10, 9),
+    ('a@gmail.com', 'linear-systems', 'number-of-solutions', 10, 10),
+    ('a@gmail.com', 'linear-systems', 'linear-system-applications', 10, 9),
+    ('a@gmail.com', 'analytic-geometry', 'length-of-a-line-segment', 10, 8),
+    ('a@gmail.com', 'analytic-geometry', 'midpoint-of-a-line-segment', 10, 7),
     ('a@gmail.com', 'analytic-geometry', 'slope-and-equation-of-a-line', 10, 8),
     -- equation-of-a-circle, classifying-shapes, verifying-properties: not attempted yet.
     ('a@gmail.com', 'quadratic-relations', 'investigating-parabolas', 10, 6),
-    ('a@gmail.com', 'quadratic-relations', 'transformations-vertex-form', 10, 7),
+    ('a@gmail.com', 'quadratic-relations', 'transformations-vertex-form', 10, 6),
     ('a@gmail.com', 'quadratic-relations', 'expanding-and-simplifying', 10, 5),
     ('a@gmail.com', 'quadratic-relations', 'factoring-quadratics', 10, 6),
-    ('a@gmail.com', 'quadratic-relations', 'solving-by-factoring', 10, 7),
+    ('a@gmail.com', 'quadratic-relations', 'solving-by-factoring', 10, 6),
     ('a@gmail.com', 'quadratic-relations', 'completing-the-square', 10, 6),
     ('a@gmail.com', 'quadratic-relations', 'quadratic-formula', 10, 5),
     ('a@gmail.com', 'quadratic-relations', 'graphing-quadratics', 10, 6),
-    ('a@gmail.com', 'quadratic-relations', 'quadratic-applications', 10, 7),
+    ('a@gmail.com', 'quadratic-relations', 'quadratic-applications', 10, 6),
 
-    -- Student B (b@gmail.com): has fully completed Trigonometry (every
-    -- subtopic mastered — green branch) and is halfway through Quadratic
-    -- Relations, where the subtopics attempted so far split evenly between
-    -- completed (green) and needs-practice (red). Analytic Geometry has
-    -- been attempted but is still weak across the board (red). Linear
-    -- Systems hasn't been started (grey, no rows below).
+    -- Student B (b@gmail.com): Trigonometry fully completed (green
+    -- branch). Quadratic Relations is a mix of nearing-completion (light
+    -- green) and struggling (orange) subtopics, so the whole branch reads
+    -- as struggling — the most urgent subtopic wins. Analytic Geometry is
+    -- struggling across the board (orange). Linear Systems hasn't been
+    -- started (grey, no rows below).
     ('b@gmail.com', 'trigonometry', 'similar-triangles', 10, 9),
     ('b@gmail.com', 'trigonometry', 'primary-trig-ratios', 10, 10),
-    ('b@gmail.com', 'trigonometry', 'solving-right-triangles', 10, 8),
+    ('b@gmail.com', 'trigonometry', 'solving-right-triangles', 10, 9),
     ('b@gmail.com', 'trigonometry', 'elevation-and-depression', 10, 9),
     ('b@gmail.com', 'trigonometry', 'sine-law', 10, 10),
-    ('b@gmail.com', 'trigonometry', 'cosine-law', 10, 8),
+    ('b@gmail.com', 'trigonometry', 'cosine-law', 10, 9),
     ('b@gmail.com', 'trigonometry', 'acute-triangle-applications', 10, 9),
-    ('b@gmail.com', 'quadratic-relations', 'investigating-parabolas', 10, 9),
-    ('b@gmail.com', 'quadratic-relations', 'transformations-vertex-form', 10, 8),
+    ('b@gmail.com', 'quadratic-relations', 'investigating-parabolas', 10, 8),
+    ('b@gmail.com', 'quadratic-relations', 'transformations-vertex-form', 10, 7),
     ('b@gmail.com', 'quadratic-relations', 'expanding-and-simplifying', 10, 3),
     ('b@gmail.com', 'quadratic-relations', 'factoring-quadratics', 10, 2),
     ('b@gmail.com', 'analytic-geometry', 'length-of-a-line-segment', 10, 3),
