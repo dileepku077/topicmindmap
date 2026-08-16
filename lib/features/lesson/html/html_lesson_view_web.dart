@@ -19,10 +19,23 @@ int _viewCounter = 0;
 /// Flutter's canvas-painted text can't do. Auto-sizes to its content via a
 /// `postMessage` height report from the iframe (see lesson_html_builder).
 class HtmlLessonView extends StatefulWidget {
-  const HtmlLessonView({super.key, required this.frameId, required this.markdown});
+  const HtmlLessonView({
+    super.key,
+    required this.frameId,
+    required this.markdown,
+    this.videoTitle,
+    this.videoUrl,
+    this.videoSource,
+  });
 
   final String frameId;
   final String markdown;
+
+  /// Shown as a "go deeper" card at the end of this section — pass these
+  /// only on the last HtmlLessonView of a lesson (see lesson_page.dart).
+  final String? videoTitle;
+  final String? videoUrl;
+  final String? videoSource;
 
   @override
   State<HtmlLessonView> createState() => _HtmlLessonViewState();
@@ -43,7 +56,13 @@ class _HtmlLessonViewState extends State<HtmlLessonView> {
       ..style.width = '100%'
       ..style.height = '100%'
       ..style.display = 'block'
-      ..srcdoc = buildLessonHtml(widget.markdown, frameId: widget.frameId);
+      ..srcdoc = buildLessonHtml(
+        widget.markdown,
+        frameId: widget.frameId,
+        videoTitle: widget.videoTitle,
+        videoUrl: widget.videoUrl,
+        videoSource: widget.videoSource,
+      );
 
     try {
       ui_web.platformViewRegistry.registerViewFactory(_viewType, (int viewId) => iframe);

@@ -8,10 +8,25 @@ import 'package:markdown/markdown.dart' as md;
 ///
 /// [frameId] is embedded in the page's auto-height script so the Flutter
 /// side can match a `postMessage` height report back to the right iframe.
-String buildLessonHtml(String markdownContent, {required String frameId}) {
+///
+/// [videoTitle]/[videoUrl]/[videoSource] are optional and, when given,
+/// render a "go deeper" card with an embedded player at the very end —
+/// pass them only on the last HTML section of a lesson (see lesson_page).
+String buildLessonHtml(
+  String markdownContent, {
+  required String frameId,
+  String? videoTitle,
+  String? videoUrl,
+  String? videoSource,
+}) {
   final bodyHtml = md.markdownToHtml(
     markdownContent,
     extensionSet: md.ExtensionSet.gitHubWeb,
+  );
+  final videoHtml = _buildVideoCard(
+    title: videoTitle,
+    url: videoUrl,
+    source: videoSource,
   );
 
   return '''
@@ -27,6 +42,7 @@ $_lessonCss
 <body>
 <div id="lesson-root">
 $bodyHtml
+$videoHtml
 </div>
 <script>
 (function () {
@@ -71,6 +87,57 @@ $bodyHtml
 String _jsString(String value) {
   final escaped = value.replaceAll(r'\', r'\\').replaceAll("'", r"\'");
   return "'$escaped'";
+}
+
+/// Escapes text pulled from lesson JSON (video titles/sources) before it's
+/// dropped into an HTML attribute or text node.
+String _htmlEscape(String value) => value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+
+/// Pulls the 11-character video id out of a youtube.com/watch?v=... or
+/// youtu.be/... URL so it can be embedded via youtube-nocookie.com.
+String? _youtubeId(String url) {
+  final uri = Uri.tryParse(url);
+  if (uri == null) return null;
+  if (uri.host.contains('youtu.be')) {
+    return uri.pathSegments.isNotEmpty ? uri.pathSegments.first : null;
+  }
+  return uri.queryParameters['v'];
+}
+
+/// Renders the end-of-lesson "go deeper" card: an embedded, privacy-mode
+/// YouTube player plus a fallback link. Returns an empty string (nothing
+/// rendered) when [url] is null or isn't a recognizable YouTube link.
+String _buildVideoCard({required String? title, required String? url, required String? source}) {
+  if (title == null || url == null) return '';
+  final id = _youtubeId(url);
+  if (id == null) return '';
+
+  final safeTitle = _htmlEscape(title);
+  final safeSource = source != null ? _htmlEscape(source) : null;
+  final embedSrc = 'https://www.youtube-nocookie.com/embed/$id';
+
+  return '''
+<div class="video-card">
+  <div class="video-label">Go deeper</div>
+  <div class="video-embed">
+    <iframe
+      src="$embedSrc"
+      title="$safeTitle"
+      loading="lazy"
+      allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+      allowfullscreen
+    ></iframe>
+  </div>
+  <div class="video-title">$safeTitle</div>
+  <a class="video-link" href="$url" target="_blank" rel="noopener noreferrer">
+    Watch on YouTube${safeSource != null ? ' · $safeSource' : ''} ↗
+  </a>
+</div>
+''';
 }
 
 const _lessonCss = '''
@@ -189,4 +256,63 @@ const _lessonCss = '''
   blockquote p { margin: 0.3em 0; }
   hr { border: none; border-top: 1px solid var(--border); margin: 1.6em 0; }
   ::selection { background: rgba(var(--accent-rgb), 0.3); }
+
+  .diagram {
+    margin: 1.2em 0;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+  }
+  .diagram svg { display: block; width: 100%; height: auto; }
+  .diagram-caption {
+    margin-top: 8px;
+    font-size: 0.85rem;
+    color: var(--text-2);
+    text-align: center;
+  }
+
+  .video-card {
+    margin: 2em 0 0.5em;
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: rgba(var(--accent-rgb), 0.05);
+  }
+  .video-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    font-weight: 700;
+    margin-bottom: 10px;
+  }
+  .video-embed {
+    position: relative;
+    width: 100%;
+    padding-bottom: 56.25%;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #000;
+  }
+  .video-embed iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+  }
+  .video-title {
+    margin-top: 12px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .video-link {
+    display: inline-block;
+    margin-top: 4px;
+    font-size: 0.88rem;
+    color: var(--accent);
+    text-decoration: none;
+  }
+  .video-link:hover { text-decoration: underline; }
 ''';

@@ -69,7 +69,13 @@ class _LessonBody extends StatelessWidget {
     if (interactiveWidget == null || splitIndex == -1) {
       return SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
-        child: HtmlLessonView(frameId: '${lesson.id}-full', markdown: lesson.content),
+        child: HtmlLessonView(
+          frameId: '${lesson.id}-full',
+          markdown: lesson.content,
+          videoTitle: lesson.videoTitle,
+          videoUrl: lesson.videoUrl,
+          videoSource: lesson.videoSource,
+        ),
       );
     }
 
@@ -87,8 +93,17 @@ class _LessonBody extends StatelessWidget {
         children: [
           HtmlLessonView(frameId: '${lesson.id}-before', markdown: before),
           interactiveWidget,
-          if (after.isNotEmpty)
-            HtmlLessonView(frameId: '${lesson.id}-after', markdown: after),
+          // The video card lives on this trailing section — always render
+          // it when there's trailing text or a video to show, so the video
+          // has somewhere to go even when "after" text is empty.
+          if (after.isNotEmpty || lesson.videoUrl != null)
+            HtmlLessonView(
+              frameId: '${lesson.id}-after',
+              markdown: after,
+              videoTitle: lesson.videoTitle,
+              videoUrl: lesson.videoUrl,
+              videoSource: lesson.videoSource,
+            ),
         ],
       ),
     );

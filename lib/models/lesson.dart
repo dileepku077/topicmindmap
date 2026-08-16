@@ -6,6 +6,9 @@ class Lesson {
     this.summary,
     this.estimatedReadMinutes,
     this.interactiveWidgetId,
+    this.videoTitle,
+    this.videoUrl,
+    this.videoSource,
   });
 
   final String id;
@@ -23,6 +26,13 @@ class Lesson {
   /// beats reading about it.
   final String? interactiveWidgetId;
 
+  /// A single hand-picked, curriculum-matched video (Jensen Math, Khan
+  /// Academy, or similar) shown at the end of the lesson. All three are
+  /// null/non-null together — see html/lesson_html_builder.dart.
+  final String? videoTitle;
+  final String? videoUrl;
+  final String? videoSource;
+
   factory Lesson.fromMap(Map<String, dynamic> map) {
     return Lesson(
       id: map['id'] as String,
@@ -31,6 +41,9 @@ class Lesson {
       estimatedReadMinutes: map['estimatedReadMinutes'] as int?,
       content: map['content'] as String? ?? '',
       interactiveWidgetId: map['interactiveWidgetId'] as String?,
+      videoTitle: map['videoTitle'] as String?,
+      videoUrl: map['videoUrl'] as String?,
+      videoSource: map['videoSource'] as String?,
     );
   }
 }
