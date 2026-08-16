@@ -5,7 +5,6 @@ class Lesson {
     required this.content,
     this.summary,
     this.estimatedReadMinutes,
-    this.interactiveWidgetId,
     this.videoTitle,
     this.videoUrl,
     this.videoSource,
@@ -19,12 +18,6 @@ class Lesson {
   /// Markdown body — the JSON's `contentFormat` is always `'markdown'`
   /// today, so there's nothing else to branch on yet.
   final String content;
-
-  /// Optional key into the interactive widget registry (see
-  /// `lib/features/lesson/interactive/`) — a hands-on graph or diagram
-  /// shown alongside the markdown for lessons where dragging something
-  /// beats reading about it.
-  final String? interactiveWidgetId;
 
   /// A single hand-picked, curriculum-matched video (Jensen Math, Khan
   /// Academy, or similar) shown at the end of the lesson. All three are
@@ -40,7 +33,6 @@ class Lesson {
       summary: map['summary'] as String?,
       estimatedReadMinutes: map['estimatedReadMinutes'] as int?,
       content: map['content'] as String? ?? '',
-      interactiveWidgetId: map['interactiveWidgetId'] as String?,
       videoTitle: map['videoTitle'] as String?,
       videoUrl: map['videoUrl'] as String?,
       videoSource: map['videoSource'] as String?,

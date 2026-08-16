@@ -87,6 +87,25 @@ $videoHtml
     });
   }
 
+  // Same reasoning as the video: an active Desmos graph is its own
+  // cross-origin iframe that captures scroll to zoom the graph, which
+  // would otherwise make the page un-scrollable the moment the cursor
+  // passes over it. Show a plain "open" button first (ordinary page
+  // content, scrolls fine) and only mount the live, scroll-capturing
+  // Desmos iframe once the student clicks in to explore it.
+  var desmosEmbed = document.querySelector('.desmos-embed[data-desmos-url]');
+  if (desmosEmbed) {
+    var openDesmos = function () {
+      var iframe = document.createElement('iframe');
+      iframe.src = desmosEmbed.getAttribute('data-desmos-url');
+      iframe.title = 'Interactive Desmos graph';
+      iframe.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;';
+      desmosEmbed.textContent = '';
+      desmosEmbed.appendChild(iframe);
+    };
+    desmosEmbed.querySelector('.desmos-open').addEventListener('click', openDesmos, { once: true });
+  }
+
   // This iframe's own document never scrolls internally (its height
   // always matches its content), so wheel/trackpad input over it would
   // otherwise just vanish instead of scrolling the lesson page. Forward
@@ -287,7 +306,7 @@ const _lessonCss = '''
   ::selection { background: rgba(var(--accent-rgb), 0.3); }
 
   .diagram {
-    max-width: 380px;
+    max-width: 520px;
     margin: 1.2em auto;
     padding: 10px;
     border: 1px solid var(--border);
@@ -303,7 +322,7 @@ const _lessonCss = '''
   }
 
   .video-card {
-    max-width: 380px;
+    max-width: 520px;
     margin: 2em auto 0.5em;
     padding: 12px;
     border: 1px solid var(--border);
@@ -367,4 +386,58 @@ const _lessonCss = '''
     text-decoration: none;
   }
   .video-link:hover { text-decoration: underline; }
+
+  .desmos-card {
+    max-width: 600px;
+    margin: 1.6em auto;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: rgba(var(--code-accent-rgb), 0.05);
+  }
+  .desmos-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--code-accent);
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .desmos-embed {
+    position: relative;
+    width: 100%;
+    height: 420px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--surface);
+    border: 1px solid var(--border);
+  }
+  .desmos-embed iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+  }
+  .desmos-open {
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    width: max-content;
+    height: max-content;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--code-accent);
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 700;
+    padding: 16px 24px;
+    transition: transform 0.15s ease;
+  }
+  .desmos-open:hover { transform: scale(1.04); }
 ''';
