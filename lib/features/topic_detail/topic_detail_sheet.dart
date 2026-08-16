@@ -2,30 +2,43 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../models/lesson.dart';
 import '../../models/practice_test_result.dart';
 import '../../models/progress_status.dart';
 import '../../models/subtopic.dart';
 import '../../state/auth_providers.dart';
+import '../../state/lesson_providers.dart';
 import '../../state/progress_providers.dart';
 
 void showTopicDetailSheet(
   BuildContext context, {
   required Subtopic subtopic,
   required Color color,
+  required String courseCode,
 }) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    builder: (context) => TopicDetailSheet(subtopic: subtopic, color: color),
+    builder: (context) => TopicDetailSheet(
+      subtopic: subtopic,
+      color: color,
+      courseCode: courseCode,
+    ),
   );
 }
 
 class TopicDetailSheet extends ConsumerWidget {
-  const TopicDetailSheet({super.key, required this.subtopic, required this.color});
+  const TopicDetailSheet({
+    super.key,
+    required this.subtopic,
+    required this.color,
+    required this.courseCode,
+  });
 
   final Subtopic subtopic;
   final Color color;
+  final String courseCode;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -35,6 +48,8 @@ class TopicDetailSheet extends ConsumerWidget {
         ? null
         : results.map((r) => r.scorePercent).reduce((a, b) => a > b ? a : b);
     final status = ProgressStatus.fromScorePercent(bestScore);
+    final lessonId = lessonIdFor(courseCode: courseCode, subtopicCode: subtopic.code);
+    final lesson = lessonId == null ? null : ref.watch(lessonProvider(lessonId));
 
     return DraggableScrollableSheet(
       initialChildSize: 0.45,
@@ -69,6 +84,10 @@ class TopicDetailSheet extends ConsumerWidget {
                   subtopic.description!,
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
+              ],
+              if (lesson != null) ...[
+                const SizedBox(height: 16),
+                _LessonLink(lesson: lesson),
               ],
               const SizedBox(height: 20),
               Text('Practice progress', style: Theme.of(context).textTheme.titleSmall),
@@ -144,6 +163,56 @@ const _months = [
 ];
 
 String _formatDate(DateTime date) => '${_months[date.month - 1]} ${date.day}';
+
+/// Opens a short, standalone explanation of the subtopic — meant to be
+/// read in about five minutes to get the idea before (or instead of)
+/// diving into practice questions.
+class _LessonLink extends StatelessWidget {
+  const _LessonLink({required this.lesson});
+
+  final Lesson lesson;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.primary.withValues(alpha: 0.08),
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () => context.push('/lesson/${lesson.id}'),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              Icon(Icons.menu_book_outlined, color: scheme.primary, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Lesson',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: scheme.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
+              if (lesson.estimatedReadMinutes != null)
+                Text(
+                  '~${lesson.estimatedReadMinutes} min read',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: scheme.onSurfaceVariant),
+                ),
+              const SizedBox(width: 4),
+              Icon(Icons.chevron_right, color: scheme.primary, size: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _SignInPrompt extends StatelessWidget {
   const _SignInPrompt();

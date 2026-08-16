@@ -329,8 +329,12 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
             onDragStart: () => setState(() => _canvasGesturesEnabled = false),
             onDragUpdate: (delta) => _moveNode(subtopic.id, delta),
             onDragEnd: () => setState(() => _canvasGesturesEnabled = true),
-            onTap: () =>
-                showTopicDetailSheet(context, subtopic: subtopic, color: status.color),
+            onTap: () => showTopicDetailSheet(
+              context,
+              subtopic: subtopic,
+              color: status.color,
+              courseCode: course.code,
+            ),
             child: SubtopicNodeWidget(
               subtopic: subtopic,
               status: status,
