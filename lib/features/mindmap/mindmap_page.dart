@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../models/course.dart';
 import '../../models/progress_status.dart';
 import '../../models/subtopic.dart';
 import '../../models/unit.dart';
@@ -37,6 +38,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
   bool _layoutInitialized = false;
   bool _canvasGesturesEnabled = true;
   Size _lastViewportSize = Size.zero;
+  String? _layoutCourseId;
 
   Map<String, List<Subtopic>> _subtopicsByUnit = {};
 
@@ -46,7 +48,16 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
     super.dispose();
   }
 
-  void _ensureLayout(List<Unit> units, List<Subtopic> subtopics) {
+  void _ensureLayout(String courseId, List<Unit> units, List<Subtopic> subtopics) {
+    if (_layoutCourseId != courseId) {
+      // Switched grades: start that grade's mindmap fresh rather than
+      // mixing its units into whatever was dragged around for the last one.
+      _layoutCourseId = courseId;
+      _positions.clear();
+      _expandedUnitIds.clear();
+      _layoutInitialized = false;
+    }
+
     _subtopicsByUnit = {
       for (final unit in units)
         unit.id: subtopics.where((s) => s.unitId == unit.id).toList()
@@ -137,6 +148,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
 
   @override
   Widget build(BuildContext context) {
+    final coursesAsync = ref.watch(coursesProvider);
     final unitsAsync = ref.watch(unitsProvider);
     final subtopicsAsync = ref.watch(subtopicsProvider);
     final user = ref.watch(currentUserProvider);
@@ -144,7 +156,14 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Grade 10 Math Mindmap'),
+        title: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Math Mindmap'),
+            SizedBox(width: 12),
+            _GradeDropdown(),
+          ],
+        ),
         actions: [
           IconButton(
             tooltip: 'Reset view',
@@ -186,14 +205,23 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
             ],
           ),
         ),
-        child: unitsAsync.when(
+        child: coursesAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (error, _) => Center(child: Text('Failed to load curriculum: $error')),
-          data: (units) => subtopicsAsync.when(
+          data: (_) => unitsAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, _) => Center(child: Text('Failed to load curriculum: $error')),
+          data: (_) => subtopicsAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (error, _) => Center(child: Text('Failed to load curriculum: $error')),
-            data: (subtopics) {
-              _ensureLayout(units, subtopics);
+            data: (_) {
+              final course = ref.watch(selectedCourseProvider);
+              if (course == null) {
+                return const Center(child: Text('No courses configured yet.'));
+              }
+              final units = ref.watch(courseUnitsProvider);
+              final subtopics = ref.watch(courseSubtopicsProvider);
+              _ensureLayout(course.id, units, subtopics);
               return LayoutBuilder(
                 builder: (context, constraints) {
                   final viewportSize = constraints.biggest;
@@ -233,7 +261,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                               ),
                             ),
                           ),
-                          ..._buildNodes(units, subtopicStatus),
+                          ..._buildNodes(course, units, subtopicStatus),
                         ],
                       ),
                     ),
@@ -242,12 +270,17 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
               );
             },
           ),
+          ),
         ),
       ),
     );
   }
 
-  List<Widget> _buildNodes(List<Unit> units, Map<String, ProgressStatus> subtopicStatus) {
+  List<Widget> _buildNodes(
+    Course course,
+    List<Unit> units,
+    Map<String, ProgressStatus> subtopicStatus,
+  ) {
     final nodes = <Widget>[];
 
     final rootPos = _positions[_rootId];
@@ -258,7 +291,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
           onDragStart: () => setState(() => _canvasGesturesEnabled = false),
           onDragUpdate: (delta) => _moveNode(_rootId, delta),
           onDragEnd: () => setState(() => _canvasGesturesEnabled = true),
-          child: const RootNodeWidget(),
+          child: RootNodeWidget(label: 'Grade ${course.grade} Math'),
         ),
       );
     }
@@ -308,6 +341,50 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
     }
 
     return nodes;
+  }
+}
+
+/// AppBar chip that shows the currently-selected grade and opens a menu to
+/// switch to another. Hidden until courses have loaded.
+class _GradeDropdown extends ConsumerWidget {
+  const _GradeDropdown();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final courses = ref.watch(coursesProvider).value ?? const [];
+    final selected = ref.watch(selectedCourseProvider);
+    if (courses.isEmpty || selected == null) return const SizedBox.shrink();
+
+    return PopupMenuButton<String>(
+      tooltip: 'Choose grade',
+      onSelected: (value) => ref.read(selectedCourseIdProvider.notifier).select(value),
+      itemBuilder: (context) => [
+        for (final course in courses)
+          PopupMenuItem(value: course.id, child: Text(course.gradeLabel)),
+      ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              selected.gradeLabel,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(Icons.expand_more, color: Colors.white, size: 18),
+          ],
+        ),
+      ),
+    );
   }
 }
 

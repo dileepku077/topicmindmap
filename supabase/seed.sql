@@ -1,11 +1,161 @@
--- Seed data: Ontario Grade 10 Academic Math (MPM2D) curriculum units & subtopics.
+-- Seed data: Ontario academic-stream math curriculum (grades 9-12) units &
+-- subtopics, plus demo students.
 -- Run after schema.sql. Safe to re-run (upserts on the unique `code` columns).
 --
--- Content mirrors the common textbook breakdown of MPM2D (Nelson / McGraw-Hill):
--- Linear Systems, Analytic Geometry, Quadratic Relations, Trigonometry.
+-- Content mirrors the common textbook breakdown of each course:
+--   MPM1D  Grade 9  Academic Math
+--   MPM2D  Grade 10 Academic Math
+--   MCR3U  Grade 11 Functions (university prep)
+--   MHF4U  Grade 12 Advanced Functions (university prep)
 -- Adjust wording/order here to match your own board's course outline.
 
-with unit_data (code, title, description, color, order_index) as (
+with course_data (grade, code, title, description, order_index) as (
+  values
+    (9, 'MPM1D', 'Grade 9 Academic Math',
+     'Foundations of algebra, linear relations, and geometry.', 0),
+    (10, 'MPM2D', 'Grade 10 Academic Math',
+     'Linear systems, analytic geometry, quadratics, and trigonometry.', 1),
+    (11, 'MCR3U', 'Grade 11 Functions',
+     'Functions, exponential and trigonometric relationships, and sequences.', 2),
+    (12, 'MHF4U', 'Grade 12 Advanced Functions',
+     'Polynomial, rational, logarithmic, and trigonometric functions.', 3)
+)
+insert into public.courses (grade, code, title, description, order_index)
+select grade, code, title, description, order_index from course_data
+on conflict (code) do update
+  set grade = excluded.grade,
+      title = excluded.title,
+      description = excluded.description,
+      order_index = excluded.order_index;
+
+-- =============================================================================
+-- Grade 9 — MPM1D
+-- =============================================================================
+
+with c as (select id from public.courses where code = 'MPM1D'),
+unit_data (code, title, description, color, order_index) as (
+  values
+    ('number-sense-and-algebra', 'Number Sense and Algebra',
+     'Exponent rules and operations with polynomial expressions.', '#5B8DEF', 0),
+    ('linear-relations', 'Linear Relations',
+     'Recognizing and representing relationships that change at a constant rate.', '#4CAF93', 1),
+    ('equations-of-lines', 'Equations of Lines',
+     'Determining and using the equation of a straight line.', '#E0834B', 2),
+    ('measurement-and-geometry', 'Measurement and Geometry',
+     'Surface area, volume, and geometric properties of shapes and solids.', '#B15BE0', 3)
+)
+insert into public.units (course_id, code, title, description, color, order_index)
+select c.id, u.code, u.title, u.description, u.color, u.order_index from unit_data u, c
+on conflict (course_id, code) do update
+  set title = excluded.title,
+      description = excluded.description,
+      color = excluded.color,
+      order_index = excluded.order_index;
+
+-- Number Sense and Algebra ----------------------------------------------------
+with u as (
+  select un.id from public.units un
+  join public.courses c on c.id = un.course_id
+  where c.code = 'MPM1D' and un.code = 'number-sense-and-algebra'
+),
+subtopic_data (code, title, description, order_index) as (
+  values
+    ('exponent-laws', 'Exponent Laws',
+     'Applying the laws of exponents to simplify numerical and algebraic expressions.', 0),
+    ('adding-subtracting-polynomials', 'Adding and Subtracting Polynomials',
+     'Collecting like terms to add and subtract polynomial expressions.', 1),
+    ('multiplying-polynomials', 'Multiplying Polynomials',
+     'Expanding products of monomials, binomials, and polynomials.', 2),
+    ('simplifying-algebraic-expressions', 'Simplifying Algebraic Expressions',
+     'Combining exponent rules and polynomial operations to simplify expressions.', 3),
+    ('polynomial-applications', 'Applications of Polynomials',
+     'Using polynomial expressions to model and solve real-world problems.', 4)
+)
+insert into public.subtopics (unit_id, code, title, description, order_index)
+select u.id, s.code, s.title, s.description, s.order_index from subtopic_data s, u
+on conflict (unit_id, code) do update
+  set title = excluded.title, description = excluded.description, order_index = excluded.order_index;
+
+-- Linear Relations -------------------------------------------------------------
+with u as (
+  select un.id from public.units un
+  join public.courses c on c.id = un.course_id
+  where c.code = 'MPM1D' and un.code = 'linear-relations'
+),
+subtopic_data (code, title, description, order_index) as (
+  values
+    ('first-differences', 'First Differences',
+     'Using first differences in a table of values to identify a linear relation.', 0),
+    ('rate-of-change', 'Rate of Change',
+     'Calculating and interpreting the rate of change between two points.', 1),
+    ('direct-variation', 'Direct Variation',
+     'Relations of the form y = mx that pass through the origin.', 2),
+    ('partial-variation', 'Partial Variation',
+     'Relations of the form y = mx + b with a non-zero initial value.', 3),
+    ('graphing-linear-relations', 'Graphing Linear Relations',
+     'Creating tables of values and graphs to represent linear relations.', 4)
+)
+insert into public.subtopics (unit_id, code, title, description, order_index)
+select u.id, s.code, s.title, s.description, s.order_index from subtopic_data s, u
+on conflict (unit_id, code) do update
+  set title = excluded.title, description = excluded.description, order_index = excluded.order_index;
+
+-- Equations of Lines -------------------------------------------------------------
+with u as (
+  select un.id from public.units un
+  join public.courses c on c.id = un.course_id
+  where c.code = 'MPM1D' and un.code = 'equations-of-lines'
+),
+subtopic_data (code, title, description, order_index) as (
+  values
+    ('slope', 'Slope',
+     'Calculating slope from a graph, table, or two points.', 0),
+    ('slope-intercept-form', 'Slope-Intercept Form',
+     'Writing and interpreting equations in the form y = mx + b.', 1),
+    ('standard-form', 'Standard Form',
+     'Converting linear equations between slope-intercept and standard form.', 2),
+    ('graphing-from-equations', 'Graphing from Equations',
+     'Sketching a line directly from its equation.', 3),
+    ('solving-linear-equations', 'Solving Linear Equations',
+     'Solving single-variable linear equations algebraically.', 4),
+    ('linear-system-intro', 'Introduction to Linear Systems',
+     'Finding the intersection of two lines by graphing.', 5)
+)
+insert into public.subtopics (unit_id, code, title, description, order_index)
+select u.id, s.code, s.title, s.description, s.order_index from subtopic_data s, u
+on conflict (unit_id, code) do update
+  set title = excluded.title, description = excluded.description, order_index = excluded.order_index;
+
+-- Measurement and Geometry -------------------------------------------------------
+with u as (
+  select un.id from public.units un
+  join public.courses c on c.id = un.course_id
+  where c.code = 'MPM1D' and un.code = 'measurement-and-geometry'
+),
+subtopic_data (code, title, description, order_index) as (
+  values
+    ('surface-area-of-solids', 'Surface Area of 3-D Solids',
+     'Calculating the surface area of prisms, cylinders, and composite solids.', 0),
+    ('volume-of-solids', 'Volume of 3-D Solids',
+     'Calculating the volume of prisms, cylinders, and composite solids.', 1),
+    ('optimization', 'Optimizing Measurements',
+     'Finding dimensions that minimize surface area or maximize volume.', 2),
+    ('similar-triangles-and-figures', 'Similar Triangles and Figures',
+     'Using proportional reasoning to solve problems with similar shapes.', 3),
+    ('angle-properties-of-polygons', 'Angle Properties of Polygons',
+     'Interior and exterior angle relationships in triangles and polygons.', 4)
+)
+insert into public.subtopics (unit_id, code, title, description, order_index)
+select u.id, s.code, s.title, s.description, s.order_index from subtopic_data s, u
+on conflict (unit_id, code) do update
+  set title = excluded.title, description = excluded.description, order_index = excluded.order_index;
+
+-- =============================================================================
+-- Grade 10 — MPM2D
+-- =============================================================================
+
+with c as (select id from public.courses where code = 'MPM2D'),
+unit_data (code, title, description, color, order_index) as (
   values
     ('linear-systems', 'Linear Systems',
      'Solving and applying systems of two linear equations.', '#5B8DEF', 0),
@@ -16,16 +166,20 @@ with unit_data (code, title, description, color, order_index) as (
     ('trigonometry', 'Trigonometry',
      'Similar triangles and trigonometric ratios for right and acute triangles.', '#B15BE0', 3)
 )
-insert into public.units (code, title, description, color, order_index)
-select code, title, description, color, order_index from unit_data
-on conflict (code) do update
+insert into public.units (course_id, code, title, description, color, order_index)
+select c.id, u.code, u.title, u.description, u.color, u.order_index from unit_data u, c
+on conflict (course_id, code) do update
   set title = excluded.title,
       description = excluded.description,
       color = excluded.color,
       order_index = excluded.order_index;
 
 -- Linear Systems -------------------------------------------------------------
-with u as (select id from public.units where code = 'linear-systems'),
+with u as (
+  select un.id from public.units un
+  join public.courses c on c.id = un.course_id
+  where c.code = 'MPM2D' and un.code = 'linear-systems'
+),
 subtopic_data (code, title, description, order_index) as (
   values
     ('solving-by-graphing', 'Solving by Graphing',
@@ -45,7 +199,11 @@ on conflict (unit_id, code) do update
   set title = excluded.title, description = excluded.description, order_index = excluded.order_index;
 
 -- Analytic Geometry ------------------------------------------------------------
-with u as (select id from public.units where code = 'analytic-geometry'),
+with u as (
+  select un.id from public.units un
+  join public.courses c on c.id = un.course_id
+  where c.code = 'MPM2D' and un.code = 'analytic-geometry'
+),
 subtopic_data (code, title, description, order_index) as (
   values
     ('length-of-a-line-segment', 'Length of a Line Segment',
@@ -67,7 +225,11 @@ on conflict (unit_id, code) do update
   set title = excluded.title, description = excluded.description, order_index = excluded.order_index;
 
 -- Quadratic Relations ------------------------------------------------------------
-with u as (select id from public.units where code = 'quadratic-relations'),
+with u as (
+  select un.id from public.units un
+  join public.courses c on c.id = un.course_id
+  where c.code = 'MPM2D' and un.code = 'quadratic-relations'
+),
 subtopic_data (code, title, description, order_index) as (
   values
     ('investigating-parabolas', 'Investigating y = ax^2',
@@ -94,8 +256,12 @@ select u.id, s.code, s.title, s.description, s.order_index from subtopic_data s,
 on conflict (unit_id, code) do update
   set title = excluded.title, description = excluded.description, order_index = excluded.order_index;
 
--- Trigonometry (subtopics) -------------------------------------------------------
-with u as (select id from public.units where code = 'trigonometry'),
+-- Trigonometry -------------------------------------------------------------------
+with u as (
+  select un.id from public.units un
+  join public.courses c on c.id = un.course_id
+  where c.code = 'MPM2D' and un.code = 'trigonometry'
+),
 subtopic_data (code, title, description, order_index) as (
   values
     ('similar-triangles', 'Similar Triangles',
@@ -118,6 +284,248 @@ select u.id, s.code, s.title, s.description, s.order_index from subtopic_data s,
 on conflict (unit_id, code) do update
   set title = excluded.title, description = excluded.description, order_index = excluded.order_index;
 
+-- =============================================================================
+-- Grade 11 — MCR3U (Functions)
+-- =============================================================================
+
+with c as (select id from public.courses where code = 'MCR3U'),
+unit_data (code, title, description, color, order_index) as (
+  values
+    ('functions-fundamentals', 'Functions Fundamentals',
+     'Function notation, domain and range, and transformations.', '#5B8DEF', 0),
+    ('quadratic-and-exponential-functions', 'Quadratic and Exponential Functions',
+     'Extending quadratic functions and introducing exponential growth and decay.', '#4CAF93', 1),
+    ('trigonometric-functions', 'Trigonometric Functions',
+     'Radian measure, the unit circle, and graphing trigonometric functions.', '#E0834B', 2),
+    ('sequences-and-series', 'Sequences and Series',
+     'Arithmetic and geometric patterns and their sums.', '#B15BE0', 3)
+)
+insert into public.units (course_id, code, title, description, color, order_index)
+select c.id, u.code, u.title, u.description, u.color, u.order_index from unit_data u, c
+on conflict (course_id, code) do update
+  set title = excluded.title,
+      description = excluded.description,
+      color = excluded.color,
+      order_index = excluded.order_index;
+
+-- Functions Fundamentals ----------------------------------------------------
+with u as (
+  select un.id from public.units un
+  join public.courses c on c.id = un.course_id
+  where c.code = 'MCR3U' and un.code = 'functions-fundamentals'
+),
+subtopic_data (code, title, description, order_index) as (
+  values
+    ('function-notation', 'Function Notation',
+     'Using f(x) notation to evaluate and interpret functions.', 0),
+    ('domain-and-range', 'Domain and Range',
+     'Determining the domain and range of a function from its equation or graph.', 1),
+    ('transformations-of-functions', 'Transformations of Functions',
+     'Translating, reflecting, and stretching the graph of a function.', 2),
+    ('inverse-functions', 'Inverse Functions',
+     'Finding and graphing the inverse of a function.', 3),
+    ('function-operations', 'Operations with Functions',
+     'Adding, subtracting, multiplying, and composing functions.', 4)
+)
+insert into public.subtopics (unit_id, code, title, description, order_index)
+select u.id, s.code, s.title, s.description, s.order_index from subtopic_data s, u
+on conflict (unit_id, code) do update
+  set title = excluded.title, description = excluded.description, order_index = excluded.order_index;
+
+-- Quadratic and Exponential Functions ----------------------------------------
+with u as (
+  select un.id from public.units un
+  join public.courses c on c.id = un.course_id
+  where c.code = 'MCR3U' and un.code = 'quadratic-and-exponential-functions'
+),
+subtopic_data (code, title, description, order_index) as (
+  values
+    ('review-of-quadratic-functions', 'Review of Quadratic Functions',
+     'Revisiting factored, standard, and vertex forms of a quadratic.', 0),
+    ('quadratic-linear-systems', 'Quadratic-Linear Systems',
+     'Solving systems of a quadratic and a linear equation.', 1),
+    ('laws-of-exponents-review', 'Laws of Exponents Review',
+     'Extending exponent laws to rational exponents.', 2),
+    ('exponential-growth-and-decay', 'Exponential Growth and Decay',
+     'Modelling growth and decay with exponential functions.', 3),
+    ('solving-exponential-equations', 'Solving Exponential Equations',
+     'Solving equations by comparing bases or using logic.', 4),
+    ('applications-of-exponential-functions', 'Applications of Exponential Functions',
+     'Modelling population growth, compound interest, and decay.', 5)
+)
+insert into public.subtopics (unit_id, code, title, description, order_index)
+select u.id, s.code, s.title, s.description, s.order_index from subtopic_data s, u
+on conflict (unit_id, code) do update
+  set title = excluded.title, description = excluded.description, order_index = excluded.order_index;
+
+-- Trigonometric Functions -----------------------------------------------------
+with u as (
+  select un.id from public.units un
+  join public.courses c on c.id = un.course_id
+  where c.code = 'MCR3U' and un.code = 'trigonometric-functions'
+),
+subtopic_data (code, title, description, order_index) as (
+  values
+    ('radian-measure', 'Radian Measure',
+     'Converting between degrees and radians.', 0),
+    ('the-unit-circle', 'The Unit Circle',
+     'Using the unit circle to determine exact trigonometric values.', 1),
+    ('graphing-sine-and-cosine', 'Graphing Sine and Cosine',
+     'Sketching and transforming sine and cosine functions.', 2),
+    ('trigonometric-identities', 'Trigonometric Identities',
+     'Proving and applying the reciprocal and Pythagorean identities.', 3),
+    ('solving-trigonometric-equations', 'Solving Trigonometric Equations',
+     'Solving equations involving trigonometric functions over a given interval.', 4),
+    ('trigonometric-applications', 'Applications of Trigonometric Functions',
+     'Modelling periodic phenomena such as tides and Ferris wheels.', 5)
+)
+insert into public.subtopics (unit_id, code, title, description, order_index)
+select u.id, s.code, s.title, s.description, s.order_index from subtopic_data s, u
+on conflict (unit_id, code) do update
+  set title = excluded.title, description = excluded.description, order_index = excluded.order_index;
+
+-- Sequences and Series ---------------------------------------------------------
+with u as (
+  select un.id from public.units un
+  join public.courses c on c.id = un.course_id
+  where c.code = 'MCR3U' and un.code = 'sequences-and-series'
+),
+subtopic_data (code, title, description, order_index) as (
+  values
+    ('arithmetic-sequences', 'Arithmetic Sequences',
+     'Identifying and generating terms of an arithmetic sequence.', 0),
+    ('geometric-sequences', 'Geometric Sequences',
+     'Identifying and generating terms of a geometric sequence.', 1),
+    ('arithmetic-series', 'Arithmetic Series',
+     'Finding the sum of an arithmetic series.', 2),
+    ('geometric-series', 'Geometric Series',
+     'Finding the sum of a finite or infinite geometric series.', 3),
+    ('financial-applications', 'Financial Applications',
+     'Applying sequences and series to loans, investments, and annuities.', 4)
+)
+insert into public.subtopics (unit_id, code, title, description, order_index)
+select u.id, s.code, s.title, s.description, s.order_index from subtopic_data s, u
+on conflict (unit_id, code) do update
+  set title = excluded.title, description = excluded.description, order_index = excluded.order_index;
+
+-- =============================================================================
+-- Grade 12 — MHF4U (Advanced Functions)
+-- =============================================================================
+
+with c as (select id from public.courses where code = 'MHF4U'),
+unit_data (code, title, description, color, order_index) as (
+  values
+    ('polynomial-and-rational-functions', 'Polynomial and Rational Functions',
+     'Properties, factoring, and graphing of polynomial and rational functions.', '#5B8DEF', 0),
+    ('exponential-and-logarithmic-functions', 'Exponential and Logarithmic Functions',
+     'Logarithms as the inverse of exponential functions.', '#4CAF93', 1),
+    ('trigonometric-functions', 'Trigonometric Functions',
+     'Compound angle formulas and advanced trigonometric identities.', '#E0834B', 2),
+    ('combining-functions', 'Combining Functions',
+     'Building new functions from sums, products, and compositions.', '#B15BE0', 3)
+)
+insert into public.units (course_id, code, title, description, color, order_index)
+select c.id, u.code, u.title, u.description, u.color, u.order_index from unit_data u, c
+on conflict (course_id, code) do update
+  set title = excluded.title,
+      description = excluded.description,
+      color = excluded.color,
+      order_index = excluded.order_index;
+
+-- Polynomial and Rational Functions --------------------------------------------
+with u as (
+  select un.id from public.units un
+  join public.courses c on c.id = un.course_id
+  where c.code = 'MHF4U' and un.code = 'polynomial-and-rational-functions'
+),
+subtopic_data (code, title, description, order_index) as (
+  values
+    ('polynomial-function-properties', 'Polynomial Function Properties',
+     'End behaviour, degree, and turning points of polynomial functions.', 0),
+    ('factoring-and-remainder-theorem', 'Factoring and the Remainder Theorem',
+     'Using the remainder and factor theorems to factor polynomials.', 1),
+    ('graphing-polynomial-functions', 'Graphing Polynomial Functions',
+     'Sketching polynomial functions from their factored form.', 2),
+    ('rational-functions', 'Rational Functions',
+     'Graphing rational functions, including asymptotes and holes.', 3),
+    ('polynomial-and-rational-inequalities', 'Polynomial and Rational Inequalities',
+     'Solving inequalities using sign analysis and graphs.', 4)
+)
+insert into public.subtopics (unit_id, code, title, description, order_index)
+select u.id, s.code, s.title, s.description, s.order_index from subtopic_data s, u
+on conflict (unit_id, code) do update
+  set title = excluded.title, description = excluded.description, order_index = excluded.order_index;
+
+-- Exponential and Logarithmic Functions ------------------------------------------
+with u as (
+  select un.id from public.units un
+  join public.courses c on c.id = un.course_id
+  where c.code = 'MHF4U' and un.code = 'exponential-and-logarithmic-functions'
+),
+subtopic_data (code, title, description, order_index) as (
+  values
+    ('exponential-functions-review', 'Exponential Functions Review',
+     'Revisiting exponential growth, decay, and their graphs.', 0),
+    ('introduction-to-logarithms', 'Introduction to Logarithms',
+     'Defining logarithms as the inverse of exponential functions.', 1),
+    ('laws-of-logarithms', 'Laws of Logarithms',
+     'Applying the product, quotient, and power laws of logarithms.', 2),
+    ('solving-exponential-and-log-equations', 'Solving Exponential and Logarithmic Equations',
+     'Solving equations using logarithms and exponent rules.', 3),
+    ('applications-of-logarithms', 'Applications of Logarithms',
+     'Modelling pH, sound intensity, and earthquake magnitude.', 4)
+)
+insert into public.subtopics (unit_id, code, title, description, order_index)
+select u.id, s.code, s.title, s.description, s.order_index from subtopic_data s, u
+on conflict (unit_id, code) do update
+  set title = excluded.title, description = excluded.description, order_index = excluded.order_index;
+
+-- Trigonometric Functions (advanced) ---------------------------------------------
+with u as (
+  select un.id from public.units un
+  join public.courses c on c.id = un.course_id
+  where c.code = 'MHF4U' and un.code = 'trigonometric-functions'
+),
+subtopic_data (code, title, description, order_index) as (
+  values
+    ('trigonometric-identities-review', 'Trigonometric Identities Review',
+     'Revisiting reciprocal, quotient, and Pythagorean identities.', 0),
+    ('compound-angle-formulas', 'Compound Angle Formulas',
+     'Deriving and applying sine and cosine sum and difference formulas.', 1),
+    ('double-angle-formulas', 'Double Angle Formulas',
+     'Deriving and applying double angle identities.', 2),
+    ('graphing-trigonometric-functions', 'Graphing Trigonometric Functions',
+     'Graphing transformed sine, cosine, and tangent functions.', 3),
+    ('solving-advanced-trigonometric-equations', 'Solving Advanced Trigonometric Equations',
+     'Solving trigonometric equations using identities.', 4)
+)
+insert into public.subtopics (unit_id, code, title, description, order_index)
+select u.id, s.code, s.title, s.description, s.order_index from subtopic_data s, u
+on conflict (unit_id, code) do update
+  set title = excluded.title, description = excluded.description, order_index = excluded.order_index;
+
+-- Combining Functions -------------------------------------------------------------
+with u as (
+  select un.id from public.units un
+  join public.courses c on c.id = un.course_id
+  where c.code = 'MHF4U' and un.code = 'combining-functions'
+),
+subtopic_data (code, title, description, order_index) as (
+  values
+    ('sums-and-differences-of-functions', 'Sums and Differences of Functions',
+     'Graphing and analyzing the sum or difference of two functions.', 0),
+    ('products-and-quotients-of-functions', 'Products and Quotients of Functions',
+     'Graphing and analyzing the product or quotient of two functions.', 1),
+    ('composite-functions', 'Composite Functions',
+     'Forming and evaluating composite functions.', 2),
+    ('rates-of-change-of-functions', 'Rates of Change',
+     'Estimating average and instantaneous rates of change from a graph.', 3)
+)
+insert into public.subtopics (unit_id, code, title, description, order_index)
+select u.id, s.code, s.title, s.description, s.order_index from subtopic_data s, u
+on conflict (unit_id, code) do update
+  set title = excluded.title, description = excluded.description, order_index = excluded.order_index;
+
 -- ---------------------------------------------------------------------------
 -- Sample students & practice test results (local/dev demo data)
 -- ---------------------------------------------------------------------------
@@ -125,7 +533,8 @@ on conflict (unit_id, code) do update
 -- (grey = not started, orange = struggling, yellow = progressing,
 -- light green = nearing completion, green = completed) can be seen
 -- end-to-end by actually signing in. Both accounts use the password
--- 'abc123'.
+-- 'abc123'. Their sample results are all against Grade 10 (MPM2D) — switch
+-- the grade dropdown to Grade 10 after signing in to see them.
 --
 --   a@gmail.com  password: abc123
 --   b@gmail.com  password: abc123
@@ -189,26 +598,26 @@ where student_id in (select id from auth.users where email in ('a@gmail.com', 'b
 -- (light green) with a few subtopics still untouched (grey mixed in).
 -- Quadratic Relations is progressing (yellow). Trigonometry hasn't been
 -- touched yet (grey, no rows below).
-with results (student_email, unit_code, subtopic_code, questions_total, questions_correct) as (
+with results (unit_code, subtopic_code, student_email, questions_total, questions_correct) as (
   values
-    ('a@gmail.com', 'linear-systems', 'solving-by-graphing', 10, 9),
-    ('a@gmail.com', 'linear-systems', 'solving-by-substitution', 10, 10),
-    ('a@gmail.com', 'linear-systems', 'solving-by-elimination', 10, 9),
-    ('a@gmail.com', 'linear-systems', 'number-of-solutions', 10, 10),
-    ('a@gmail.com', 'linear-systems', 'linear-system-applications', 10, 9),
-    ('a@gmail.com', 'analytic-geometry', 'length-of-a-line-segment', 10, 8),
-    ('a@gmail.com', 'analytic-geometry', 'midpoint-of-a-line-segment', 10, 7),
-    ('a@gmail.com', 'analytic-geometry', 'slope-and-equation-of-a-line', 10, 8),
+    ('linear-systems', 'solving-by-graphing', 'a@gmail.com', 10, 9),
+    ('linear-systems', 'solving-by-substitution', 'a@gmail.com', 10, 10),
+    ('linear-systems', 'solving-by-elimination', 'a@gmail.com', 10, 9),
+    ('linear-systems', 'number-of-solutions', 'a@gmail.com', 10, 10),
+    ('linear-systems', 'linear-system-applications', 'a@gmail.com', 10, 9),
+    ('analytic-geometry', 'length-of-a-line-segment', 'a@gmail.com', 10, 8),
+    ('analytic-geometry', 'midpoint-of-a-line-segment', 'a@gmail.com', 10, 7),
+    ('analytic-geometry', 'slope-and-equation-of-a-line', 'a@gmail.com', 10, 8),
     -- equation-of-a-circle, classifying-shapes, verifying-properties: not attempted yet.
-    ('a@gmail.com', 'quadratic-relations', 'investigating-parabolas', 10, 6),
-    ('a@gmail.com', 'quadratic-relations', 'transformations-vertex-form', 10, 6),
-    ('a@gmail.com', 'quadratic-relations', 'expanding-and-simplifying', 10, 5),
-    ('a@gmail.com', 'quadratic-relations', 'factoring-quadratics', 10, 6),
-    ('a@gmail.com', 'quadratic-relations', 'solving-by-factoring', 10, 6),
-    ('a@gmail.com', 'quadratic-relations', 'completing-the-square', 10, 6),
-    ('a@gmail.com', 'quadratic-relations', 'quadratic-formula', 10, 5),
-    ('a@gmail.com', 'quadratic-relations', 'graphing-quadratics', 10, 6),
-    ('a@gmail.com', 'quadratic-relations', 'quadratic-applications', 10, 6),
+    ('quadratic-relations', 'investigating-parabolas', 'a@gmail.com', 10, 6),
+    ('quadratic-relations', 'transformations-vertex-form', 'a@gmail.com', 10, 6),
+    ('quadratic-relations', 'expanding-and-simplifying', 'a@gmail.com', 10, 5),
+    ('quadratic-relations', 'factoring-quadratics', 'a@gmail.com', 10, 6),
+    ('quadratic-relations', 'solving-by-factoring', 'a@gmail.com', 10, 6),
+    ('quadratic-relations', 'completing-the-square', 'a@gmail.com', 10, 6),
+    ('quadratic-relations', 'quadratic-formula', 'a@gmail.com', 10, 5),
+    ('quadratic-relations', 'graphing-quadratics', 'a@gmail.com', 10, 6),
+    ('quadratic-relations', 'quadratic-applications', 'a@gmail.com', 10, 6),
 
     -- Student B (b@gmail.com): Trigonometry fully completed (green
     -- branch). Quadratic Relations is a mix of nearing-completion (light
@@ -216,29 +625,30 @@ with results (student_email, unit_code, subtopic_code, questions_total, question
     -- as struggling — the most urgent subtopic wins. Analytic Geometry is
     -- struggling across the board (orange). Linear Systems hasn't been
     -- started (grey, no rows below).
-    ('b@gmail.com', 'trigonometry', 'similar-triangles', 10, 9),
-    ('b@gmail.com', 'trigonometry', 'primary-trig-ratios', 10, 10),
-    ('b@gmail.com', 'trigonometry', 'solving-right-triangles', 10, 9),
-    ('b@gmail.com', 'trigonometry', 'elevation-and-depression', 10, 9),
-    ('b@gmail.com', 'trigonometry', 'sine-law', 10, 10),
-    ('b@gmail.com', 'trigonometry', 'cosine-law', 10, 9),
-    ('b@gmail.com', 'trigonometry', 'acute-triangle-applications', 10, 9),
-    ('b@gmail.com', 'quadratic-relations', 'investigating-parabolas', 10, 8),
-    ('b@gmail.com', 'quadratic-relations', 'transformations-vertex-form', 10, 7),
-    ('b@gmail.com', 'quadratic-relations', 'expanding-and-simplifying', 10, 3),
-    ('b@gmail.com', 'quadratic-relations', 'factoring-quadratics', 10, 2),
-    ('b@gmail.com', 'analytic-geometry', 'length-of-a-line-segment', 10, 3),
-    ('b@gmail.com', 'analytic-geometry', 'midpoint-of-a-line-segment', 10, 4),
-    ('b@gmail.com', 'analytic-geometry', 'slope-and-equation-of-a-line', 10, 2)
+    ('trigonometry', 'similar-triangles', 'b@gmail.com', 10, 9),
+    ('trigonometry', 'primary-trig-ratios', 'b@gmail.com', 10, 10),
+    ('trigonometry', 'solving-right-triangles', 'b@gmail.com', 10, 9),
+    ('trigonometry', 'elevation-and-depression', 'b@gmail.com', 10, 9),
+    ('trigonometry', 'sine-law', 'b@gmail.com', 10, 10),
+    ('trigonometry', 'cosine-law', 'b@gmail.com', 10, 9),
+    ('trigonometry', 'acute-triangle-applications', 'b@gmail.com', 10, 9),
+    ('quadratic-relations', 'investigating-parabolas', 'b@gmail.com', 10, 8),
+    ('quadratic-relations', 'transformations-vertex-form', 'b@gmail.com', 10, 7),
+    ('quadratic-relations', 'expanding-and-simplifying', 'b@gmail.com', 10, 3),
+    ('quadratic-relations', 'factoring-quadratics', 'b@gmail.com', 10, 2),
+    ('analytic-geometry', 'length-of-a-line-segment', 'b@gmail.com', 10, 3),
+    ('analytic-geometry', 'midpoint-of-a-line-segment', 'b@gmail.com', 10, 4),
+    ('analytic-geometry', 'slope-and-equation-of-a-line', 'b@gmail.com', 10, 2)
     -- linear-systems: not attempted yet.
 )
 insert into public.practice_test_results (
   student_id, subtopic_id, questions_total, questions_correct, attempted_at
 )
 select
-  u.id, s.id, r.questions_total, r.questions_correct,
+  au.id, s.id, r.questions_total, r.questions_correct,
   now() - (random() * interval '14 days')
 from results r
-join auth.users u on u.email = r.student_email
-join public.units un on un.code = r.unit_code
+join auth.users au on au.email = r.student_email
+join public.courses c on c.code = 'MPM2D'
+join public.units un on un.code = r.unit_code and un.course_id = c.id
 join public.subtopics s on s.code = r.subtopic_code and s.unit_id = un.id;

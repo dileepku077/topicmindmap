@@ -1,4 +1,5 @@
--- Topic Mindmap: schema for Ontario Grade 10 Math (MPM2D) curriculum mindmap app.
+-- Topic Mindmap: schema for the Ontario academic math stream (grades 9-12)
+-- curriculum mindmap app.
 -- Run this in the Supabase SQL editor (or via `supabase db push`) on a fresh project.
 
 create extension if not exists "pgcrypto";
@@ -7,15 +8,44 @@ create extension if not exists "pgcrypto";
 -- Curriculum content (public, read-only to app users)
 -- ---------------------------------------------------------------------------
 
+-- This revision adds `courses` (one per grade) and a `units.course_id` FK,
+-- so unit/subtopic codes only need to be unique within their own course
+-- rather than globally. `create table if not exists` below won't retrofit
+-- that column onto an already-existing `units` table, so drop and recreate
+-- instead of migrating in place — every row here (curriculum content and
+-- demo practice-test results) is fully reproducible from seed.sql, so
+-- there's nothing to preserve. Re-run seed.sql after this.
+drop table if exists public.practice_test_results cascade;
+drop table if exists public.subtopics cascade;
+drop table if exists public.units cascade;
+drop table if exists public.courses cascade;
+
+-- One row per grade's academic-stream course (MPM1D, MPM2D, MCR3U, MHF4U).
+-- The mindmap shows one course at a time; the grade dropdown in the app
+-- switches which course's units/subtopics are loaded.
+create table if not exists public.courses (
+  id uuid primary key default gen_random_uuid(),
+  grade int not null,                     -- 9, 10, 11, 12
+  code text not null unique,              -- e.g. 'MPM2D'
+  title text not null,                    -- e.g. 'Grade 10 Academic Math'
+  description text,
+  order_index int not null default 0,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.units (
   id uuid primary key default gen_random_uuid(),
-  code text not null unique,              -- e.g. 'linear-systems'
+  course_id uuid not null references public.courses (id) on delete cascade,
+  code text not null,                     -- e.g. 'linear-systems' (unique within its course)
   title text not null,                    -- e.g. 'Linear Systems'
   description text,
   color text not null default '#5B8DEF',  -- hex color used as a subtle accent on the mindmap node
   order_index int not null default 0,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  unique (course_id, code)
 );
+
+create index if not exists units_course_id_idx on public.units (course_id);
 
 create table if not exists public.subtopics (
   id uuid primary key default gen_random_uuid(),
@@ -97,12 +127,18 @@ create trigger on_auth_user_created
 -- Row Level Security
 -- ---------------------------------------------------------------------------
 
+alter table public.courses enable row level security;
 alter table public.units enable row level security;
 alter table public.subtopics enable row level security;
 alter table public.profiles enable row level security;
 alter table public.practice_test_results enable row level security;
 
 -- Curriculum content: readable by anyone (including anonymous), no client writes.
+drop policy if exists "courses are publicly readable" on public.courses;
+create policy "courses are publicly readable"
+  on public.courses for select
+  using (true);
+
 drop policy if exists "units are publicly readable" on public.units;
 create policy "units are publicly readable"
   on public.units for select

@@ -6,9 +6,9 @@ import 'package:topicmindmap/models/progress_status.dart';
 import 'package:topicmindmap/models/subtopic.dart';
 
 void main() {
-  testWidgets('RootNodeWidget shows the course title', (tester) async {
+  testWidgets('RootNodeWidget shows the given label', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(home: Scaffold(body: RootNodeWidget())),
+      const MaterialApp(home: Scaffold(body: RootNodeWidget(label: 'Grade 10 Math'))),
     );
 
     expect(find.text('Grade 10 Math'), findsOneWidget);

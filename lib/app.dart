@@ -11,7 +11,7 @@ class TopicMindmapApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(appRouterProvider);
     return MaterialApp.router(
-      title: 'Grade 10 Math Mindmap',
+      title: 'Ontario Math Mindmap',
       debugShowCheckedModeBanner: false,
       theme: buildLightTheme(),
       darkTheme: buildDarkTheme(),

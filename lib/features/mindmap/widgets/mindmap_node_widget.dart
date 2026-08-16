@@ -5,7 +5,9 @@ import '../../../models/subtopic.dart';
 import '../../../models/unit.dart';
 
 class RootNodeWidget extends StatelessWidget {
-  const RootNodeWidget({super.key});
+  const RootNodeWidget({super.key, required this.label});
+
+  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +26,7 @@ class RootNodeWidget extends StatelessWidget {
         ],
       ),
       child: Text(
-        'Grade 10 Math',
+        label,
         style: Theme.of(context).textTheme.titleMedium?.copyWith(
               color: scheme.onPrimary,
               fontWeight: FontWeight.bold,
