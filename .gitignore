@@ -52,3 +52,10 @@ app.env
 
 # Netlify CLI local state (site linkage)
 .netlify/
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
