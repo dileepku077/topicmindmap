@@ -93,6 +93,14 @@ $videoHtml
   // passes over it. Show a plain "open" button first (ordinary page
   // content, scrolls fine) and only mount the live, scroll-capturing
   // Desmos iframe once the student clicks in to explore it.
+  //
+  // Even once open, a transparent "guard" layer sits on top of the
+  // iframe and stays armed by default: it's ordinary content in *this*
+  // document, so wheel input on it still bubbles to the forwarder below
+  // instead of reaching Desmos's zoom handler. Only a click disarms it
+  // (letting drag/scroll-to-zoom through to the graph itself), and it
+  // re-arms the moment the cursor leaves — so scrolling past the lesson
+  // works by default, and dragging the graph is one click away.
   var desmosEmbed = document.querySelector('.desmos-embed[data-desmos-url]');
   if (desmosEmbed) {
     var openDesmos = function () {
@@ -100,8 +108,25 @@ $videoHtml
       iframe.src = desmosEmbed.getAttribute('data-desmos-url');
       iframe.title = 'Interactive Desmos graph';
       iframe.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;';
+
+      var guard = document.createElement('div');
+      guard.className = 'desmos-guard';
+      guard.setAttribute('role', 'button');
+      guard.setAttribute('tabindex', '0');
+      guard.setAttribute('aria-label', 'Click to interact with the graph');
+      guard.innerHTML = '<span>Click to interact</span>';
+      var disarm = function () { guard.classList.add('disarmed'); };
+      var arm = function () { guard.classList.remove('disarmed'); };
+      guard.addEventListener('click', disarm);
+      guard.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); disarm(); }
+      });
+      desmosEmbed.addEventListener('mouseleave', arm);
+
       desmosEmbed.textContent = '';
       desmosEmbed.appendChild(iframe);
+      desmosEmbed.appendChild(guard);
+      desmosEmbed.classList.add('playing');
     };
     desmosEmbed.querySelector('.desmos-open').addEventListener('click', openDesmos, { once: true });
   }
@@ -440,4 +465,34 @@ const _lessonCss = '''
     transition: transform 0.15s ease;
   }
   .desmos-open:hover { transform: scale(1.04); }
+
+  .desmos-guard {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding-bottom: 14px;
+    cursor: pointer;
+    background: rgba(var(--code-accent-rgb), 0.03);
+  }
+  .desmos-guard span {
+    padding: 5px 12px;
+    border-radius: 999px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-2);
+    font-size: 0.78rem;
+    font-weight: 600;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+  }
+  .desmos-guard:hover span,
+  .desmos-guard:focus-visible span {
+    opacity: 1;
+  }
+  .desmos-guard.disarmed {
+    pointer-events: none;
+    background: none;
+  }
 ''';
