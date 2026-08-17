@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -19,6 +21,14 @@ const _rootId = 'root';
 // the user pan/zoom around it — same idea as Coggle's infinite board.
 const _canvasSize = Size(3200, 3200);
 const _canvasCenter = Offset(1600, 1600);
+
+// Generous approximate footprints used only for collision avoidance when
+// placing nodes — deliberately larger than the widgets' typical rendered
+// size (titles can wrap to two lines) so nodes get a visible gap rather
+// than just barely not touching.
+const _rootNodeSize = Size(220, 56);
+const _unitNodeSize = Size(180, 48);
+const _subtopicNodeSize = Size(160, 56);
 
 class MindmapPage extends ConsumerStatefulWidget {
   const MindmapPage({super.key});
@@ -105,12 +115,106 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
     const subSpacingY = 48.0;
     final totalHeight = (subtopics.length - 1) * subSpacingY;
     final startY = unitPos.dy - totalHeight / 2;
+
+    // Units on the same side of the root all share the same x-coordinate
+    // for their subtopic column (see _ensureLayout), so two expanded
+    // neighboring units' ideal stacks can easily land in the same band —
+    // that's the overlap this was reported for. Each new subtopic is
+    // placed at its "ideal" spot in the stack unless that spot is already
+    // occupied by another currently-visible node, in which case it's
+    // nudged to the nearest free space instead.
+    final occupied = _occupiedRects();
     for (var i = 0; i < subtopics.length; i++) {
       final subtopic = subtopics[i];
       if (_positions.containsKey(subtopic.id)) continue;
-      _positions[subtopic.id] =
-          Offset(unitPos.dx + sideSign * subOffsetX, startY + i * subSpacingY);
+      final ideal = Offset(unitPos.dx + sideSign * subOffsetX, startY + i * subSpacingY);
+      final placed = _findVacantPosition(ideal: ideal, size: _subtopicNodeSize, occupied: occupied);
+      _positions[subtopic.id] = placed;
+      occupied.add(Rect.fromCenter(
+        center: placed,
+        width: _subtopicNodeSize.width,
+        height: _subtopicNodeSize.height,
+      ));
     }
+  }
+
+  /// Bounding boxes of every node currently visible on the canvas (the
+  /// root, every unit, and the subtopics of every *expanded* unit) — used
+  /// to keep newly-placed subtopics from landing on top of one another.
+  List<Rect> _occupiedRects() {
+    final rects = <Rect>[];
+    final rootPos = _positions[_rootId];
+    if (rootPos != null) {
+      rects.add(Rect.fromCenter(
+        center: rootPos,
+        width: _rootNodeSize.width,
+        height: _rootNodeSize.height,
+      ));
+    }
+    for (final unitId in _subtopicsByUnit.keys) {
+      final pos = _positions[unitId];
+      if (pos == null) continue;
+      rects.add(Rect.fromCenter(center: pos, width: _unitNodeSize.width, height: _unitNodeSize.height));
+    }
+    for (final unitId in _expandedUnitIds) {
+      for (final subtopic in _subtopicsByUnit[unitId] ?? const <Subtopic>[]) {
+        final pos = _positions[subtopic.id];
+        if (pos == null) continue;
+        rects.add(Rect.fromCenter(
+          center: pos,
+          width: _subtopicNodeSize.width,
+          height: _subtopicNodeSize.height,
+        ));
+      }
+    }
+    return rects;
+  }
+
+  /// Returns [ideal] if nothing there overlaps [occupied]; otherwise finds
+  /// the nearest free spot. Searches straight up/down first — that resolves
+  /// the common case (a unit's subtopic stack overlapping a same-side
+  /// neighbor's stack, since both sit at the same x) while keeping the
+  /// subtopic close to where it "should" be — then falls back to a widening
+  /// radial search so a vacant spot is always found regardless of shape.
+  Offset _findVacantPosition({
+    required Offset ideal,
+    required Size size,
+    required List<Rect> occupied,
+  }) {
+    const margin = 14.0;
+    bool isFree(Offset center) {
+      final rect = Rect.fromCenter(
+        center: center,
+        width: size.width + margin,
+        height: size.height + margin,
+      );
+      for (final other in occupied) {
+        if (rect.overlaps(other)) return false;
+      }
+      return true;
+    }
+
+    if (isFree(ideal)) return ideal;
+
+    const verticalStep = 16.0;
+    for (var k = 1; k <= 240; k++) {
+      final down = ideal + Offset(0, verticalStep * k);
+      if (isFree(down)) return down;
+      final up = ideal - Offset(0, verticalStep * k);
+      if (isFree(up)) return up;
+    }
+
+    const ringStep = 28.0;
+    for (var radius = ringStep; radius < 3000; radius += ringStep) {
+      final samples = ((radius / ringStep) * 8).clamp(8, 72).round();
+      for (var i = 0; i < samples; i++) {
+        final angle = 2 * math.pi * i / samples;
+        final candidate = ideal + Offset(math.cos(angle), math.sin(angle)) * radius;
+        if (isFree(candidate)) return candidate;
+      }
+    }
+
+    return ideal; // Unreachable in practice given the canvas size.
   }
 
   void _centerView() {
