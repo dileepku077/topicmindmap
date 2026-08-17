@@ -200,12 +200,12 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
     }
   }
 
-  /// Recomputes the viewer's pan and zoom so every currently-visible node
-  /// (the root, every unit, and the subtopics of every expanded unit) fits
-  /// inside the viewport at once — the whole tree stays in view without
-  /// scrolling, however much of it is expanded. Called after the first
-  /// layout and after every expand/collapse; a manual pinch/pan is left
-  /// free the rest of the time.
+  /// Re-centers the viewer on whatever's currently visible (the root,
+  /// every unit, and the subtopics of every expanded unit) — but always at
+  /// a natural 1:1 zoom, never shrinking to force everything into view.
+  /// Readable, full-size text matters more than seeing the entire tree at
+  /// once; a manual pinch/pan is left free the rest of the time. Called
+  /// after the first layout and after every expand/collapse.
   void _fitToContent() {
     if (_lastViewportSize == Size.zero) return;
     final root = _positions[_rootId];
@@ -230,32 +230,16 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
       }
     }
 
-    // Room for a node's own half-width/height plus a comfortable margin,
-    // since the bounding box above is built from node *centers*.
-    const nodePad = 110.0;
-    final contentWidth = (maxX - minX) + nodePad * 2;
-    final contentHeight = (maxY - minY) + nodePad * 2;
     final contentCenter = Offset((minX + maxX) / 2, (minY + maxY) / 2);
-
-    // Only ever zoom out to fit, never in past a natural 1:1 — a lightly
-    // expanded map should still look like a normal-sized mindmap, not a
-    // magnified one.
-    final scale = math
-        .min(
-          _lastViewportSize.width / contentWidth,
-          _lastViewportSize.height / contentHeight,
-        )
-        .clamp(0.35, 1.0);
 
     setState(() {
       _transformController.value = Matrix4.identity()
         ..translateByDouble(
-          _lastViewportSize.width / 2 - contentCenter.dx * scale,
-          _lastViewportSize.height / 2 - contentCenter.dy * scale,
+          _lastViewportSize.width / 2 - contentCenter.dx,
+          _lastViewportSize.height / 2 - contentCenter.dy,
           0,
           1,
-        )
-        ..scaleByDouble(scale, scale, 1, 1);
+        );
     });
   }
 
@@ -263,6 +247,24 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
     final scale = _transformController.value.getMaxScaleOnAxis();
     setState(() {
       _positions[nodeId] = (_positions[nodeId] ?? Offset.zero) + delta / scale;
+    });
+  }
+
+  /// Drags a unit together with every subtopic already placed under it
+  /// (whether or not currently expanded) — the whole branch moves as one
+  /// piece, the way it would in a real mindmap, instead of leaving the
+  /// subtopics behind.
+  void _moveUnit(String unitId, Offset delta) {
+    final scale = _transformController.value.getMaxScaleOnAxis();
+    final scaledDelta = delta / scale;
+    setState(() {
+      _positions[unitId] = (_positions[unitId] ?? Offset.zero) + scaledDelta;
+      for (final subtopic in _subtopicsByUnit[unitId] ?? const <Subtopic>[]) {
+        final pos = _positions[subtopic.id];
+        if (pos != null) {
+          _positions[subtopic.id] = pos + scaledDelta;
+        }
+      }
     });
   }
 
@@ -438,7 +440,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
         _DraggableNode(
           position: unitPos,
           onDragStart: () => setState(() => _canvasGesturesEnabled = false),
-          onDragUpdate: (delta) => _moveNode(unit.id, delta),
+          onDragUpdate: (delta) => _moveUnit(unit.id, delta),
           onDragEnd: () => setState(() => _canvasGesturesEnabled = true),
           onTap: () => _toggleUnit(unit),
           child: UnitNodeWidget(
