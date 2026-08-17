@@ -22,18 +22,19 @@ const _rootId = 'root';
 const _canvasSize = Size(4400, 4400);
 const _canvasCenter = Offset(2200, 2200);
 
-// Horizontal distance from the root to a unit — generous on purpose so the
-// first-glance topic list has real breathing room around it, not a tight
-// cluster.
-const _unitOffsetX = 340.0;
+// Horizontal distance from the root to a unit — enough for real breathing
+// room, but kept modest: the view auto-fits its zoom to whatever's
+// currently visible (see _fitToContent), so a tighter base layout means a
+// higher, more legible zoom level once things are expanded.
+const _unitOffsetX = 250.0;
 const _subtopicNodeHeight = 56.0;
 
 // The minimum vertical territory a unit gets even with zero subtopics, and
 // the guaranteed gap of empty canvas left between two units' territories —
 // this is what keeps the collapsed topic list visibly spread out and
 // guarantees one unit's subtopics can never reach into a neighbor's.
-const _minUnitSlotHeight = 170.0;
-const _unitSlotGap = 90.0;
+const _minUnitSlotHeight = 130.0;
+const _unitSlotGap = 56.0;
 
 // Subtopics fan out around their unit like leaves around a branch tip
 // instead of stacking in a column to one side. They're spread across an
@@ -41,10 +42,10 @@ const _unitSlotGap = 90.0;
 // this many degrees wide, growing with how many there are to fit — with
 // only a blind cone directly back toward the root left clear so nothing
 // crosses over the connecting line back to the parent.
-const _leafMaxSpanDeg = 240.0;
-const _leafSpanPerGap = 40.0;
-const _leafMinRadius = 180.0;
-const _leafTargetChord = 185.0;
+const _leafMaxSpanDeg = 230.0;
+const _leafSpanPerGap = 34.0;
+const _leafMinRadius = 130.0;
+const _leafTargetChord = 145.0;
 
 class MindmapPage extends ConsumerStatefulWidget {
   const MindmapPage({super.key});
@@ -107,7 +108,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
     placeSide(rightUnits, 1);
     placeSide(leftUnits, -1);
 
-    WidgetsBinding.instance.addPostFrameCallback((_) => _centerView());
+    WidgetsBinding.instance.addPostFrameCallback((_) => _fitToContent());
   }
 
   /// Relative polar placement (angle in degrees measured off the "outward"
@@ -199,18 +200,62 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
     }
   }
 
-  void _centerView() {
+  /// Recomputes the viewer's pan and zoom so every currently-visible node
+  /// (the root, every unit, and the subtopics of every expanded unit) fits
+  /// inside the viewport at once — the whole tree stays in view without
+  /// scrolling, however much of it is expanded. Called after the first
+  /// layout and after every expand/collapse; a manual pinch/pan is left
+  /// free the rest of the time.
+  void _fitToContent() {
     if (_lastViewportSize == Size.zero) return;
     final root = _positions[_rootId];
     if (root == null) return;
+
+    var minX = root.dx, maxX = root.dx, minY = root.dy, maxY = root.dy;
+    void include(Offset p) {
+      minX = math.min(minX, p.dx);
+      maxX = math.max(maxX, p.dx);
+      minY = math.min(minY, p.dy);
+      maxY = math.max(maxY, p.dy);
+    }
+
+    for (final unitId in _subtopicsByUnit.keys) {
+      final pos = _positions[unitId];
+      if (pos != null) include(pos);
+    }
+    for (final unitId in _expandedUnitIds) {
+      for (final subtopic in _subtopicsByUnit[unitId] ?? const <Subtopic>[]) {
+        final pos = _positions[subtopic.id];
+        if (pos != null) include(pos);
+      }
+    }
+
+    // Room for a node's own half-width/height plus a comfortable margin,
+    // since the bounding box above is built from node *centers*.
+    const nodePad = 110.0;
+    final contentWidth = (maxX - minX) + nodePad * 2;
+    final contentHeight = (maxY - minY) + nodePad * 2;
+    final contentCenter = Offset((minX + maxX) / 2, (minY + maxY) / 2);
+
+    // Only ever zoom out to fit, never in past a natural 1:1 — a lightly
+    // expanded map should still look like a normal-sized mindmap, not a
+    // magnified one.
+    final scale = math
+        .min(
+          _lastViewportSize.width / contentWidth,
+          _lastViewportSize.height / contentHeight,
+        )
+        .clamp(0.35, 1.0);
+
     setState(() {
       _transformController.value = Matrix4.identity()
         ..translateByDouble(
-          _lastViewportSize.width / 2 - root.dx,
-          _lastViewportSize.height / 2 - root.dy,
+          _lastViewportSize.width / 2 - contentCenter.dx * scale,
+          _lastViewportSize.height / 2 - contentCenter.dy * scale,
           0,
           1,
-        );
+        )
+        ..scaleByDouble(scale, scale, 1, 1);
     });
   }
 
@@ -230,6 +275,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
         _expandedUnitIds.add(unit.id);
       }
     });
+    _fitToContent();
   }
 
   @override
@@ -254,7 +300,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
           IconButton(
             tooltip: 'Reset view',
             icon: const Icon(Icons.center_focus_strong),
-            onPressed: _centerView,
+            onPressed: _fitToContent,
           ),
           if (user == null)
             TextButton(
@@ -315,7 +361,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                     final wasZero = _lastViewportSize == Size.zero;
                     _lastViewportSize = viewportSize;
                     if (wasZero) {
-                      WidgetsBinding.instance.addPostFrameCallback((_) => _centerView());
+                      WidgetsBinding.instance.addPostFrameCallback((_) => _fitToContent());
                     }
                   }
                   return InteractiveViewer(
