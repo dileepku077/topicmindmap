@@ -22,19 +22,13 @@ const _rootId = 'root';
 const _canvasSize = Size(4400, 4400);
 const _canvasCenter = Offset(2200, 2200);
 
-// Horizontal distance from the root to a unit — enough for real breathing
-// room, but kept modest: the view auto-fits its zoom to whatever's
-// currently visible (see _fitToContent), so a tighter base layout means a
-// higher, more legible zoom level once things are expanded.
+// Distance from the root to the first unit on each side, and the gap left
+// between two units' fans on the same side (see placeSide) — units grow
+// outward toward the left/right margins in a roughly horizontal row, the
+// way a horizontal mind map's primary branches do; only their subtopics
+// branch vertically off of that.
 const _unitOffsetX = 250.0;
-const _subtopicNodeHeight = 56.0;
-
-// The minimum vertical territory a unit gets even with zero subtopics, and
-// the guaranteed gap of empty canvas left between two units' territories —
-// this is what keeps the collapsed topic list visibly spread out and
-// guarantees one unit's subtopics can never reach into a neighbor's.
-const _minUnitSlotHeight = 130.0;
-const _unitSlotGap = 56.0;
+const _unitRowGap = 70.0;
 
 // Subtopics fan out around their unit like leaves around a branch tip
 // instead of stacking in a column to one side. They're spread across an
@@ -140,37 +134,43 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
     ];
   }
 
-  /// Height of the vertical territory a unit needs to fit its own leaf fan
-  /// (see [_ensureSubtopicPositions]), plus breathing room. Units are given
-  /// this much room from the very first layout — whether or not they're
-  /// expanded yet — so a topic with a long subtopic list already has a
-  /// wide-enough gap to its neighbors before the user ever taps it, and its
-  /// subtopics never have to encroach on a neighboring topic's space to
-  /// avoid overlapping it.
-  double _unitSlotHeight(Unit unit) {
+  /// How far a unit's own leaf fan (see [_ensureSubtopicPositions]) reaches
+  /// outward (away from the root) and — for a wide enough fan — back
+  /// toward the root, measured from the unit's own center. Used to give
+  /// each unit in a horizontal row just enough room that its fan can never
+  /// reach into a neighboring unit's fan.
+  ({double towardRoot, double outward}) _unitFanReach(Unit unit) {
     final count = _subtopicsByUnit[unit.id]?.length ?? 0;
-    if (count == 0) return _minUnitSlotHeight;
-    var maxAbsY = 0.0;
+    if (count == 0) return (towardRoot: 0, outward: 0);
+    var maxOutward = 0.0, maxTowardRoot = 0.0;
     for (final leaf in _leafLayout(count)) {
-      final y = leaf.radius * math.sin(leaf.angleDeg * math.pi / 180);
-      maxAbsY = math.max(maxAbsY, y.abs());
+      // angleDeg is already measured relative to "outward" — reach along
+      // that axis is independent of which side (left/right) this ends up
+      // placed on, so this can be computed once, unsigned.
+      final x = leaf.radius * math.cos(leaf.angleDeg * math.pi / 180);
+      maxOutward = math.max(maxOutward, x);
+      maxTowardRoot = math.max(maxTowardRoot, -x);
     }
-    return math.max(_minUnitSlotHeight, 2 * maxAbsY + _subtopicNodeHeight + 30);
+    return (towardRoot: maxTowardRoot, outward: maxOutward);
   }
 
-  /// Stacks [side]'s units top-to-bottom, each centered in its own
-  /// non-overlapping vertical slot (see [_unitSlotHeight]), separated by a
-  /// fixed gap of guaranteed-empty canvas.
+  /// Lines [side]'s units up in a horizontal row extending outward from the
+  /// root — the primary branches of a horizontal mind map grow toward the
+  /// left/right margins, not up and down — each one just far enough past
+  /// the last that its leaf fan (see [_unitFanReach]) can't reach into the
+  /// previous unit's fan. Subtopics do all of the vertical branching.
   void placeSide(List<Unit> side, double sign) {
     if (side.isEmpty) return;
-    final slotHeights = [for (final unit in side) _unitSlotHeight(unit)];
-    final totalHeight =
-        slotHeights.fold<double>(0, (sum, h) => sum + h) + _unitSlotGap * (side.length - 1);
-    var top = _canvasCenter.dy - totalHeight / 2;
+    var cursorX = _canvasCenter.dx + sign * _unitOffsetX;
+    var previousOutwardReach = 0.0;
     for (var i = 0; i < side.length; i++) {
-      final centerY = top + slotHeights[i] / 2;
-      _positions[side[i].id] = Offset(_canvasCenter.dx + sign * _unitOffsetX, centerY);
-      top += slotHeights[i] + _unitSlotGap;
+      final unit = side[i];
+      final reach = _unitFanReach(unit);
+      if (i > 0) {
+        cursorX += sign * (previousOutwardReach + _unitRowGap + reach.towardRoot);
+      }
+      _positions[unit.id] = Offset(cursorX, _canvasCenter.dy);
+      previousOutwardReach = reach.outward;
     }
   }
 
@@ -184,11 +184,11 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
     // fan; 0° for a right-side unit, 180° for a left-side one.
     final outwardDeg = sideSign > 0 ? 0.0 : 180.0;
 
-    // Every unit already owns enough vertical territory for this exact fan
-    // (see _unitSlotHeight), so it can never reach into a neighboring
-    // unit's space — subtopics stay right beside their own topic, spread
-    // around it like leaves around a branch tip rather than stacked in a
-    // column to one side.
+    // Every unit already sits far enough from its row-neighbors for this
+    // exact fan (see _unitFanReach), so it can never reach into a
+    // neighboring unit's space — subtopics stay right beside their own
+    // topic, spread around it like leaves around a branch tip rather than
+    // stacked in a column to one side.
     final leaves = _leafLayout(subtopics.length);
     for (var i = 0; i < subtopics.length; i++) {
       final subtopic = subtopics[i];
