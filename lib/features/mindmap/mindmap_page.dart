@@ -640,12 +640,40 @@ class _MindmapEdgePainter extends CustomPainter {
     final rootPos = positions[_rootId];
     if (rootPos == null) return;
 
+    // Units on the same side now sit in a horizontal row at the root's own
+    // height (see placeSide), so a straight root-to-unit line for a
+    // farther unit would run directly through any closer unit sitting
+    // between it and the root — reading as a chain from unit to unit
+    // instead of every unit connecting only to the root. Ranking each
+    // unit by its distance from the root lets its curve bow just enough
+    // to visibly clear whatever's closer on the same row.
+    final rowIndex = <String, int>{};
+    final right = <Unit>[], left = <Unit>[];
+    for (final unit in units) {
+      final pos = positions[unit.id];
+      if (pos == null) continue;
+      (pos.dx >= rootPos.dx ? right : left).add(unit);
+    }
+    for (final side in [right, left]) {
+      side.sort(
+        (a, b) => (positions[a.id]!.dx - rootPos.dx)
+            .abs()
+            .compareTo((positions[b.id]!.dx - rootPos.dx).abs()),
+      );
+      for (var i = 0; i < side.length; i++) {
+        rowIndex[side[i].id] = i;
+      }
+    }
+
     for (final unit in units) {
       final unitPos = positions[unit.id];
       if (unitPos == null) continue;
       final subtopicIds = (subtopicsByUnit[unit.id] ?? const []).map((s) => s.id);
       final unitStatus = aggregateUnitStatus(subtopicIds, subtopicStatus);
-      _drawCurve(canvas, rootPos, unitPos, unitStatus.color, 4);
+      final index = rowIndex[unit.id] ?? 0;
+      final bowDirection = index.isEven ? -1.0 : 1.0;
+      final bow = index == 0 ? 0.0 : bowDirection * (60.0 + 55.0 * index);
+      _drawCurve(canvas, rootPos, unitPos, unitStatus.color, 4, bow: bow);
 
       if (!expandedUnitIds.contains(unit.id)) continue;
       for (final subtopic in subtopicsByUnit[unit.id] ?? const <Subtopic>[]) {
@@ -657,7 +685,7 @@ class _MindmapEdgePainter extends CustomPainter {
     }
   }
 
-  void _drawCurve(Canvas canvas, Offset start, Offset end, Color color, double width) {
+  void _drawCurve(Canvas canvas, Offset start, Offset end, Color color, double width, {double bow = 0}) {
     final paint = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
@@ -666,7 +694,7 @@ class _MindmapEdgePainter extends CustomPainter {
     final midX = (start.dx + end.dx) / 2;
     final path = Path()
       ..moveTo(start.dx, start.dy)
-      ..cubicTo(midX, start.dy, midX, end.dy, end.dx, end.dy);
+      ..cubicTo(midX, start.dy + bow, midX, end.dy + bow, end.dx, end.dy);
     canvas.drawPath(path, paint);
   }
 
