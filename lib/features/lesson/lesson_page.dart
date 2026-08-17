@@ -46,6 +46,7 @@ class LessonPage extends ConsumerWidget {
           return SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
             child: HtmlLessonView(
+              key: ValueKey(lesson.id),
               frameId: '${lesson.id}-full',
               markdown: lesson.content,
               videoTitle: lesson.videoTitle,

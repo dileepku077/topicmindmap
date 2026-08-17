@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/grade10_lesson_mapping.dart';
+import '../data/grade9_lesson_mapping.dart';
 import '../data/lesson_repository.dart';
 import '../models/lesson.dart';
 
@@ -22,8 +23,14 @@ final lessonProvider = Provider.family<Lesson?, String>((ref, lessonId) {
 });
 
 /// The lesson id covering [subtopicCode] in [courseCode]'s curriculum, if
-/// any. Lesson content only exists for Grade 10 (MPM2D) today.
+/// any. Lesson content exists for Grade 9 (MPM1D) and Grade 10 (MPM2D) today.
 String? lessonIdFor({required String courseCode, required String subtopicCode}) {
-  if (courseCode != 'MPM2D') return null;
-  return grade10LessonIdBySubtopicCode[subtopicCode];
+  switch (courseCode) {
+    case 'MPM1D':
+      return grade9LessonIdBySubtopicCode[subtopicCode];
+    case 'MPM2D':
+      return grade10LessonIdBySubtopicCode[subtopicCode];
+    default:
+      return null;
+  }
 }
