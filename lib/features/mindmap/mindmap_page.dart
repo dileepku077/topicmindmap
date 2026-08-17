@@ -22,12 +22,10 @@ const _rootId = 'root';
 const _canvasSize = Size(4400, 4400);
 const _canvasCenter = Offset(2200, 2200);
 
-// Horizontal distance from the root to a unit, and from a unit out to its
-// own subtopics — generous on purpose so the first-glance topic list has
-// real breathing room around it, not a tight cluster.
+// Horizontal distance from the root to a unit — generous on purpose so the
+// first-glance topic list has real breathing room around it, not a tight
+// cluster.
 const _unitOffsetX = 340.0;
-const _subOffsetX = 260.0;
-const _subSpacingY = 52.0;
 const _subtopicNodeHeight = 56.0;
 
 // The minimum vertical territory a unit gets even with zero subtopics, and
@@ -36,6 +34,17 @@ const _subtopicNodeHeight = 56.0;
 // guarantees one unit's subtopics can never reach into a neighbor's.
 const _minUnitSlotHeight = 170.0;
 const _unitSlotGap = 90.0;
+
+// Subtopics fan out around their unit like leaves around a branch tip
+// instead of stacking in a column to one side. They're spread across an
+// arc centered on the "outward" direction (away from the root) — up to
+// this many degrees wide, growing with how many there are to fit — with
+// only a blind cone directly back toward the root left clear so nothing
+// crosses over the connecting line back to the parent.
+const _leafMaxSpanDeg = 240.0;
+const _leafSpanPerGap = 40.0;
+const _leafMinRadius = 180.0;
+const _leafTargetChord = 185.0;
 
 class MindmapPage extends ConsumerStatefulWidget {
   const MindmapPage({super.key});
@@ -101,18 +110,51 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _centerView());
   }
 
-  /// Height of the vertical territory a unit needs to fit its own subtopic
-  /// stack (see [_ensureSubtopicPositions]), plus breathing room. Units are
-  /// given this much room from the very first layout — whether or not
-  /// they're expanded yet — so a topic with a long subtopic list already
-  /// has a wide-enough gap to its neighbors before the user ever taps it,
-  /// and its subtopics never have to encroach on a neighboring topic's
-  /// space to avoid overlapping it.
+  /// Relative polar placement (angle in degrees measured off the "outward"
+  /// direction, radius in px) for each of [count] subtopics. The arc widens
+  /// as [count] grows — a couple of leaves stay close together rather than
+  /// being flung to the far top/bottom of the available space, the way an
+  /// actual small cluster of leaves would — capped at [_leafMaxSpanDeg] so
+  /// it never wraps back around toward the root. Radius is whatever keeps
+  /// adjacent leaves comfortably apart at that angular spacing; alternating
+  /// leaves sit slightly closer in so the ring reads as organic rather than
+  /// a perfectly uniform circle.
+  List<({double angleDeg, double radius})> _leafLayout(int count) {
+    if (count <= 0) return const [];
+    if (count == 1) return const [(angleDeg: 0, radius: _leafMinRadius)];
+
+    final span = math.min(_leafMaxSpanDeg, _leafSpanPerGap * (count - 1));
+    final angleStep = span / (count - 1);
+    final spacingRad = angleStep * math.pi / 180;
+    final radius = math.max(
+      _leafMinRadius,
+      _leafTargetChord / (2 * math.sin(spacingRad / 2)),
+    );
+    return [
+      for (var i = 0; i < count; i++)
+        (
+          angleDeg: -span / 2 + i * angleStep,
+          radius: radius * (i.isEven ? 1.0 : 0.88),
+        ),
+    ];
+  }
+
+  /// Height of the vertical territory a unit needs to fit its own leaf fan
+  /// (see [_ensureSubtopicPositions]), plus breathing room. Units are given
+  /// this much room from the very first layout — whether or not they're
+  /// expanded yet — so a topic with a long subtopic list already has a
+  /// wide-enough gap to its neighbors before the user ever taps it, and its
+  /// subtopics never have to encroach on a neighboring topic's space to
+  /// avoid overlapping it.
   double _unitSlotHeight(Unit unit) {
     final count = _subtopicsByUnit[unit.id]?.length ?? 0;
     if (count == 0) return _minUnitSlotHeight;
-    final stackHeight = (count - 1) * _subSpacingY + _subtopicNodeHeight;
-    return math.max(_minUnitSlotHeight, stackHeight + 40);
+    var maxAbsY = 0.0;
+    for (final leaf in _leafLayout(count)) {
+      final y = leaf.radius * math.sin(leaf.angleDeg * math.pi / 180);
+      maxAbsY = math.max(maxAbsY, y.abs());
+    }
+    return math.max(_minUnitSlotHeight, 2 * maxAbsY + _subtopicNodeHeight + 30);
   }
 
   /// Stacks [side]'s units top-to-bottom, each centered in its own
@@ -137,23 +179,23 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
 
     final unitPos = _positions[unit.id]!;
     final sideSign = unitPos.dx >= _canvasCenter.dx ? 1.0 : -1.0;
-    final totalHeight = (subtopics.length - 1) * _subSpacingY;
-    final startY = unitPos.dy - totalHeight / 2;
+    // "Outward" — directly away from the root — is the center of the leaf
+    // fan; 0° for a right-side unit, 180° for a left-side one.
+    final outwardDeg = sideSign > 0 ? 0.0 : 180.0;
 
-    // Every unit already owns enough vertical territory for this exact
-    // stack (see _unitSlotHeight), so it can never reach into a
-    // neighboring unit's space — subtopics stay right beside their own
-    // topic. A gentle outward fan on top of the plain column — subtopics
-    // further from the unit's own row sit slightly further out — reads
-    // more like an organic mindmap branch than a rigid list.
-    const fanSpread = 22.0;
-    final halfHeight = totalHeight / 2;
+    // Every unit already owns enough vertical territory for this exact fan
+    // (see _unitSlotHeight), so it can never reach into a neighboring
+    // unit's space — subtopics stay right beside their own topic, spread
+    // around it like leaves around a branch tip rather than stacked in a
+    // column to one side.
+    final leaves = _leafLayout(subtopics.length);
     for (var i = 0; i < subtopics.length; i++) {
       final subtopic = subtopics[i];
       if (_positions.containsKey(subtopic.id)) continue;
-      final y = startY + i * _subSpacingY;
-      final fan = halfHeight > 0 ? fanSpread * ((y - unitPos.dy).abs() / halfHeight) : 0.0;
-      _positions[subtopic.id] = Offset(unitPos.dx + sideSign * (_subOffsetX + fan), y);
+      final leaf = leaves[i];
+      final angleRad = (outwardDeg + leaf.angleDeg) * math.pi / 180;
+      _positions[subtopic.id] = unitPos +
+          Offset(leaf.radius * math.cos(angleRad), leaf.radius * math.sin(angleRad));
     }
   }
 
