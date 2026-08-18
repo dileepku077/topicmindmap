@@ -6,6 +6,7 @@ import '../../../models/progress_status.dart';
 import '../../../models/subtopic.dart';
 import '../../../models/unit.dart';
 import '../../../state/progress_providers.dart';
+import 'hoverable_node.dart';
 
 /// A plain, scrollable outline of the same curriculum the mindmap shows —
 /// course title at top, units as collapsible sections, subtopics indented
@@ -140,103 +141,109 @@ class _UnitSection extends StatelessWidget {
       subtopicScorePercent,
     );
 
-    return Material(
-      color: scheme.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(14),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          InkWell(
-            onTap: onToggle,
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: 14 * scale,
-                vertical: 12 * scale,
-              ),
-              child: Row(
-                children: [
-                  Icon(status.icon, color: status.color, size: 20 * scale),
-                  SizedBox(width: 12 * scale),
-                  Expanded(
-                    child: Text(
-                      unit.title,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 15 * scale,
+    return HoverableNode(
+      pop: false,
+      message: status.hoverMessage(noun: 'unit', scorePercent: scorePercent),
+      highlightColor: status.color,
+      child: Material(
+        color: scheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(14),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            InkWell(
+              onTap: onToggle,
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: 14 * scale,
+                  vertical: 12 * scale,
+                ),
+                child: Row(
+                  children: [
+                    Icon(status.icon, color: status.color, size: 20 * scale),
+                    SizedBox(width: 12 * scale),
+                    Expanded(
+                      child: Text(
+                        unit.title,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15 * scale,
+                        ),
                       ),
                     ),
-                  ),
-                  if (scorePercent != null) ...[
-                    Text(
-                      '${scorePercent.round()}%',
-                      style: TextStyle(
-                        color: status.color,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 13 * scale,
+                    if (scorePercent != null) ...[
+                      Text(
+                        '${scorePercent.round()}%',
+                        style: TextStyle(
+                          color: status.color,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13 * scale,
+                        ),
+                      ),
+                      SizedBox(width: 10 * scale),
+                    ],
+                    Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 8 * scale,
+                        vertical: 2 * scale,
+                      ),
+                      decoration: BoxDecoration(
+                        color: status.color.withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '${subtopics.length}',
+                        style: TextStyle(
+                          color: status.color,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 11 * scale,
+                        ),
                       ),
                     ),
-                    SizedBox(width: 10 * scale),
+                    SizedBox(width: 6 * scale),
+                    AnimatedRotation(
+                      turns: expanded ? 0.5 : 0,
+                      duration: const Duration(milliseconds: 180),
+                      child: Icon(Icons.expand_more, size: 22 * scale),
+                    ),
                   ],
-                  Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 8 * scale,
-                      vertical: 2 * scale,
-                    ),
-                    decoration: BoxDecoration(
-                      color: status.color.withValues(alpha: 0.18),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      '${subtopics.length}',
-                      style: TextStyle(
-                        color: status.color,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 11 * scale,
+                ),
+              ),
+            ),
+            AnimatedCrossFade(
+              duration: const Duration(milliseconds: 180),
+              crossFadeState: expanded
+                  ? CrossFadeState.showFirst
+                  : CrossFadeState.showSecond,
+              firstChild: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Divider(
+                    height: 1,
+                    color: scheme.outlineVariant.withValues(alpha: 0.3),
+                  ),
+                  for (final subtopic in subtopics)
+                    _SubtopicRow(
+                      subtopic: subtopic,
+                      status:
+                          subtopicStatus[subtopic.id] ??
+                          ProgressStatus.notStarted,
+                      scorePercent: subtopicScorePercent[subtopic.id],
+                      scale: scale,
+                      onTap: () => onTapSubtopic(
+                        subtopic,
+                        subtopicStatus[subtopic.id] ??
+                            ProgressStatus.notStarted,
                       ),
                     ),
-                  ),
-                  SizedBox(width: 6 * scale),
-                  AnimatedRotation(
-                    turns: expanded ? 0.5 : 0,
-                    duration: const Duration(milliseconds: 180),
-                    child: Icon(Icons.expand_more, size: 22 * scale),
-                  ),
+                  const SizedBox(height: 4),
                 ],
               ),
+              secondChild: const SizedBox(width: double.infinity),
             ),
-          ),
-          AnimatedCrossFade(
-            duration: const Duration(milliseconds: 180),
-            crossFadeState: expanded
-                ? CrossFadeState.showFirst
-                : CrossFadeState.showSecond,
-            firstChild: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Divider(
-                  height: 1,
-                  color: scheme.outlineVariant.withValues(alpha: 0.3),
-                ),
-                for (final subtopic in subtopics)
-                  _SubtopicRow(
-                    subtopic: subtopic,
-                    status:
-                        subtopicStatus[subtopic.id] ??
-                        ProgressStatus.notStarted,
-                    scorePercent: subtopicScorePercent[subtopic.id],
-                    scale: scale,
-                    onTap: () => onTapSubtopic(
-                      subtopic,
-                      subtopicStatus[subtopic.id] ?? ProgressStatus.notStarted,
-                    ),
-                  ),
-                const SizedBox(height: 4),
-              ],
-            ),
-            secondChild: const SizedBox(width: double.infinity),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -259,42 +266,47 @@ class _SubtopicRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          44 * scale,
-          10 * scale,
-          14 * scale,
-          10 * scale,
-        ),
-        child: Row(
-          children: [
-            Icon(status.icon, color: status.color, size: 16 * scale),
-            SizedBox(width: 12 * scale),
-            Expanded(
-              child: Text(
-                subtopic.title,
-                style: TextStyle(fontSize: 13.5 * scale),
-              ),
-            ),
-            if (scorePercent != null) ...[
-              Text(
-                '${scorePercent!.round()}%',
-                style: TextStyle(
-                  color: status.color,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 12 * scale,
+    return HoverableNode(
+      pop: false,
+      message: status.hoverMessage(scorePercent: scorePercent),
+      highlightColor: status.color,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            44 * scale,
+            10 * scale,
+            14 * scale,
+            10 * scale,
+          ),
+          child: Row(
+            children: [
+              Icon(status.icon, color: status.color, size: 16 * scale),
+              SizedBox(width: 12 * scale),
+              Expanded(
+                child: Text(
+                  subtopic.title,
+                  style: TextStyle(fontSize: 13.5 * scale),
                 ),
               ),
-              SizedBox(width: 10 * scale),
+              if (scorePercent != null) ...[
+                Text(
+                  '${scorePercent!.round()}%',
+                  style: TextStyle(
+                    color: status.color,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12 * scale,
+                  ),
+                ),
+                SizedBox(width: 10 * scale),
+              ],
+              Icon(
+                Icons.chevron_right,
+                size: 18 * scale,
+                color: Theme.of(context).colorScheme.outline,
+              ),
             ],
-            Icon(
-              Icons.chevron_right,
-              size: 18 * scale,
-              color: Theme.of(context).colorScheme.outline,
-            ),
-          ],
+          ),
         ),
       ),
     );

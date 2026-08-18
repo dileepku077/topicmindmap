@@ -14,6 +14,7 @@ import '../../state/auth_providers.dart';
 import '../../state/curriculum_providers.dart';
 import '../../state/progress_providers.dart';
 import '../topic_detail/topic_detail_sheet.dart';
+import 'widgets/hoverable_node.dart';
 import 'widgets/mindmap_node_widget.dart';
 import 'widgets/topic_tree_view.dart';
 
@@ -636,12 +637,19 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
           onDragUpdate: (delta) => _moveUnit(unit.id, delta),
           onDragEnd: () => setState(() => _canvasGesturesEnabled = true),
           onTap: () => _toggleUnit(unit),
-          child: UnitNodeWidget(
-            unit: unit,
-            status: unitStatus,
-            subtopicCount: (_subtopicsByUnit[unit.id] ?? const []).length,
-            collapsed: !_expandedUnitIds.contains(unit.id),
-            scorePercent: unitScorePercent,
+          child: HoverableNode(
+            message: unitStatus.hoverMessage(
+              noun: 'unit',
+              scorePercent: unitScorePercent,
+            ),
+            highlightColor: unitStatus.color,
+            child: UnitNodeWidget(
+              unit: unit,
+              status: unitStatus,
+              subtopicCount: (_subtopicsByUnit[unit.id] ?? const []).length,
+              collapsed: !_expandedUnitIds.contains(unit.id),
+              scorePercent: unitScorePercent,
+            ),
           ),
         ),
       );
@@ -663,10 +671,16 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
               color: status.color,
               courseCode: course.code,
             ),
-            child: SubtopicNodeWidget(
-              subtopic: subtopic,
-              status: status,
-              scorePercent: subtopicScorePercent[subtopic.id],
+            child: HoverableNode(
+              message: status.hoverMessage(
+                scorePercent: subtopicScorePercent[subtopic.id],
+              ),
+              highlightColor: status.color,
+              child: SubtopicNodeWidget(
+                subtopic: subtopic,
+                status: status,
+                scorePercent: subtopicScorePercent[subtopic.id],
+              ),
             ),
           ),
         );
