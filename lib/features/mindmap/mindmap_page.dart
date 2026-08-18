@@ -13,8 +13,14 @@ import '../../state/curriculum_providers.dart';
 import '../../state/progress_providers.dart';
 import '../topic_detail/topic_detail_sheet.dart';
 import 'widgets/mindmap_node_widget.dart';
+import 'widgets/topic_tree_view.dart';
 
 const _rootId = 'root';
+
+/// The two ways to browse the curriculum — a spatial mindmap, or a plain
+/// top-to-bottom outline. Same data and tap targets either way; some
+/// students read a list faster than they read a map.
+enum _TopicViewMode { mindmap, tree }
 
 // A large, fixed logical canvas the mindmap lives on. Nodes are positioned
 // freely within it (in canvas coordinates) and the InteractiveViewer lets
@@ -60,6 +66,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
   bool _canvasGesturesEnabled = true;
   Size _lastViewportSize = Size.zero;
   String? _layoutCourseId;
+  _TopicViewMode _viewMode = _TopicViewMode.mindmap;
 
   Map<String, List<Subtopic>> _subtopicsByUnit = {};
 
@@ -299,11 +306,37 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
           ],
         ),
         actions: [
-          IconButton(
-            tooltip: 'Reset view',
-            icon: const Icon(Icons.center_focus_strong),
-            onPressed: _fitToContent,
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: SegmentedButton<_TopicViewMode>(
+              segments: const [
+                ButtonSegment(
+                  value: _TopicViewMode.mindmap,
+                  icon: Icon(Icons.hub_outlined, size: 18),
+                  tooltip: 'Mindmap view',
+                ),
+                ButtonSegment(
+                  value: _TopicViewMode.tree,
+                  icon: Icon(Icons.account_tree_outlined, size: 18),
+                  tooltip: 'List view',
+                ),
+              ],
+              selected: {_viewMode},
+              showSelectedIcon: false,
+              onSelectionChanged: (selection) =>
+                  setState(() => _viewMode = selection.first),
+              style: const ButtonStyle(
+                visualDensity: VisualDensity.compact,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
           ),
+          if (_viewMode == _TopicViewMode.mindmap)
+            IconButton(
+              tooltip: 'Reset view',
+              icon: const Icon(Icons.center_focus_strong),
+              onPressed: _fitToContent,
+            ),
           if (user == null)
             TextButton(
               onPressed: () => context.push('/login'),
@@ -356,6 +389,24 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
               final units = ref.watch(courseUnitsProvider);
               final subtopics = ref.watch(courseSubtopicsProvider);
               _ensureLayout(course.id, units, subtopics);
+
+              if (_viewMode == _TopicViewMode.tree) {
+                return TopicTreeView(
+                  course: course,
+                  units: units,
+                  subtopicsByUnit: _subtopicsByUnit,
+                  subtopicStatus: subtopicStatus,
+                  expandedUnitIds: _expandedUnitIds,
+                  onToggleUnit: _toggleUnit,
+                  onTapSubtopic: (subtopic, status) => showTopicDetailSheet(
+                    context,
+                    subtopic: subtopic,
+                    color: status.color,
+                    courseCode: course.code,
+                  ),
+                );
+              }
+
               return LayoutBuilder(
                 builder: (context, constraints) {
                   final viewportSize = constraints.biggest;
