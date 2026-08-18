@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -47,6 +49,17 @@ const _leafSpanPerGap = 34.0;
 const _leafMinRadius = 130.0;
 const _leafTargetChord = 145.0;
 
+// Zoom bounds for the mindmap canvas — shared by InteractiveViewer's own
+// pinch/drag-scale gestures and the explicit Cmd/Ctrl+scroll zoom below, so
+// both routes agree on how far in/out the student can go.
+const _minZoom = 0.3;
+const _maxZoom = 2.2;
+
+// Zoom bounds for the tree/list view's text+row scale (no spatial canvas to
+// pinch there, so "zoom" just means bigger/smaller rows).
+const _minTreeScale = 0.75;
+const _maxTreeScale = 1.75;
+
 class MindmapPage extends ConsumerStatefulWidget {
   const MindmapPage({super.key});
 
@@ -55,7 +68,8 @@ class MindmapPage extends ConsumerStatefulWidget {
 }
 
 class _MindmapPageState extends ConsumerState<MindmapPage> {
-  final TransformationController _transformController = TransformationController();
+  final TransformationController _transformController =
+      TransformationController();
 
   /// Center position of every currently-visible node, in canvas coordinates.
   /// Free-dragging a node just overwrites its entry here.
@@ -68,6 +82,10 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
   String? _layoutCourseId;
   _TopicViewMode _viewMode = _TopicViewMode.mindmap;
 
+  /// Row/text scale for the tree view's Cmd/Ctrl+scroll zoom — the tree is a
+  /// plain list, so "zoom" scales its rows rather than panning a canvas.
+  double _treeScale = 1.0;
+
   Map<String, List<Subtopic>> _subtopicsByUnit = {};
 
   @override
@@ -76,7 +94,11 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
     super.dispose();
   }
 
-  void _ensureLayout(String courseId, List<Unit> units, List<Subtopic> subtopics) {
+  void _ensureLayout(
+    String courseId,
+    List<Unit> units,
+    List<Subtopic> subtopics,
+  ) {
     if (_layoutCourseId != courseId) {
       // Switched grades: start that grade's mindmap fresh rather than
       // mixing its units into whatever was dragged around for the last one.
@@ -99,7 +121,8 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
 
     // Fan the units out left/right of the root, alternating sides so both
     // fill up evenly — the classic two-sided mindmap silhouette.
-    final sortedUnits = [...units]..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+    final sortedUnits = [...units]
+      ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
     final rightUnits = <Unit>[];
     final leftUnits = <Unit>[];
     for (var i = 0; i < sortedUnits.length; i++) {
@@ -174,7 +197,8 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
       final unit = side[i];
       final reach = _unitFanReach(unit);
       if (i > 0) {
-        cursorX += sign * (previousOutwardReach + _unitRowGap + reach.towardRoot);
+        cursorX +=
+            sign * (previousOutwardReach + _unitRowGap + reach.towardRoot);
       }
       _positions[unit.id] = Offset(cursorX, _canvasCenter.dy);
       previousOutwardReach = reach.outward;
@@ -202,17 +226,20 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
       if (_positions.containsKey(subtopic.id)) continue;
       final leaf = leaves[i];
       final angleRad = (outwardDeg + leaf.angleDeg) * math.pi / 180;
-      _positions[subtopic.id] = unitPos +
-          Offset(leaf.radius * math.cos(angleRad), leaf.radius * math.sin(angleRad));
+      _positions[subtopic.id] =
+          unitPos +
+          Offset(
+            leaf.radius * math.cos(angleRad),
+            leaf.radius * math.sin(angleRad),
+          );
     }
   }
 
   /// Re-centers the viewer on whatever's currently visible (the root,
-  /// every unit, and the subtopics of every expanded unit) — but always at
-  /// a natural 1:1 zoom, never shrinking to force everything into view.
-  /// Readable, full-size text matters more than seeing the entire tree at
-  /// once; a manual pinch/pan is left free the rest of the time. Called
-  /// after the first layout and after every expand/collapse.
+  /// every unit, and the subtopics of every expanded unit) — at whatever
+  /// zoom level the student currently has set (never auto-shrinking text
+  /// to force everything into view, and never resetting a manual zoom).
+  /// Called after the first layout and after every expand/collapse.
   void _fitToContent() {
     if (_lastViewportSize == Size.zero) return;
     final root = _positions[_rootId];
@@ -238,15 +265,81 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
     }
 
     final contentCenter = Offset((minX + maxX) / 2, (minY + maxY) / 2);
+    final scale = _transformController.value.getMaxScaleOnAxis();
 
     setState(() {
       _transformController.value = Matrix4.identity()
         ..translateByDouble(
-          _lastViewportSize.width / 2 - contentCenter.dx,
-          _lastViewportSize.height / 2 - contentCenter.dy,
+          _lastViewportSize.width / 2 - contentCenter.dx * scale,
+          _lastViewportSize.height / 2 - contentCenter.dy * scale,
           0,
           1,
+        )
+        ..scaleByDouble(scale, scale, 1, 1);
+    });
+  }
+
+  /// Cmd/Ctrl + scroll (trackpad two-finger scroll or a mouse wheel) zooms
+  /// the canvas toward the cursor, Coggle/Lucidchart-style. Plain scroll is
+  /// left alone so InteractiveViewer's own default pan/zoom behavior keeps
+  /// working exactly as before. Registers with the pointer signal resolver
+  /// so this claims the event ahead of InteractiveViewer's own listener —
+  /// InteractiveViewer sits *above* this Listener in the tree, so its
+  /// onPointerSignal only runs (and only registers) after this one already
+  /// has, and a resolver only honors the first registrant per event.
+  void _handleMindmapScroll(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent) return;
+    final zoomRequested =
+        HardwareKeyboard.instance.isMetaPressed ||
+        HardwareKeyboard.instance.isControlPressed;
+    if (!zoomRequested) return;
+
+    GestureBinding.instance.pointerSignalResolver.register(event, (
+      resolvedEvent,
+    ) {
+      final scrollEvent = resolvedEvent as PointerScrollEvent;
+      final oldMatrix = _transformController.value;
+      final oldScale = oldMatrix.getMaxScaleOnAxis();
+      final translation = oldMatrix.getTranslation();
+      final canvasPoint = scrollEvent.localPosition;
+      final viewportPoint = Offset(
+        canvasPoint.dx * oldScale + translation.x,
+        canvasPoint.dy * oldScale + translation.y,
+      );
+      final zoomFactor = math.exp(-scrollEvent.scrollDelta.dy / 200);
+      final newScale = (oldScale * zoomFactor).clamp(_minZoom, _maxZoom);
+      final newTranslation = Offset(
+        viewportPoint.dx - canvasPoint.dx * newScale,
+        viewportPoint.dy - canvasPoint.dy * newScale,
+      );
+      setState(() {
+        _transformController.value = Matrix4.identity()
+          ..translateByDouble(newTranslation.dx, newTranslation.dy, 0, 1)
+          ..scaleByDouble(newScale, newScale, 1, 1);
+      });
+    });
+  }
+
+  /// Same Cmd/Ctrl+scroll convention for the tree view, but there's no
+  /// canvas to pan/zoom there — it just scales row text/icons up or down.
+  void _handleTreeScroll(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent) return;
+    final zoomRequested =
+        HardwareKeyboard.instance.isMetaPressed ||
+        HardwareKeyboard.instance.isControlPressed;
+    if (!zoomRequested) return;
+
+    GestureBinding.instance.pointerSignalResolver.register(event, (
+      resolvedEvent,
+    ) {
+      final scrollEvent = resolvedEvent as PointerScrollEvent;
+      final zoomFactor = math.exp(-scrollEvent.scrollDelta.dy / 200);
+      setState(() {
+        _treeScale = (_treeScale * zoomFactor).clamp(
+          _minTreeScale,
+          _maxTreeScale,
         );
+      });
     });
   }
 
@@ -375,88 +468,111 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
         ),
         child: coursesAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, _) => Center(child: Text('Failed to load curriculum: $error')),
+          error: (error, _) =>
+              Center(child: Text('Failed to load curriculum: $error')),
           data: (_) => unitsAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, _) => Center(child: Text('Failed to load curriculum: $error')),
-          data: (_) => subtopicsAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (error, _) => Center(child: Text('Failed to load curriculum: $error')),
-            data: (_) {
-              final course = ref.watch(selectedCourseProvider);
-              if (course == null) {
-                return const Center(child: Text('No courses configured yet.'));
-              }
-              final units = ref.watch(courseUnitsProvider);
-              final subtopics = ref.watch(courseSubtopicsProvider);
-              _ensureLayout(course.id, units, subtopics);
+            error: (error, _) =>
+                Center(child: Text('Failed to load curriculum: $error')),
+            data: (_) => subtopicsAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (error, _) =>
+                  Center(child: Text('Failed to load curriculum: $error')),
+              data: (_) {
+                final course = ref.watch(selectedCourseProvider);
+                if (course == null) {
+                  return const Center(
+                    child: Text('No courses configured yet.'),
+                  );
+                }
+                final units = ref.watch(courseUnitsProvider);
+                final subtopics = ref.watch(courseSubtopicsProvider);
+                _ensureLayout(course.id, units, subtopics);
 
-              if (_viewMode == _TopicViewMode.tree) {
-                return TopicTreeView(
-                  course: course,
-                  units: units,
-                  subtopicsByUnit: _subtopicsByUnit,
-                  subtopicStatus: subtopicStatus,
-                  subtopicScorePercent: subtopicScorePercent,
-                  expandedUnitIds: _expandedUnitIds,
-                  onToggleUnit: _toggleUnit,
-                  onTapSubtopic: (subtopic, status) => showTopicDetailSheet(
-                    context,
-                    subtopic: subtopic,
-                    color: status.color,
-                    courseCode: course.code,
-                  ),
-                );
-              }
-
-              return LayoutBuilder(
-                builder: (context, constraints) {
-                  final viewportSize = constraints.biggest;
-                  if (viewportSize != _lastViewportSize) {
-                    final wasZero = _lastViewportSize == Size.zero;
-                    _lastViewportSize = viewportSize;
-                    if (wasZero) {
-                      WidgetsBinding.instance.addPostFrameCallback((_) => _fitToContent());
-                    }
-                  }
-                  return InteractiveViewer(
-                    transformationController: _transformController,
-                    constrained: false,
-                    // Disabled for the duration of any node-level pointer
-                    // interaction (see _DraggableNode) so InteractiveViewer's
-                    // own pan/scale recognizer never competes with — or
-                    // nudges the canvas during — a tap or drag on a node.
-                    panEnabled: _canvasGesturesEnabled,
-                    scaleEnabled: _canvasGesturesEnabled,
-                    minScale: 0.3,
-                    maxScale: 2.2,
-                    boundaryMargin: const EdgeInsets.all(1200),
-                    child: SizedBox(
-                      width: _canvasSize.width,
-                      height: _canvasSize.height,
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          Positioned.fill(
-                            child: CustomPaint(
-                              painter: _MindmapEdgePainter(
-                                positions: _positions,
-                                units: units,
-                                subtopicsByUnit: _subtopicsByUnit,
-                                expandedUnitIds: _expandedUnitIds,
-                                subtopicStatus: subtopicStatus,
-                              ),
-                            ),
-                          ),
-                          ..._buildNodes(course, units, subtopicStatus, subtopicScorePercent),
-                        ],
-                      ),
+                if (_viewMode == _TopicViewMode.tree) {
+                  return TopicTreeView(
+                    course: course,
+                    units: units,
+                    subtopicsByUnit: _subtopicsByUnit,
+                    subtopicStatus: subtopicStatus,
+                    subtopicScorePercent: subtopicScorePercent,
+                    expandedUnitIds: _expandedUnitIds,
+                    scale: _treeScale,
+                    onScrollSignal: _handleTreeScroll,
+                    onToggleUnit: _toggleUnit,
+                    onTapSubtopic: (subtopic, status) => showTopicDetailSheet(
+                      context,
+                      subtopic: subtopic,
+                      color: status.color,
+                      courseCode: course.code,
                     ),
                   );
-                },
-              );
-            },
-          ),
+                }
+
+                return LayoutBuilder(
+                  builder: (context, constraints) {
+                    final viewportSize = constraints.biggest;
+                    if (viewportSize != _lastViewportSize) {
+                      final wasZero = _lastViewportSize == Size.zero;
+                      _lastViewportSize = viewportSize;
+                      if (wasZero) {
+                        WidgetsBinding.instance.addPostFrameCallback(
+                          (_) => _fitToContent(),
+                        );
+                      }
+                    }
+                    return InteractiveViewer(
+                      transformationController: _transformController,
+                      constrained: false,
+                      // Disabled for the duration of any node-level pointer
+                      // interaction (see _DraggableNode) so InteractiveViewer's
+                      // own pan/scale recognizer never competes with — or
+                      // nudges the canvas during — a tap or drag on a node.
+                      panEnabled: _canvasGesturesEnabled,
+                      scaleEnabled: _canvasGesturesEnabled,
+                      minScale: _minZoom,
+                      maxScale: _maxZoom,
+                      boundaryMargin: const EdgeInsets.all(1200),
+                      // Nested inside InteractiveViewer's own child so this
+                      // Listener sits deeper in the hit-test path than
+                      // InteractiveViewer's internal one — the pointer signal
+                      // resolver honors whichever listener registers first,
+                      // and deeper listeners are visited first, so a
+                      // Cmd/Ctrl+scroll claimed here always wins.
+                      child: Listener(
+                        onPointerSignal: _handleMindmapScroll,
+                        child: SizedBox(
+                          width: _canvasSize.width,
+                          height: _canvasSize.height,
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              Positioned.fill(
+                                child: CustomPaint(
+                                  painter: _MindmapEdgePainter(
+                                    positions: _positions,
+                                    units: units,
+                                    subtopicsByUnit: _subtopicsByUnit,
+                                    expandedUnitIds: _expandedUnitIds,
+                                    subtopicStatus: subtopicStatus,
+                                  ),
+                                ),
+                              ),
+                              ..._buildNodes(
+                                course,
+                                units,
+                                subtopicStatus,
+                                subtopicScorePercent,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
           ),
         ),
       ),
@@ -488,9 +604,14 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
       final unitPos = _positions[unit.id];
       if (unitPos == null) continue;
 
-      final subtopicIds = (_subtopicsByUnit[unit.id] ?? const []).map((s) => s.id);
+      final subtopicIds = (_subtopicsByUnit[unit.id] ?? const []).map(
+        (s) => s.id,
+      );
       final unitStatus = aggregateUnitStatus(subtopicIds, subtopicStatus);
-      final unitScorePercent = aggregateUnitScorePercent(subtopicIds, subtopicScorePercent);
+      final unitScorePercent = aggregateUnitScorePercent(
+        subtopicIds,
+        subtopicScorePercent,
+      );
       nodes.add(
         _DraggableNode(
           position: unitPos,
@@ -552,7 +673,8 @@ class _GradeDropdown extends ConsumerWidget {
 
     return PopupMenuButton<String>(
       tooltip: 'Choose grade',
-      onSelected: (value) => ref.read(selectedCourseIdProvider.notifier).select(value),
+      onSelected: (value) =>
+          ref.read(selectedCourseIdProvider.notifier).select(value),
       itemBuilder: (context) => [
         for (final course in courses)
           PopupMenuItem(value: course.id, child: Text(course.gradeLabel)),
@@ -713,9 +835,9 @@ class _MindmapEdgePainter extends CustomPainter {
     }
     for (final side in [right, left]) {
       side.sort(
-        (a, b) => (positions[a.id]!.dx - rootPos.dx)
-            .abs()
-            .compareTo((positions[b.id]!.dx - rootPos.dx).abs()),
+        (a, b) => (positions[a.id]!.dx - rootPos.dx).abs().compareTo(
+          (positions[b.id]!.dx - rootPos.dx).abs(),
+        ),
       );
       for (var i = 0; i < side.length; i++) {
         rowIndex[side[i].id] = i;
@@ -725,7 +847,9 @@ class _MindmapEdgePainter extends CustomPainter {
     for (final unit in units) {
       final unitPos = positions[unit.id];
       if (unitPos == null) continue;
-      final subtopicIds = (subtopicsByUnit[unit.id] ?? const []).map((s) => s.id);
+      final subtopicIds = (subtopicsByUnit[unit.id] ?? const []).map(
+        (s) => s.id,
+      );
       final unitStatus = aggregateUnitStatus(subtopicIds, subtopicStatus);
       final index = rowIndex[unit.id] ?? 0;
       final bowDirection = index.isEven ? -1.0 : 1.0;
@@ -742,7 +866,14 @@ class _MindmapEdgePainter extends CustomPainter {
     }
   }
 
-  void _drawCurve(Canvas canvas, Offset start, Offset end, Color color, double width, {double bow = 0}) {
+  void _drawCurve(
+    Canvas canvas,
+    Offset start,
+    Offset end,
+    Color color,
+    double width, {
+    double bow = 0,
+  }) {
     final paint = Paint()
       ..color = color
       ..style = PaintingStyle.stroke

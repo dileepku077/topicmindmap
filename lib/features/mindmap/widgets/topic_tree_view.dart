@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../../models/course.dart';
@@ -22,6 +23,8 @@ class TopicTreeView extends StatelessWidget {
     required this.expandedUnitIds,
     required this.onToggleUnit,
     required this.onTapSubtopic,
+    this.scale = 1.0,
+    this.onScrollSignal,
   });
 
   final Course course;
@@ -33,42 +36,66 @@ class TopicTreeView extends StatelessWidget {
   final void Function(Unit unit) onToggleUnit;
   final void Function(Subtopic subtopic, ProgressStatus status) onTapSubtopic;
 
+  /// Row/text scale driven by the page's Cmd/Ctrl+scroll zoom handling —
+  /// this view has no spatial canvas to pan/zoom, so "zoom" just scales
+  /// the rows up or down.
+  final double scale;
+
+  /// Raw pointer-signal passthrough so the page can detect Cmd/Ctrl+scroll
+  /// over this list and adjust [scale]. Wired up deep inside the list's
+  /// own scrolled content (not wrapped around the outside) so it wins the
+  /// pointer signal resolver's race against the list's own scroll handling
+  /// only when it actually claims the event.
+  final void Function(PointerSignalEvent event)? onScrollSignal;
+
   @override
   Widget build(BuildContext context) {
-    final sortedUnits = [...units]..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+    final sortedUnits = [...units]
+      ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
       children: [
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 640),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16, left: 4),
-                child: Text(
-                  'Grade ${course.grade} Math',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                ),
-              ),
-              for (final unit in sortedUnits)
+        Listener(
+          onPointerSignal: onScrollSignal,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 640),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: _UnitSection(
-                    unit: unit,
-                    subtopics: subtopicsByUnit[unit.id] ?? const [],
-                    subtopicStatus: subtopicStatus,
-                    subtopicScorePercent: subtopicScorePercent,
-                    expanded: expandedUnitIds.contains(unit.id),
-                    onToggle: () => onToggleUnit(unit),
-                    onTapSubtopic: onTapSubtopic,
+                  padding: const EdgeInsets.only(bottom: 16, left: 4),
+                  child: Text(
+                    'Grade ${course.grade} Math',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      fontSize:
+                          (Theme.of(context)
+                                  .textTheme
+                                  .headlineSmall
+                                  ?.fontSize ??
+                              24) *
+                          scale,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                   ),
                 ),
-            ],
+                for (final unit in sortedUnits)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _UnitSection(
+                      unit: unit,
+                      subtopics: subtopicsByUnit[unit.id] ?? const [],
+                      subtopicStatus: subtopicStatus,
+                      subtopicScorePercent: subtopicScorePercent,
+                      expanded: expandedUnitIds.contains(unit.id),
+                      scale: scale,
+                      onToggle: () => onToggleUnit(unit),
+                      onTapSubtopic: onTapSubtopic,
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ],
@@ -85,6 +112,7 @@ class _UnitSection extends StatelessWidget {
     required this.expanded,
     required this.onToggle,
     required this.onTapSubtopic,
+    this.scale = 1.0,
   });
 
   final Unit unit;
@@ -92,6 +120,7 @@ class _UnitSection extends StatelessWidget {
   final Map<String, ProgressStatus> subtopicStatus;
   final Map<String, double> subtopicScorePercent;
   final bool expanded;
+  final double scale;
   final VoidCallback onToggle;
   final void Function(Subtopic subtopic, ProgressStatus status) onTapSubtopic;
 
@@ -100,7 +129,10 @@ class _UnitSection extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final subtopicIds = subtopics.map((s) => s.id);
     final status = aggregateUnitStatus(subtopicIds, subtopicStatus);
-    final scorePercent = aggregateUnitScorePercent(subtopicIds, subtopicScorePercent);
+    final scorePercent = aggregateUnitScorePercent(
+      subtopicIds,
+      subtopicScorePercent,
+    );
 
     return Material(
       color: scheme.surfaceContainerHigh,
@@ -112,15 +144,21 @@ class _UnitSection extends StatelessWidget {
           InkWell(
             onTap: onToggle,
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              padding: EdgeInsets.symmetric(
+                horizontal: 14 * scale,
+                vertical: 12 * scale,
+              ),
               child: Row(
                 children: [
-                  Icon(status.icon, color: status.color, size: 20),
-                  const SizedBox(width: 12),
+                  Icon(status.icon, color: status.color, size: 20 * scale),
+                  SizedBox(width: 12 * scale),
                   Expanded(
                     child: Text(
                       unit.title,
-                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15 * scale,
+                      ),
                     ),
                   ),
                   if (scorePercent != null) ...[
@@ -129,13 +167,16 @@ class _UnitSection extends StatelessWidget {
                       style: TextStyle(
                         color: status.color,
                         fontWeight: FontWeight.w800,
-                        fontSize: 13,
+                        fontSize: 13 * scale,
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    SizedBox(width: 10 * scale),
                   ],
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 8 * scale,
+                      vertical: 2 * scale,
+                    ),
                     decoration: BoxDecoration(
                       color: status.color.withValues(alpha: 0.18),
                       borderRadius: BorderRadius.circular(999),
@@ -145,15 +186,15 @@ class _UnitSection extends StatelessWidget {
                       style: TextStyle(
                         color: status.color,
                         fontWeight: FontWeight.w800,
-                        fontSize: 11,
+                        fontSize: 11 * scale,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 6),
+                  SizedBox(width: 6 * scale),
                   AnimatedRotation(
                     turns: expanded ? 0.5 : 0,
                     duration: const Duration(milliseconds: 180),
-                    child: const Icon(Icons.expand_more, size: 22),
+                    child: Icon(Icons.expand_more, size: 22 * scale),
                   ),
                 ],
               ),
@@ -161,16 +202,24 @@ class _UnitSection extends StatelessWidget {
           ),
           AnimatedCrossFade(
             duration: const Duration(milliseconds: 180),
-            crossFadeState: expanded ? CrossFadeState.showFirst : CrossFadeState.showSecond,
+            crossFadeState: expanded
+                ? CrossFadeState.showFirst
+                : CrossFadeState.showSecond,
             firstChild: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Divider(height: 1, color: scheme.outlineVariant.withValues(alpha: 0.3)),
+                Divider(
+                  height: 1,
+                  color: scheme.outlineVariant.withValues(alpha: 0.3),
+                ),
                 for (final subtopic in subtopics)
                   _SubtopicRow(
                     subtopic: subtopic,
-                    status: subtopicStatus[subtopic.id] ?? ProgressStatus.notStarted,
+                    status:
+                        subtopicStatus[subtopic.id] ??
+                        ProgressStatus.notStarted,
                     scorePercent: subtopicScorePercent[subtopic.id],
+                    scale: scale,
                     onTap: () => onTapSubtopic(
                       subtopic,
                       subtopicStatus[subtopic.id] ?? ProgressStatus.notStarted,
@@ -193,11 +242,13 @@ class _SubtopicRow extends StatelessWidget {
     required this.status,
     required this.onTap,
     this.scorePercent,
+    this.scale = 1.0,
   });
 
   final Subtopic subtopic;
   final ProgressStatus status;
   final double? scorePercent;
+  final double scale;
   final VoidCallback onTap;
 
   @override
@@ -205,13 +256,21 @@ class _SubtopicRow extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(44, 10, 14, 10),
+        padding: EdgeInsets.fromLTRB(
+          44 * scale,
+          10 * scale,
+          14 * scale,
+          10 * scale,
+        ),
         child: Row(
           children: [
-            Icon(status.icon, color: status.color, size: 16),
-            const SizedBox(width: 12),
+            Icon(status.icon, color: status.color, size: 16 * scale),
+            SizedBox(width: 12 * scale),
             Expanded(
-              child: Text(subtopic.title, style: const TextStyle(fontSize: 13.5)),
+              child: Text(
+                subtopic.title,
+                style: TextStyle(fontSize: 13.5 * scale),
+              ),
             ),
             if (scorePercent != null) ...[
               Text(
@@ -219,12 +278,16 @@ class _SubtopicRow extends StatelessWidget {
                 style: TextStyle(
                   color: status.color,
                   fontWeight: FontWeight.w800,
-                  fontSize: 12,
+                  fontSize: 12 * scale,
                 ),
               ),
-              const SizedBox(width: 10),
+              SizedBox(width: 10 * scale),
             ],
-            Icon(Icons.chevron_right, size: 18, color: Theme.of(context).colorScheme.outline),
+            Icon(
+              Icons.chevron_right,
+              size: 18 * scale,
+              color: Theme.of(context).colorScheme.outline,
+            ),
           ],
         ),
       ),

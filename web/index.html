@@ -33,6 +33,17 @@
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
+  <script>
+    // Cmd/Ctrl+scroll is used inside the app (mindmap and tree view) as an
+    // explicit zoom gesture. Left alone, the browser treats the same
+    // gesture as its own native page-zoom and wins the race before Flutter
+    // ever sees it, so block that default here and let the app handle it.
+    window.addEventListener('wheel', function (event) {
+      if (event.ctrlKey || event.metaKey) {
+        event.preventDefault();
+      }
+    }, { passive: false });
+  </script>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader
