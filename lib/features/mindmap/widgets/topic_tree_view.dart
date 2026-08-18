@@ -18,6 +18,7 @@ class TopicTreeView extends StatelessWidget {
     required this.units,
     required this.subtopicsByUnit,
     required this.subtopicStatus,
+    required this.subtopicScorePercent,
     required this.expandedUnitIds,
     required this.onToggleUnit,
     required this.onTapSubtopic,
@@ -27,6 +28,7 @@ class TopicTreeView extends StatelessWidget {
   final List<Unit> units;
   final Map<String, List<Subtopic>> subtopicsByUnit;
   final Map<String, ProgressStatus> subtopicStatus;
+  final Map<String, double> subtopicScorePercent;
   final Set<String> expandedUnitIds;
   final void Function(Unit unit) onToggleUnit;
   final void Function(Subtopic subtopic, ProgressStatus status) onTapSubtopic;
@@ -60,6 +62,7 @@ class TopicTreeView extends StatelessWidget {
                     unit: unit,
                     subtopics: subtopicsByUnit[unit.id] ?? const [],
                     subtopicStatus: subtopicStatus,
+                    subtopicScorePercent: subtopicScorePercent,
                     expanded: expandedUnitIds.contains(unit.id),
                     onToggle: () => onToggleUnit(unit),
                     onTapSubtopic: onTapSubtopic,
@@ -78,6 +81,7 @@ class _UnitSection extends StatelessWidget {
     required this.unit,
     required this.subtopics,
     required this.subtopicStatus,
+    required this.subtopicScorePercent,
     required this.expanded,
     required this.onToggle,
     required this.onTapSubtopic,
@@ -86,6 +90,7 @@ class _UnitSection extends StatelessWidget {
   final Unit unit;
   final List<Subtopic> subtopics;
   final Map<String, ProgressStatus> subtopicStatus;
+  final Map<String, double> subtopicScorePercent;
   final bool expanded;
   final VoidCallback onToggle;
   final void Function(Subtopic subtopic, ProgressStatus status) onTapSubtopic;
@@ -93,7 +98,9 @@ class _UnitSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final status = aggregateUnitStatus(subtopics.map((s) => s.id), subtopicStatus);
+    final subtopicIds = subtopics.map((s) => s.id);
+    final status = aggregateUnitStatus(subtopicIds, subtopicStatus);
+    final scorePercent = aggregateUnitScorePercent(subtopicIds, subtopicScorePercent);
 
     return Material(
       color: scheme.surfaceContainerHigh,
@@ -116,6 +123,17 @@ class _UnitSection extends StatelessWidget {
                       style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
                     ),
                   ),
+                  if (scorePercent != null) ...[
+                    Text(
+                      '${scorePercent.round()}%',
+                      style: TextStyle(
+                        color: status.color,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                  ],
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
@@ -152,6 +170,7 @@ class _UnitSection extends StatelessWidget {
                   _SubtopicRow(
                     subtopic: subtopic,
                     status: subtopicStatus[subtopic.id] ?? ProgressStatus.notStarted,
+                    scorePercent: subtopicScorePercent[subtopic.id],
                     onTap: () => onTapSubtopic(
                       subtopic,
                       subtopicStatus[subtopic.id] ?? ProgressStatus.notStarted,
@@ -173,10 +192,12 @@ class _SubtopicRow extends StatelessWidget {
     required this.subtopic,
     required this.status,
     required this.onTap,
+    this.scorePercent,
   });
 
   final Subtopic subtopic;
   final ProgressStatus status;
+  final double? scorePercent;
   final VoidCallback onTap;
 
   @override
@@ -192,6 +213,17 @@ class _SubtopicRow extends StatelessWidget {
             Expanded(
               child: Text(subtopic.title, style: const TextStyle(fontSize: 13.5)),
             ),
+            if (scorePercent != null) ...[
+              Text(
+                '${scorePercent!.round()}%',
+                style: TextStyle(
+                  color: status.color,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(width: 10),
+            ],
             Icon(Icons.chevron_right, size: 18, color: Theme.of(context).colorScheme.outline),
           ],
         ),

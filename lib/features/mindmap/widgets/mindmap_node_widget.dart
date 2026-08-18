@@ -51,6 +51,7 @@ class UnitNodeWidget extends StatelessWidget {
     required this.status,
     required this.subtopicCount,
     required this.collapsed,
+    this.scorePercent,
   });
 
   final Unit unit;
@@ -58,11 +59,15 @@ class UnitNodeWidget extends StatelessWidget {
   final int subtopicCount;
   final bool collapsed;
 
+  /// Average best-score percent across this unit's subtopics, or null if
+  /// none have been attempted yet (nothing worth showing).
+  final double? scorePercent;
+
   @override
   Widget build(BuildContext context) {
     final borderColor = Color.lerp(status.color, Colors.black, 0.25)!;
     return Container(
-      constraints: const BoxConstraints(maxWidth: 160),
+      constraints: const BoxConstraints(maxWidth: 185),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: status.color,
@@ -91,6 +96,17 @@ class UnitNodeWidget extends StatelessWidget {
               ),
             ),
           ),
+          if (scorePercent != null) ...[
+            const SizedBox(width: 6),
+            Text(
+              '${scorePercent!.round()}%',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                fontSize: 11,
+              ),
+            ),
+          ],
           const SizedBox(width: 6),
           _CountBadge(count: subtopicCount, color: status.color),
           const SizedBox(width: 3),
@@ -140,10 +156,15 @@ class SubtopicNodeWidget extends StatelessWidget {
     super.key,
     required this.subtopic,
     required this.status,
+    this.scorePercent,
   });
 
   final Subtopic subtopic;
   final ProgressStatus status;
+
+  /// This subtopic's best practice-test score percent, or null if it
+  /// hasn't been attempted yet (nothing worth showing).
+  final double? scorePercent;
 
   @override
   Widget build(BuildContext context) {
@@ -173,6 +194,17 @@ class SubtopicNodeWidget extends StatelessWidget {
               style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
             ),
           ),
+          if (scorePercent != null) ...[
+            const SizedBox(width: 5),
+            Text(
+              '${scorePercent!.round()}%',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                color: status.color,
+              ),
+            ),
+          ],
         ],
       ),
     );

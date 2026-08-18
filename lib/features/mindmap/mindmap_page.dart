@@ -294,6 +294,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
     final subtopicsAsync = ref.watch(subtopicsProvider);
     final user = ref.watch(currentUserProvider);
     final subtopicStatus = ref.watch(subtopicStatusProvider);
+    final subtopicScorePercent = ref.watch(subtopicScorePercentProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -396,6 +397,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                   units: units,
                   subtopicsByUnit: _subtopicsByUnit,
                   subtopicStatus: subtopicStatus,
+                  subtopicScorePercent: subtopicScorePercent,
                   expandedUnitIds: _expandedUnitIds,
                   onToggleUnit: _toggleUnit,
                   onTapSubtopic: (subtopic, status) => showTopicDetailSheet(
@@ -446,7 +448,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                               ),
                             ),
                           ),
-                          ..._buildNodes(course, units, subtopicStatus),
+                          ..._buildNodes(course, units, subtopicStatus, subtopicScorePercent),
                         ],
                       ),
                     ),
@@ -465,6 +467,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
     Course course,
     List<Unit> units,
     Map<String, ProgressStatus> subtopicStatus,
+    Map<String, double> subtopicScorePercent,
   ) {
     final nodes = <Widget>[];
 
@@ -487,6 +490,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
 
       final subtopicIds = (_subtopicsByUnit[unit.id] ?? const []).map((s) => s.id);
       final unitStatus = aggregateUnitStatus(subtopicIds, subtopicStatus);
+      final unitScorePercent = aggregateUnitScorePercent(subtopicIds, subtopicScorePercent);
       nodes.add(
         _DraggableNode(
           position: unitPos,
@@ -499,6 +503,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
             status: unitStatus,
             subtopicCount: (_subtopicsByUnit[unit.id] ?? const []).length,
             collapsed: !_expandedUnitIds.contains(unit.id),
+            scorePercent: unitScorePercent,
           ),
         ),
       );
@@ -523,6 +528,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
             child: SubtopicNodeWidget(
               subtopic: subtopic,
               status: status,
+              scorePercent: subtopicScorePercent[subtopic.id],
             ),
           ),
         );

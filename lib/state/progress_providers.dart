@@ -45,6 +45,16 @@ final subtopicStatusProvider = Provider<Map<String, ProgressStatus>>((ref) {
   };
 });
 
+/// Live subtopicId -> best practice-test score (0-100) so far. A subtopic
+/// with no attempts simply has no entry — distinct from "scored 0%".
+final subtopicScorePercentProvider = Provider<Map<String, double>>((ref) {
+  final bySubtopic = ref.watch(practiceResultsProvider).value ?? const {};
+  return {
+    for (final entry in bySubtopic.entries)
+      if (entry.value.isNotEmpty) entry.key: _bestScore(entry.value),
+  };
+});
+
 double _bestScore(List<PracticeTestResult> results) =>
     results.map((r) => r.scorePercent).reduce((a, b) => a > b ? a : b);
 
@@ -62,4 +72,20 @@ ProgressStatus aggregateUnitStatus(
       subtopicIds.map((id) => subtopicStatus[id]).whereType<ProgressStatus>();
   if (statuses.isEmpty) return ProgressStatus.notStarted;
   return statuses.reduce((a, b) => a.index < b.index ? a : b);
+}
+
+/// A unit's overall completion percent — the average of its subtopics'
+/// best scores, counting an untouched subtopic as 0 so the number climbs
+/// smoothly from 0% toward 100% as the student works through the whole
+/// unit rather than jumping straight to one subtopic's score. Returns
+/// null (nothing to show yet) until at least one subtopic in the unit has
+/// been attempted.
+double? aggregateUnitScorePercent(
+  Iterable<String> subtopicIds,
+  Map<String, double> subtopicScorePercent,
+) {
+  final ids = subtopicIds.toList();
+  if (ids.isEmpty || !ids.any(subtopicScorePercent.containsKey)) return null;
+  final total = ids.fold<double>(0, (sum, id) => sum + (subtopicScorePercent[id] ?? 0));
+  return total / ids.length;
 }
