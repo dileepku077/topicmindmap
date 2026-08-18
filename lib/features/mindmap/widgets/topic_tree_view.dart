@@ -24,6 +24,7 @@ class TopicTreeView extends StatelessWidget {
     required this.onToggleUnit,
     required this.onTapSubtopic,
     this.scale = 1.0,
+    this.zoomModifierHeld = false,
     this.onScrollSignal,
   });
 
@@ -41,11 +42,15 @@ class TopicTreeView extends StatelessWidget {
   /// the rows up or down.
   final double scale;
 
+  /// Whether Cmd/Ctrl is currently held. The list's own scroll physics are
+  /// switched off while this is true so a Cmd/Ctrl+scroll used to zoom
+  /// doesn't *also* scroll the list at the same time — otherwise both
+  /// [onScrollSignal] and the ListView's own wheel handling would react to
+  /// the same tick.
+  final bool zoomModifierHeld;
+
   /// Raw pointer-signal passthrough so the page can detect Cmd/Ctrl+scroll
-  /// over this list and adjust [scale]. Wired up deep inside the list's
-  /// own scrolled content (not wrapped around the outside) so it wins the
-  /// pointer signal resolver's race against the list's own scroll handling
-  /// only when it actually claims the event.
+  /// over this list and adjust [scale].
   final void Function(PointerSignalEvent event)? onScrollSignal;
 
   @override
@@ -55,6 +60,7 @@ class TopicTreeView extends StatelessWidget {
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
+      physics: zoomModifierHeld ? const NeverScrollableScrollPhysics() : null,
       children: [
         Listener(
           onPointerSignal: onScrollSignal,

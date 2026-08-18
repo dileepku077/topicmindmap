@@ -86,12 +86,39 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
   /// plain list, so "zoom" scales its rows rather than panning a canvas.
   double _treeScale = 1.0;
 
+  /// Whether Cmd/Ctrl is currently held — tracked from real keyboard events
+  /// (not from the scroll event itself) so it's already up to date *before*
+  /// a scroll tick arrives. InteractiveViewer has its own built-in
+  /// wheel-to-zoom behavior that isn't something a Listener further down
+  /// the tree can preempt per-event (there's no reliable way to "win" that
+  /// race), so the only clean way to stop it double-processing the same
+  /// tick as our own zoom is to disable its scaleEnabled/panEnabled outright
+  /// while this is true.
+  bool _zoomModifierHeld = false;
+
   Map<String, List<Subtopic>> _subtopicsByUnit = {};
 
   @override
+  void initState() {
+    super.initState();
+    HardwareKeyboard.instance.addHandler(_handleKeyEvent);
+  }
+
+  @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
     _transformController.dispose();
     super.dispose();
+  }
+
+  bool _handleKeyEvent(KeyEvent event) {
+    final held =
+        HardwareKeyboard.instance.isMetaPressed ||
+        HardwareKeyboard.instance.isControlPressed;
+    if (held != _zoomModifierHeld) {
+      setState(() => _zoomModifierHeld = held);
+    }
+    return false;
   }
 
   void _ensureLayout(
@@ -275,71 +302,58 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
           0,
           1,
         )
-        ..scaleByDouble(scale, scale, 1, 1);
+        // Scaling z too (not just x/y) matters: getMaxScaleOnAxis() (used
+        // to read this scale back out, e.g. next time this runs) takes the
+        // max across all three axes, so leaving z at 1 would make it
+        // impossible to ever read back a scale below 1.
+        ..scaleByDouble(scale, scale, scale, 1);
     });
   }
 
   /// Cmd/Ctrl + scroll (trackpad two-finger scroll or a mouse wheel) zooms
   /// the canvas toward the cursor, Coggle/Lucidchart-style. Plain scroll is
   /// left alone so InteractiveViewer's own default pan/zoom behavior keeps
-  /// working exactly as before. Registers with the pointer signal resolver
-  /// so this claims the event ahead of InteractiveViewer's own listener —
-  /// InteractiveViewer sits *above* this Listener in the tree, so its
-  /// onPointerSignal only runs (and only registers) after this one already
-  /// has, and a resolver only honors the first registrant per event.
+  /// working exactly as before. Only runs while [_zoomModifierHeld] is
+  /// true, at which point InteractiveViewer's own scaleEnabled/panEnabled
+  /// are already turned off (see build()) so it can't also react to the
+  /// same tick — without that, InteractiveViewer's built-in wheel handling
+  /// and this one would both apply a zoom to the same scroll tick and
+  /// compound into a runaway zoom-out.
+  ///
+  /// Wired up on a Listener *above* InteractiveViewer (outside its Transform)
+  /// so [event.localPosition] is in stable viewport coordinates, unaffected
+  /// by the very transform this is about to change — reading a position
+  /// from *inside* the transformed subtree could observe a stale transform
+  /// (rebuilds don't happen synchronously) and, combined with a fresh read
+  /// of the transform for the scale math, drift the zoom pivot further off
+  /// with every tick until the canvas scrolled entirely out of view.
   void _handleMindmapScroll(PointerSignalEvent event) {
-    if (event is! PointerScrollEvent) return;
-    final zoomRequested =
-        HardwareKeyboard.instance.isMetaPressed ||
-        HardwareKeyboard.instance.isControlPressed;
-    if (!zoomRequested) return;
-
-    GestureBinding.instance.pointerSignalResolver.register(event, (
-      resolvedEvent,
-    ) {
-      final scrollEvent = resolvedEvent as PointerScrollEvent;
-      final oldMatrix = _transformController.value;
-      final oldScale = oldMatrix.getMaxScaleOnAxis();
-      final translation = oldMatrix.getTranslation();
-      final canvasPoint = scrollEvent.localPosition;
-      final viewportPoint = Offset(
-        canvasPoint.dx * oldScale + translation.x,
-        canvasPoint.dy * oldScale + translation.y,
+    if (!_zoomModifierHeld || event is! PointerScrollEvent) return;
+    setState(() {
+      _transformController.value = computeZoomedTransform(
+        oldMatrix: _transformController.value,
+        viewportPoint: event.localPosition,
+        scrollDeltaY: event.scrollDelta.dy,
+        minZoom: _minZoom,
+        maxZoom: _maxZoom,
       );
-      final zoomFactor = math.exp(-scrollEvent.scrollDelta.dy / 200);
-      final newScale = (oldScale * zoomFactor).clamp(_minZoom, _maxZoom);
-      final newTranslation = Offset(
-        viewportPoint.dx - canvasPoint.dx * newScale,
-        viewportPoint.dy - canvasPoint.dy * newScale,
-      );
-      setState(() {
-        _transformController.value = Matrix4.identity()
-          ..translateByDouble(newTranslation.dx, newTranslation.dy, 0, 1)
-          ..scaleByDouble(newScale, newScale, 1, 1);
-      });
     });
   }
 
   /// Same Cmd/Ctrl+scroll convention for the tree view, but there's no
   /// canvas to pan/zoom there — it just scales row text/icons up or down.
+  /// Only runs while [_zoomModifierHeld] is true, at which point the
+  /// ListView's own scroll physics are switched to non-scrollable (see
+  /// TopicTreeView's use of [_zoomModifierHeld]) so this doesn't also
+  /// scroll the list at the same time.
   void _handleTreeScroll(PointerSignalEvent event) {
-    if (event is! PointerScrollEvent) return;
-    final zoomRequested =
-        HardwareKeyboard.instance.isMetaPressed ||
-        HardwareKeyboard.instance.isControlPressed;
-    if (!zoomRequested) return;
-
-    GestureBinding.instance.pointerSignalResolver.register(event, (
-      resolvedEvent,
-    ) {
-      final scrollEvent = resolvedEvent as PointerScrollEvent;
-      final zoomFactor = math.exp(-scrollEvent.scrollDelta.dy / 200);
-      setState(() {
-        _treeScale = (_treeScale * zoomFactor).clamp(
-          _minTreeScale,
-          _maxTreeScale,
-        );
-      });
+    if (!_zoomModifierHeld || event is! PointerScrollEvent) return;
+    final zoomFactor = math.exp(-event.scrollDelta.dy / 200);
+    setState(() {
+      _treeScale = (_treeScale * zoomFactor).clamp(
+        _minTreeScale,
+        _maxTreeScale,
+      );
     });
   }
 
@@ -498,6 +512,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                     subtopicScorePercent: subtopicScorePercent,
                     expandedUnitIds: _expandedUnitIds,
                     scale: _treeScale,
+                    zoomModifierHeld: _zoomModifierHeld,
                     onScrollSignal: _handleTreeScroll,
                     onToggleUnit: _toggleUnit,
                     onTapSubtopic: (subtopic, status) => showTopicDetailSheet(
@@ -521,26 +536,28 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                         );
                       }
                     }
-                    return InteractiveViewer(
-                      transformationController: _transformController,
-                      constrained: false,
-                      // Disabled for the duration of any node-level pointer
-                      // interaction (see _DraggableNode) so InteractiveViewer's
-                      // own pan/scale recognizer never competes with — or
-                      // nudges the canvas during — a tap or drag on a node.
-                      panEnabled: _canvasGesturesEnabled,
-                      scaleEnabled: _canvasGesturesEnabled,
-                      minScale: _minZoom,
-                      maxScale: _maxZoom,
-                      boundaryMargin: const EdgeInsets.all(1200),
-                      // Nested inside InteractiveViewer's own child so this
-                      // Listener sits deeper in the hit-test path than
-                      // InteractiveViewer's internal one — the pointer signal
-                      // resolver honors whichever listener registers first,
-                      // and deeper listeners are visited first, so a
-                      // Cmd/Ctrl+scroll claimed here always wins.
-                      child: Listener(
-                        onPointerSignal: _handleMindmapScroll,
+                    return Listener(
+                      behavior: HitTestBehavior.opaque,
+                      onPointerSignal: _handleMindmapScroll,
+                      child: InteractiveViewer(
+                        transformationController: _transformController,
+                        constrained: false,
+                        // Disabled for the duration of any node-level
+                        // pointer interaction (see _DraggableNode) so
+                        // InteractiveViewer's own pan/scale recognizer
+                        // never competes with — or nudges the canvas
+                        // during — a tap or drag on a node. Also disabled
+                        // while Cmd/Ctrl is held so its own built-in
+                        // wheel-to-zoom doesn't double-process the same
+                        // scroll tick our custom zoom handler is already
+                        // applying (see _handleMindmapScroll).
+                        panEnabled:
+                            _canvasGesturesEnabled && !_zoomModifierHeld,
+                        scaleEnabled:
+                            _canvasGesturesEnabled && !_zoomModifierHeld,
+                        minScale: _minZoom,
+                        maxScale: _maxZoom,
+                        boundaryMargin: const EdgeInsets.all(1200),
                         child: SizedBox(
                           width: _canvasSize.width,
                           height: _canvasSize.height,
@@ -888,4 +905,37 @@ class _MindmapEdgePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _MindmapEdgePainter oldDelegate) => true;
+}
+
+/// Given the canvas's current transform, zooms toward [viewportPoint] (a
+/// position in stable, untransformed viewport coordinates) by an amount
+/// derived from [scrollDeltaY], clamped to [minZoom]/[maxZoom]. The canvas
+/// point currently under [viewportPoint] stays under it after the zoom.
+/// A pure function (no widget/controller state) so this can be exercised
+/// directly in a unit test, independent of how the scroll event arrived.
+Matrix4 computeZoomedTransform({
+  required Matrix4 oldMatrix,
+  required Offset viewportPoint,
+  required double scrollDeltaY,
+  required double minZoom,
+  required double maxZoom,
+}) {
+  final oldScale = oldMatrix.getMaxScaleOnAxis();
+  final oldTranslation = oldMatrix.getTranslation();
+  final canvasPoint = Offset(
+    (viewportPoint.dx - oldTranslation.x) / oldScale,
+    (viewportPoint.dy - oldTranslation.y) / oldScale,
+  );
+  final zoomFactor = math.exp(-scrollDeltaY / 200);
+  final newScale = (oldScale * zoomFactor).clamp(minZoom, maxZoom);
+  final newTranslation = Offset(
+    viewportPoint.dx - canvasPoint.dx * newScale,
+    viewportPoint.dy - canvasPoint.dy * newScale,
+  );
+  return Matrix4.identity()
+    ..translateByDouble(newTranslation.dx, newTranslation.dy, 0, 1)
+    // Scale z too — see the comment on the equivalent line in
+    // _fitToContent for why leaving it at 1 breaks reading the scale back
+    // out via getMaxScaleOnAxis().
+    ..scaleByDouble(newScale, newScale, newScale, 1);
 }
