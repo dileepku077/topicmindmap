@@ -18,6 +18,7 @@ class LessonRepository {
     'assets/data/mpm1d_topics_mindmap.json',
     'assets/data/mpm2d_topics_mindmap.json',
     'assets/data/snc2d_topics_mindmap.json',
+    'assets/data/sph3u_topics_mindmap.json',
   ];
 
   Future<Map<String, Lesson>> fetchLessons() async {

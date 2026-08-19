@@ -1,5 +1,5 @@
 -- Seed data: Ontario academic-stream math curriculum (grades 9-12) units &
--- subtopics, plus one Grade 10 science course, plus demo students.
+-- subtopics, plus Grade 10 science and Grade 11 physics, plus demo students.
 -- Run after schema.sql. Safe to re-run (upserts on the unique `code` columns).
 --
 -- Content mirrors the common textbook breakdown of each course:
@@ -8,6 +8,7 @@
 --   MCR3U  Grade 11 Functions (university prep)
 --   MHF4U  Grade 12 Advanced Functions (university prep)
 --   SNC2D  Grade 10 Academic Science
+--   SPH3U  Grade 11 Physics (university prep)
 -- Adjust wording/order here to match your own board's course outline.
 
 with course_data (grade, code, title, description, order_index) as (
@@ -21,7 +22,9 @@ with course_data (grade, code, title, description, order_index) as (
     (12, 'MHF4U', 'Grade 12 Advanced Functions',
      'Polynomial, rational, logarithmic, and trigonometric functions.', 3),
     (10, 'SNC2D', 'Grade 10 Academic Science',
-     'Biology, chemistry, earth and space science, and physics.', 4)
+     'Biology, chemistry, earth and space science, and physics.', 4),
+    (11, 'SPH3U', 'Grade 11 Physics',
+     'Kinematics, dynamics, energy and momentum, waves and sound, and electricity and magnetism.', 5)
 )
 insert into public.courses (grade, code, title, description, order_index)
 select grade, code, title, description, order_index from course_data
@@ -675,6 +678,178 @@ subtopic_data (code, title, description, order_index) as (
      'How cameras, microscopes, and telescopes combine lenses and mirrors.', 7),
     ('light-and-colour', 'Light and Colour',
      'Why objects appear coloured, and additive versus subtractive colour mixing.', 8)
+)
+insert into public.subtopics (unit_id, code, title, description, order_index)
+select u.id, s.code, s.title, s.description, s.order_index from subtopic_data s, u
+on conflict (unit_id, code) do update
+  set title = excluded.title, description = excluded.description, order_index = excluded.order_index;
+
+-- =============================================================================
+-- Grade 11 — SPH3U (Physics, University Preparation)
+-- =============================================================================
+
+with c as (select id from public.courses where code = 'SPH3U'),
+unit_data (code, title, description, color, order_index) as (
+  values
+    ('kinematics', 'Kinematics',
+     'Describing motion using position, velocity, acceleration, and graphs.', '#4E7FE0', 0),
+    ('dynamics', 'Dynamics',
+     'Newton''s laws and the forces that cause and change motion.', '#D65A4A', 1),
+    ('energy-and-momentum', 'Energy and Momentum',
+     'Work, energy, power, momentum, and collisions.', '#C9820A', 2),
+    ('waves-and-sound', 'Waves and Sound',
+     'The properties of mechanical waves and sound.', '#7C5CBF', 3),
+    ('electricity-and-magnetism', 'Electricity and Magnetism',
+     'Electric charge, circuits, and magnetism.', '#C9A227', 4)
+)
+insert into public.units (course_id, code, title, description, color, order_index)
+select c.id, u.code, u.title, u.description, u.color, u.order_index from unit_data u, c
+on conflict (course_id, code) do update
+  set title = excluded.title,
+      description = excluded.description,
+      color = excluded.color,
+      order_index = excluded.order_index;
+
+-- Kinematics -----------------------------------------------------------------------
+with u as (
+  select un.id from public.units un
+  join public.courses c on c.id = un.course_id
+  where c.code = 'SPH3U' and un.code = 'kinematics'
+),
+subtopic_data (code, title, description, order_index) as (
+  values
+    ('position-distance-displacement', 'Position, Distance, and Displacement',
+     'Distinguishing distance and displacement, and describing position along a line.', 0),
+    ('speed-and-velocity', 'Speed and Velocity',
+     'Calculating average speed and velocity, and the difference between them.', 1),
+    ('acceleration', 'Acceleration',
+     'Defining acceleration as the rate of change of velocity.', 2),
+    ('uniform-acceleration-equations', 'Uniform Acceleration Equations',
+     'Using the kinematics equations to solve constant-acceleration problems.', 3),
+    ('motion-graphs', 'Motion Graphs',
+     'Interpreting and sketching position-time and velocity-time graphs.', 4),
+    ('free-fall-and-gravity', 'Free Fall and Gravity',
+     'Applying uniform acceleration to objects falling under gravity.', 5),
+    ('projectile-motion', 'Projectile Motion',
+     'Analyzing two-dimensional motion by treating horizontal and vertical components separately.', 6),
+    ('relative-velocity', 'Relative Velocity',
+     'Adding velocity vectors to find velocity relative to a moving observer.', 7)
+)
+insert into public.subtopics (unit_id, code, title, description, order_index)
+select u.id, s.code, s.title, s.description, s.order_index from subtopic_data s, u
+on conflict (unit_id, code) do update
+  set title = excluded.title, description = excluded.description, order_index = excluded.order_index;
+
+-- Dynamics -------------------------------------------------------------------------
+with u as (
+  select un.id from public.units un
+  join public.courses c on c.id = un.course_id
+  where c.code = 'SPH3U' and un.code = 'dynamics'
+),
+subtopic_data (code, title, description, order_index) as (
+  values
+    ('newtons-first-law', 'Newton''s First Law',
+     'Inertia and why objects resist changes to their motion.', 0),
+    ('newtons-second-law', 'Newton''s Second Law',
+     'Relating net force, mass, and acceleration with F = ma.', 1),
+    ('newtons-third-law', 'Newton''s Third Law',
+     'Action-reaction force pairs and how to identify them.', 2),
+    ('gravity-and-weight', 'Gravity and Weight',
+     'Distinguishing mass from weight and calculating gravitational force.', 3),
+    ('friction', 'Friction',
+     'Static and kinetic friction, and calculating friction force with the coefficient of friction.', 4),
+    ('free-body-diagrams', 'Free-Body Diagrams',
+     'Drawing and using free-body diagrams to analyze the forces on an object.', 5),
+    ('applications-of-newtons-laws', 'Applications of Newton''s Laws',
+     'Solving multi-force problems like inclines, elevators, and connected objects.', 6),
+    ('uniform-circular-motion', 'Uniform Circular Motion',
+     'Centripetal acceleration and force for objects moving in a circle.', 7)
+)
+insert into public.subtopics (unit_id, code, title, description, order_index)
+select u.id, s.code, s.title, s.description, s.order_index from subtopic_data s, u
+on conflict (unit_id, code) do update
+  set title = excluded.title, description = excluded.description, order_index = excluded.order_index;
+
+-- Energy and Momentum ----------------------------------------------------------------
+with u as (
+  select un.id from public.units un
+  join public.courses c on c.id = un.course_id
+  where c.code = 'SPH3U' and un.code = 'energy-and-momentum'
+),
+subtopic_data (code, title, description, order_index) as (
+  values
+    ('work-and-energy', 'Work and the Work-Energy Theorem',
+     'Defining work and relating it to a change in kinetic energy.', 0),
+    ('kinetic-energy', 'Kinetic Energy',
+     'Calculating the energy of a moving object.', 1),
+    ('gravitational-potential-energy', 'Gravitational Potential Energy',
+     'Calculating stored energy due to an object''s height.', 2),
+    ('conservation-of-energy', 'Conservation of Mechanical Energy',
+     'Using conservation of energy to solve problems without forces or time.', 3),
+    ('power', 'Power',
+     'Calculating the rate at which work is done or energy is transferred.', 4),
+    ('momentum-and-impulse', 'Momentum and Impulse',
+     'Defining momentum and relating impulse to a change in momentum.', 5),
+    ('conservation-of-momentum', 'Conservation of Momentum',
+     'Using conservation of momentum to analyze interactions between objects.', 6),
+    ('elastic-and-inelastic-collisions', 'Elastic and Inelastic Collisions',
+     'Distinguishing collision types and solving for velocities after a collision.', 7)
+)
+insert into public.subtopics (unit_id, code, title, description, order_index)
+select u.id, s.code, s.title, s.description, s.order_index from subtopic_data s, u
+on conflict (unit_id, code) do update
+  set title = excluded.title, description = excluded.description, order_index = excluded.order_index;
+
+-- Waves and Sound ---------------------------------------------------------------------
+with u as (
+  select un.id from public.units un
+  join public.courses c on c.id = un.course_id
+  where c.code = 'SPH3U' and un.code = 'waves-and-sound'
+),
+subtopic_data (code, title, description, order_index) as (
+  values
+    ('properties-of-waves', 'Properties of Waves',
+     'Wavelength, frequency, period, amplitude, and wave speed.', 0),
+    ('wave-interference', 'Wave Interference and Superposition',
+     'How overlapping waves combine constructively and destructively.', 1),
+    ('standing-waves', 'Standing Waves',
+     'How reflected waves combine to form standing waves with nodes and antinodes.', 2),
+    ('nature-of-sound', 'The Nature of Sound',
+     'Sound as a longitudinal mechanical wave and how it travels through matter.', 3),
+    ('resonance-and-music', 'Resonance and Musical Instruments',
+     'How resonance produces the sounds of strings and air columns.', 4),
+    ('doppler-effect', 'The Doppler Effect',
+     'Why a sound''s pitch changes when its source or the listener is moving.', 5),
+    ('sound-intensity-decibels', 'Intensity and the Decibel Scale',
+     'Measuring the loudness of sound on the logarithmic decibel scale.', 6)
+)
+insert into public.subtopics (unit_id, code, title, description, order_index)
+select u.id, s.code, s.title, s.description, s.order_index from subtopic_data s, u
+on conflict (unit_id, code) do update
+  set title = excluded.title, description = excluded.description, order_index = excluded.order_index;
+
+-- Electricity and Magnetism -------------------------------------------------------------
+with u as (
+  select un.id from public.units un
+  join public.courses c on c.id = un.course_id
+  where c.code = 'SPH3U' and un.code = 'electricity-and-magnetism'
+),
+subtopic_data (code, title, description, order_index) as (
+  values
+    ('electric-charge-and-static', 'Electric Charge and Static Electricity',
+     'Electric charge, charging methods, and Coulomb''s law.', 0),
+    ('electric-current-and-circuits', 'Electric Current and Circuits',
+     'Current, voltage, and the basic components of an electric circuit.', 1),
+    ('ohms-law', 'Ohm''s Law',
+     'Relating voltage, current, and resistance in a circuit.', 2),
+    ('series-and-parallel-circuits', 'Series and Parallel Circuits',
+     'Analyzing current, voltage, and resistance in series and parallel circuits.', 3),
+    ('electrical-power-and-energy', 'Electrical Power and Energy',
+     'Calculating electrical power and the cost of electrical energy.', 4),
+    ('magnetism-and-magnetic-fields', 'Magnetism and Magnetic Fields',
+     'Magnetic poles, fields, and how to sketch them.', 5),
+    ('electromagnetism', 'Electromagnetism',
+     'How electric current creates magnetism, and the basis of motors and generators.', 6)
 )
 insert into public.subtopics (unit_id, code, title, description, order_index)
 select u.id, s.code, s.title, s.description, s.order_index from subtopic_data s, u

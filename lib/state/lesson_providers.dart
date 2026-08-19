@@ -4,6 +4,7 @@ import '../data/grade10_lesson_mapping.dart';
 import '../data/grade9_lesson_mapping.dart';
 import '../data/lesson_repository.dart';
 import '../data/snc2d_lesson_mapping.dart';
+import '../data/sph3u_lesson_mapping.dart';
 import '../models/lesson.dart';
 
 final lessonRepositoryProvider = Provider<LessonRepository>((ref) {
@@ -25,7 +26,7 @@ final lessonProvider = Provider.family<Lesson?, String>((ref, lessonId) {
 
 /// The lesson id covering [subtopicCode] in [courseCode]'s curriculum, if
 /// any. Lesson content exists for Grade 9 Math (MPM1D), Grade 10 Math
-/// (MPM2D), and Grade 10 Science (SNC2D) today.
+/// (MPM2D), Grade 10 Science (SNC2D), and Grade 11 Physics (SPH3U) today.
 String? lessonIdFor({
   required String courseCode,
   required String subtopicCode,
@@ -37,6 +38,8 @@ String? lessonIdFor({
       return grade10LessonIdBySubtopicCode[subtopicCode];
     case 'SNC2D':
       return snc2dLessonIdBySubtopicCode[subtopicCode];
+    case 'SPH3U':
+      return sph3uLessonIdBySubtopicCode[subtopicCode];
     default:
       return null;
   }
