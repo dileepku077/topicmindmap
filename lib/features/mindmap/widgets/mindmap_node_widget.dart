@@ -28,10 +28,10 @@ class RootNodeWidget extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: scheme.onPrimary,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.2,
-            ),
+          color: scheme.onPrimary,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 0.2,
+        ),
       ),
     );
   }
@@ -51,6 +51,7 @@ class UnitNodeWidget extends StatelessWidget {
     required this.status,
     required this.subtopicCount,
     required this.collapsed,
+    required this.sequenceNumber,
     this.scorePercent,
   });
 
@@ -58,6 +59,11 @@ class UnitNodeWidget extends StatelessWidget {
   final ProgressStatus status;
   final int subtopicCount;
   final bool collapsed;
+
+  /// This unit's 1-based position in the course's recommended learning
+  /// order (i.e. `unit.orderIndex + 1`) — shown as a small badge so a
+  /// student can tell at a glance which unit to tackle first.
+  final int sequenceNumber;
 
   /// Average best-score percent across this unit's subtopics, or null if
   /// none have been attempted yet (nothing worth showing).
@@ -84,6 +90,8 @@ class UnitNodeWidget extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          _SequenceBadge(number: sequenceNumber, color: status.color),
+          const SizedBox(width: 6),
           Icon(status.icon, color: Colors.white, size: 14),
           const SizedBox(width: 6),
           Flexible(
@@ -116,6 +124,36 @@ class UnitNodeWidget extends StatelessWidget {
             size: 16,
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// A small "N of the course/unit" pill, in the same visual language as
+/// [_CountBadge] (white pill, colored digits) but always shown first so a
+/// student scanning left-to-right sees the recommended order before
+/// anything else.
+class _SequenceBadge extends StatelessWidget {
+  const _SequenceBadge({required this.number, required this.color});
+
+  final int number;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        '$number',
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w800,
+          fontSize: 10,
+        ),
       ),
     );
   }
@@ -156,11 +194,18 @@ class SubtopicNodeWidget extends StatelessWidget {
     super.key,
     required this.subtopic,
     required this.status,
+    required this.sequenceNumber,
     this.scorePercent,
   });
 
   final Subtopic subtopic;
   final ProgressStatus status;
+
+  /// This subtopic's 1-based position within its unit (i.e.
+  /// `subtopic.orderIndex + 1`) — the recommended order to learn the
+  /// unit's subtopics in, shown as a plain small number since these
+  /// nodes are already tight on space.
+  final int sequenceNumber;
 
   /// This subtopic's best practice-test score percent, or null if it
   /// hasn't been attempted yet (nothing worth showing).
@@ -186,6 +231,15 @@ class SubtopicNodeWidget extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          Text(
+            '$sequenceNumber',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: Theme.of(context).colorScheme.outline,
+            ),
+          ),
+          const SizedBox(width: 4),
           Icon(status.icon, color: status.color, size: 13),
           const SizedBox(width: 6),
           Flexible(

@@ -613,7 +613,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
           onDragStart: () => setState(() => _canvasGesturesEnabled = false),
           onDragUpdate: (delta) => _moveNode(_rootId, delta),
           onDragEnd: () => setState(() => _canvasGesturesEnabled = true),
-          child: RootNodeWidget(label: 'Grade ${course.grade} Math'),
+          child: RootNodeWidget(label: course.gradeLabel),
         ),
       );
     }
@@ -648,6 +648,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
               status: unitStatus,
               subtopicCount: (_subtopicsByUnit[unit.id] ?? const []).length,
               collapsed: !_expandedUnitIds.contains(unit.id),
+              sequenceNumber: unit.orderIndex + 1,
               scorePercent: unitScorePercent,
             ),
           ),
@@ -679,6 +680,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
               child: SubtopicNodeWidget(
                 subtopic: subtopic,
                 status: status,
+                sequenceNumber: subtopic.orderIndex + 1,
                 scorePercent: subtopicScorePercent[subtopic.id],
               ),
             ),

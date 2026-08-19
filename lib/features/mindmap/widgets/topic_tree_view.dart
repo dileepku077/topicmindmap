@@ -73,7 +73,7 @@ class TopicTreeView extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(bottom: 16, left: 4),
                   child: Text(
-                    'Grade ${course.grade} Math',
+                    course.title,
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                       fontSize:
@@ -106,6 +106,37 @@ class TopicTreeView extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// A small, neutral (not status-colored, so it doesn't compete with the
+/// traffic-signal progress color) numbered pill showing where an item
+/// sits in its recommended learning order.
+class _SequenceBadge extends StatelessWidget {
+  const _SequenceBadge({required this.number, this.scale = 1.0});
+
+  final int number;
+  final double scale;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 6 * scale, vertical: 2 * scale),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Text(
+        '$number',
+        style: TextStyle(
+          color: scheme.onSurfaceVariant,
+          fontWeight: FontWeight.w800,
+          fontSize: 11 * scale,
+        ),
+      ),
     );
   }
 }
@@ -161,6 +192,8 @@ class _UnitSection extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
+                    _SequenceBadge(number: unit.orderIndex + 1, scale: scale),
+                    SizedBox(width: 10 * scale),
                     Icon(status.icon, color: status.color, size: 20 * scale),
                     SizedBox(width: 12 * scale),
                     Expanded(
@@ -281,6 +314,18 @@ class _SubtopicRow extends StatelessWidget {
           ),
           child: Row(
             children: [
+              SizedBox(
+                width: 18 * scale,
+                child: Text(
+                  '${subtopic.orderIndex + 1}',
+                  style: TextStyle(
+                    fontSize: 12 * scale,
+                    fontWeight: FontWeight.w700,
+                    color: Theme.of(context).colorScheme.outline,
+                  ),
+                ),
+              ),
+              SizedBox(width: 6 * scale),
               Icon(status.icon, color: status.color, size: 16 * scale),
               SizedBox(width: 12 * scale),
               Expanded(
