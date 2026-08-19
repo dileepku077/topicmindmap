@@ -1,5 +1,5 @@
 -- Seed data: Ontario academic-stream math curriculum (grades 9-12) units &
--- subtopics, plus demo students.
+-- subtopics, plus one Grade 10 science course, plus demo students.
 -- Run after schema.sql. Safe to re-run (upserts on the unique `code` columns).
 --
 -- Content mirrors the common textbook breakdown of each course:
@@ -7,6 +7,7 @@
 --   MPM2D  Grade 10 Academic Math
 --   MCR3U  Grade 11 Functions (university prep)
 --   MHF4U  Grade 12 Advanced Functions (university prep)
+--   SNC2D  Grade 10 Academic Science
 -- Adjust wording/order here to match your own board's course outline.
 
 with course_data (grade, code, title, description, order_index) as (
@@ -18,7 +19,9 @@ with course_data (grade, code, title, description, order_index) as (
     (11, 'MCR3U', 'Grade 11 Functions',
      'Functions, exponential and trigonometric relationships, and sequences.', 2),
     (12, 'MHF4U', 'Grade 12 Advanced Functions',
-     'Polynomial, rational, logarithmic, and trigonometric functions.', 3)
+     'Polynomial, rational, logarithmic, and trigonometric functions.', 3),
+    (10, 'SNC2D', 'Grade 10 Academic Science',
+     'Biology, chemistry, earth and space science, and physics.', 4)
 )
 insert into public.courses (grade, code, title, description, order_index)
 select grade, code, title, description, order_index from course_data
@@ -520,6 +523,158 @@ subtopic_data (code, title, description, order_index) as (
      'Forming and evaluating composite functions.', 2),
     ('rates-of-change-of-functions', 'Rates of Change',
      'Estimating average and instantaneous rates of change from a graph.', 3)
+)
+insert into public.subtopics (unit_id, code, title, description, order_index)
+select u.id, s.code, s.title, s.description, s.order_index from subtopic_data s, u
+on conflict (unit_id, code) do update
+  set title = excluded.title, description = excluded.description, order_index = excluded.order_index;
+
+-- =============================================================================
+-- Grade 10 — SNC2D (Academic Science)
+-- =============================================================================
+
+with c as (select id from public.courses where code = 'SNC2D'),
+unit_data (code, title, description, color, order_index) as (
+  values
+    ('tissues-organs-and-systems', 'Biology: Tissues, Organs, and Systems',
+     'How cells organize into the tissues, organs, and systems of plants and animals.', '#4CAA6E', 0),
+    ('chemical-reactions', 'Chemistry: Chemical Reactions',
+     'Atoms, bonding, and chemical reactions, with a focus on acids and bases.', '#8E5BC9', 1),
+    ('climate-change', 'Earth and Space Science: Climate Change',
+     'The natural and human forces that shape and change Earth''s climate.', '#2E9B98', 2),
+    ('light-and-optics', 'Physics: Light and Geometric Optics',
+     'How light behaves, bends, and interacts with mirrors, lenses, and matter.', '#E0954B', 3)
+)
+insert into public.units (course_id, code, title, description, color, order_index)
+select c.id, u.code, u.title, u.description, u.color, u.order_index from unit_data u, c
+on conflict (course_id, code) do update
+  set title = excluded.title,
+      description = excluded.description,
+      color = excluded.color,
+      order_index = excluded.order_index;
+
+-- Biology: Tissues, Organs, and Systems -----------------------------------------
+with u as (
+  select un.id from public.units un
+  join public.courses c on c.id = un.course_id
+  where c.code = 'SNC2D' and un.code = 'tissues-organs-and-systems'
+),
+subtopic_data (code, title, description, order_index) as (
+  values
+    ('cell-theory-and-structure', 'Cell Theory and Cell Structure',
+     'The cell theory and the structure and function of plant and animal cell organelles.', 0),
+    ('levels-of-organization', 'Levels of Biological Organization',
+     'How cells build up into tissues, organs, systems, and whole organisms.', 1),
+    ('plant-tissues-and-structures', 'Plant Tissues and Structures',
+     'Xylem, phloem, and the specialized tissues of roots, stems, and leaves.', 2),
+    ('plant-transport-systems', 'Plant Transport Systems',
+     'How water and nutrients move through a plant via transpiration and translocation.', 3),
+    ('animal-tissue-types', 'Animal Tissue Types',
+     'The four basic animal tissue types: epithelial, connective, muscle, and nervous.', 4),
+    ('the-circulatory-system', 'The Circulatory System',
+     'The structure of the heart, blood vessels, and blood, and how they move materials.', 5),
+    ('the-respiratory-system', 'The Respiratory System',
+     'How the lungs and alveoli exchange oxygen and carbon dioxide with the blood.', 6),
+    ('the-digestive-system', 'The Digestive System',
+     'How the digestive system breaks down and absorbs food mechanically and chemically.', 7),
+    ('homeostasis-and-feedback', 'Homeostasis and Feedback Systems',
+     'How negative and positive feedback loops keep the body''s internal conditions stable.', 8)
+)
+insert into public.subtopics (unit_id, code, title, description, order_index)
+select u.id, s.code, s.title, s.description, s.order_index from subtopic_data s, u
+on conflict (unit_id, code) do update
+  set title = excluded.title, description = excluded.description, order_index = excluded.order_index;
+
+-- Chemistry: Chemical Reactions ---------------------------------------------------
+with u as (
+  select un.id from public.units un
+  join public.courses c on c.id = un.course_id
+  where c.code = 'SNC2D' and un.code = 'chemical-reactions'
+),
+subtopic_data (code, title, description, order_index) as (
+  values
+    ('atoms-and-the-periodic-table', 'Atoms, Elements, and the Periodic Table',
+     'Atomic structure and how the periodic table organizes elements by properties.', 0),
+    ('chemical-bonding', 'Chemical Bonding: Ionic and Covalent',
+     'How atoms bond by transferring or sharing electrons.', 1),
+    ('naming-compounds', 'Naming Compounds and Chemical Formulas',
+     'Naming ionic and molecular compounds and writing their chemical formulas.', 2),
+    ('types-of-chemical-reactions', 'Types of Chemical Reactions',
+     'Recognizing synthesis, decomposition, displacement, and combustion reactions.', 3),
+    ('balancing-chemical-equations', 'Balancing Chemical Equations',
+     'Using conservation of mass to balance chemical equations.', 4),
+    ('intro-to-acids-and-bases', 'Introduction to Acids and Bases',
+     'The properties of acids and bases and how indicators detect them.', 5),
+    ('the-ph-scale', 'The pH Scale',
+     'What the pH scale measures and how it relates to acidity and basicity.', 6),
+    ('acid-base-neutralization', 'Acid-Base Neutralization',
+     'What happens when an acid and a base react to form a salt and water.', 7),
+    ('acids-bases-and-the-environment', 'Acids, Bases, and the Environment',
+     'Real-world acid-base chemistry, from acid rain to buffering in living systems.', 8)
+)
+insert into public.subtopics (unit_id, code, title, description, order_index)
+select u.id, s.code, s.title, s.description, s.order_index from subtopic_data s, u
+on conflict (unit_id, code) do update
+  set title = excluded.title, description = excluded.description, order_index = excluded.order_index;
+
+-- Earth and Space Science: Climate Change -----------------------------------------
+with u as (
+  select un.id from public.units un
+  join public.courses c on c.id = un.course_id
+  where c.code = 'SNC2D' and un.code = 'climate-change'
+),
+subtopic_data (code, title, description, order_index) as (
+  values
+    ('earths-interconnected-spheres', 'Earth''s Interconnected Spheres',
+     'How the atmosphere, hydrosphere, lithosphere, and biosphere interact.', 0),
+    ('weather-vs-climate', 'Weather vs. Climate',
+     'The difference between short-term weather and long-term climate patterns.', 1),
+    ('the-greenhouse-effect', 'The Greenhouse Effect',
+     'How greenhouse gases trap energy and keep Earth warm enough to live on.', 2),
+    ('natural-causes-of-climate-change', 'Natural Causes of Climate Change',
+     'Orbital cycles, solar variability, and volcanic activity as natural climate drivers.', 3),
+    ('human-impact-on-climate', 'Human Impact on Climate',
+     'How burning fossil fuels and land-use change add greenhouse gases to the atmosphere.', 4),
+    ('evidence-of-climate-change', 'Evidence of a Changing Climate',
+     'Ice cores, temperature records, and sea level data as evidence of climate change.', 5),
+    ('climate-feedback-loops', 'Feedback Loops in the Climate System',
+     'How positive and negative feedback loops can amplify or dampen climate change.', 6),
+    ('consequences-of-climate-change', 'Consequences of Climate Change',
+     'The effects of climate change on sea level, weather, and ecosystems.', 7),
+    ('responding-to-climate-change', 'Responding to Climate Change',
+     'Mitigation and adaptation strategies, from renewable energy to policy.', 8)
+)
+insert into public.subtopics (unit_id, code, title, description, order_index)
+select u.id, s.code, s.title, s.description, s.order_index from subtopic_data s, u
+on conflict (unit_id, code) do update
+  set title = excluded.title, description = excluded.description, order_index = excluded.order_index;
+
+-- Physics: Light and Geometric Optics ----------------------------------------------
+with u as (
+  select un.id from public.units un
+  join public.courses c on c.id = un.course_id
+  where c.code = 'SNC2D' and un.code = 'light-and-optics'
+),
+subtopic_data (code, title, description, order_index) as (
+  values
+    ('the-nature-of-light', 'The Nature of Light',
+     'Light as an electromagnetic wave and its place in the electromagnetic spectrum.', 0),
+    ('rectilinear-propagation', 'Light Travels in Straight Lines',
+     'How rectilinear propagation explains shadows, eclipses, and pinhole cameras.', 1),
+    ('reflection-of-light', 'Reflection of Light and Plane Mirrors',
+     'The law of reflection and how plane mirrors form images.', 2),
+    ('curved-mirrors', 'Curved Mirrors',
+     'Ray diagrams and image formation in concave and convex mirrors.', 3),
+    ('refraction-of-light', 'Refraction of Light',
+     'Why light bends when it crosses between materials, and total internal reflection.', 4),
+    ('lenses-and-ray-diagrams', 'Lenses and Ray Diagrams',
+     'Ray diagrams and image formation in converging and diverging lenses.', 5),
+    ('the-human-eye', 'The Human Eye and Vision',
+     'The structure of the eye and how lenses correct common vision defects.', 6),
+    ('optical-instruments', 'Optical Instruments',
+     'How cameras, microscopes, and telescopes combine lenses and mirrors.', 7),
+    ('light-and-colour', 'Light and Colour',
+     'Why objects appear coloured, and additive versus subtractive colour mixing.', 8)
 )
 insert into public.subtopics (unit_id, code, title, description, order_index)
 select u.id, s.code, s.title, s.description, s.order_index from subtopic_data s, u
