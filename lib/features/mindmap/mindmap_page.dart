@@ -712,27 +712,37 @@ class _GradeDropdown extends ConsumerWidget {
         for (final course in courses)
           PopupMenuItem(value: course.id, child: Text(course.gradeLabel)),
       ],
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              selected.gradeLabel,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-              ),
+      child: Builder(
+        builder: (context) {
+          // Theme-derived, not hardcoded white: the AppBar's own background
+          // already flips between near-black (dark theme) and near-white
+          // (light theme) with no override, so a fixed white-on-white
+          // pill made this chip unreadable — and effectively invisible —
+          // in light mode.
+          final onSurface = Theme.of(context).colorScheme.onSurface;
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: onSurface.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(999),
             ),
-            const SizedBox(width: 4),
-            const Icon(Icons.expand_more, color: Colors.white, size: 18),
-          ],
-        ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  selected.gradeLabel,
+                  style: TextStyle(
+                    color: onSurface,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(Icons.expand_more, color: onSurface, size: 18),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
