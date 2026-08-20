@@ -36,8 +36,8 @@ const _canvasCenter = Offset(2200, 2200);
 // outward toward the left/right margins in a roughly horizontal row, the
 // way a horizontal mind map's primary branches do; only their subtopics
 // branch vertically off of that.
-const _unitOffsetX = 250.0;
-const _unitRowGap = 70.0;
+const _unitOffsetX = 300.0;
+const _unitRowGap = 110.0;
 
 // Subtopics fan out around their unit like leaves around a branch tip
 // instead of stacking in a column to one side. They're spread across an
@@ -48,7 +48,11 @@ const _unitRowGap = 70.0;
 const _leafMaxSpanDeg = 230.0;
 const _leafSpanPerGap = 34.0;
 const _leafMinRadius = 130.0;
-const _leafTargetChord = 145.0;
+// Widened alongside the node boxes themselves (see mindmap_node_widget's
+// maxWidth bumps) so wider titles don't need to wrap as tightly — without
+// a matching bump here, wider boxes at the old (tighter) chord spacing
+// would start overlapping their neighbours.
+const _leafTargetChord = 215.0;
 
 // Zoom bounds for the mindmap canvas — shared by InteractiveViewer's own
 // pinch/drag-scale gestures and the explicit Cmd/Ctrl+scroll zoom below, so

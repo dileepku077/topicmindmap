@@ -73,7 +73,13 @@ class UnitNodeWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final borderColor = Color.lerp(status.color, Colors.black, 0.25)!;
     return Container(
-      constraints: const BoxConstraints(maxWidth: 185),
+      // Wide enough that even this course set's single longest unit-title
+      // word ("Trigonometric", ~91px at this font) always fits within the
+      // title's share of the row, alongside the sequence/count badges and
+      // score%, without ever needing a mid-word break — see the width
+      // math worked out against real canvas text measurements while
+      // fixing the "Systems" word-split bug this replaced.
+      constraints: const BoxConstraints(maxWidth: 280),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: status.color,
@@ -214,7 +220,12 @@ class SubtopicNodeWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      constraints: const BoxConstraints(maxWidth: 140),
+      // Wide enough that even the single longest subtopic-title word
+      // across every course ("Electromagnetism", ~97px at this font)
+      // always fits within the title's share of the row without a
+      // mid-word break — see mindmap_node_widget's UnitNodeWidget for
+      // the same reasoning.
+      constraints: const BoxConstraints(maxWidth: 210),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
