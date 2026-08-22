@@ -19,12 +19,25 @@ class PracticeTestPage extends ConsumerStatefulWidget {
     required this.unitCode,
     required this.subtopicCode,
     required this.subtopicTitle,
+    this.embedded = false,
+    this.onFinished,
   });
 
   final String courseCode;
   final String unitCode;
   final String subtopicCode;
   final String subtopicTitle;
+
+  /// True when embedded in the classroom view's main pane instead of
+  /// pushed as its own route — skips the Scaffold/AppBar, since the
+  /// classroom view supplies its own header and keeps the left-hand unit
+  /// list on screen around it.
+  final bool embedded;
+
+  /// Called when the student taps through from the completion screen.
+  /// Defaults to popping the route, which only makes sense when this
+  /// isn't [embedded]; the classroom view always passes its own callback.
+  final VoidCallback? onFinished;
 
   @override
   ConsumerState<PracticeTestPage> createState() => _PracticeTestPageState();
@@ -129,56 +142,60 @@ class _PracticeTestPageState extends ConsumerState<PracticeTestPage> {
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
 
+    final body = user == null
+        ? _SignInPrompt(subtopicTitle: widget.subtopicTitle)
+        : _completed
+        ? _CompletionView(
+            medal: _medal ?? 'None',
+            firstTryCorrectCount: _firstTryCorrectCount,
+            questionCount: _questionCount,
+            subtopicTitle: widget.subtopicTitle,
+            onFinished: widget.onFinished ?? () => context.pop(),
+          )
+        : Consumer(
+            builder: (context, ref, _) {
+              final questionsAsync = ref.watch(
+                practiceQuestionsProvider(_ref),
+              );
+              return questionsAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (error, _) =>
+                    Center(child: Text('Failed to load questions: $error')),
+                data: (questions) {
+                  if (questions.isEmpty) {
+                    return const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Text(
+                          'No practice questions for this topic yet — '
+                          'check back soon.',
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    );
+                  }
+                  final question = questions[_index];
+                  return _QuestionView(
+                    question: question,
+                    questionNumber: _index + 1,
+                    questionCount: questions.length,
+                    lastResult: _lastResult,
+                    triedIndices: _triedThisQuestion,
+                    correctIndex: _correctIndex,
+                    submitting: _submitting || _awardingMedal,
+                    onSelect: (i) => _submit(i, question.sortOrder),
+                    onNext: () => _next(questions.length),
+                  );
+                },
+              );
+            },
+          );
+
+    if (widget.embedded) return body;
+
     return Scaffold(
       appBar: AppBar(title: Text('Practice: ${widget.subtopicTitle}')),
-      body: user == null
-          ? _SignInPrompt(subtopicTitle: widget.subtopicTitle)
-          : _completed
-          ? _CompletionView(
-              medal: _medal ?? 'None',
-              firstTryCorrectCount: _firstTryCorrectCount,
-              questionCount: _questionCount,
-              subtopicTitle: widget.subtopicTitle,
-            )
-          : Consumer(
-              builder: (context, ref, _) {
-                final questionsAsync = ref.watch(
-                  practiceQuestionsProvider(_ref),
-                );
-                return questionsAsync.when(
-                  loading: () =>
-                      const Center(child: CircularProgressIndicator()),
-                  error: (error, _) =>
-                      Center(child: Text('Failed to load questions: $error')),
-                  data: (questions) {
-                    if (questions.isEmpty) {
-                      return const Center(
-                        child: Padding(
-                          padding: EdgeInsets.all(24),
-                          child: Text(
-                            'No practice questions for this topic yet — '
-                            'check back soon.',
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      );
-                    }
-                    final question = questions[_index];
-                    return _QuestionView(
-                      question: question,
-                      questionNumber: _index + 1,
-                      questionCount: questions.length,
-                      lastResult: _lastResult,
-                      triedIndices: _triedThisQuestion,
-                      correctIndex: _correctIndex,
-                      submitting: _submitting || _awardingMedal,
-                      onSelect: (i) => _submit(i, question.sortOrder),
-                      onNext: () => _next(questions.length),
-                    );
-                  },
-                );
-              },
-            ),
+      body: body,
     );
   }
 }
@@ -233,7 +250,10 @@ class _QuestionView extends StatelessWidget {
             borderRadius: BorderRadius.circular(999),
           ),
           const SizedBox(height: 20),
-          Text(question.prompt, style: Theme.of(context).textTheme.titleLarge),
+          SelectableText(
+            question.prompt,
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
           const SizedBox(height: 20),
           for (var i = 0; i < question.optionTexts.length; i++)
             Padding(
@@ -269,7 +289,7 @@ class _QuestionView extends StatelessWidget {
                     size: 20,
                   ),
                   const SizedBox(width: 10),
-                  Expanded(child: Text(lastResult!.feedback)),
+                  Expanded(child: SelectableText(lastResult!.feedback)),
                 ],
               ),
             ),
@@ -342,7 +362,14 @@ class _OptionTile extends StatelessWidget {
                   color: isCorrectAnswer ? Colors.green : scheme.error,
                 ),
               if (tried) const SizedBox(width: 10),
-              Expanded(child: Text(text)),
+              // SelectableText, not Text — a student should be able to
+              // select and copy option text, same as the question — but it
+              // needs its own onTap (matching the InkWell's) so tapping the
+              // text itself still picks this option instead of only
+              // starting a text selection.
+              Expanded(
+                child: SelectableText(text, onTap: enabled ? onTap : null),
+              ),
             ],
           ),
         ),
@@ -390,12 +417,14 @@ class _CompletionView extends StatelessWidget {
     required this.firstTryCorrectCount,
     required this.questionCount,
     required this.subtopicTitle,
+    required this.onFinished,
   });
 
   final String medal;
   final int firstTryCorrectCount;
   final int questionCount;
   final String subtopicTitle;
+  final VoidCallback onFinished;
 
   Color _medalColor(BuildContext context) => switch (medal) {
     'Gold' => const Color(0xFFD4A017),
@@ -429,10 +458,7 @@ class _CompletionView extends StatelessWidget {
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 24),
-            FilledButton(
-              onPressed: () => context.pop(),
-              child: const Text('Back to mindmap'),
-            ),
+            FilledButton(onPressed: onFinished, child: const Text('Continue')),
           ],
         ),
       ),

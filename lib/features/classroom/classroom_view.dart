@@ -11,14 +11,21 @@ import '../../state/auth_providers.dart';
 import '../../state/practice_test_providers.dart';
 import '../../state/profile_providers.dart';
 import '../../state/progress_providers.dart';
+import '../lesson/lesson_page.dart';
+import '../practice_test/practice_test_page.dart';
+import '../topic_detail/topic_detail_sheet.dart';
 
 /// The "classroom" alternative to the spatial mindmap: a left-hand list of
-/// units to navigate by, and a main panel that either shows a personalized
-/// dashboard (a "pick up where you left off" card, plus an overall
-/// progress summary) or the subtopics of whichever unit is selected.
+/// units to navigate by, and a main panel that shows a dashboard, a unit's
+/// subtopics, a subtopic's overview, a lesson, or a practice test —
+/// entirely by swapping what's in the main panel, never by navigating to a
+/// different route. The unit list on the left stays on screen the whole
+/// time, including while reading a lesson or taking a practice test.
 ///
-/// Same underlying data and the same subtopic detail sheet as the mindmap
-/// — this is a different way to navigate to it, not a different feature.
+/// (The spatial mindmap still opens lessons/practice tests as their own
+/// full-screen routes via a modal sheet — see topic_detail_sheet.dart. That
+/// makes sense there since the mindmap has no side panel to lose; here it
+/// would defeat the point of having one.)
 class ClassroomView extends ConsumerStatefulWidget {
   const ClassroomView({
     super.key,
@@ -27,7 +34,6 @@ class ClassroomView extends ConsumerStatefulWidget {
     required this.subtopicsByUnit,
     required this.subtopicStatus,
     required this.subtopicScorePercent,
-    required this.onTapSubtopic,
   });
 
   final Course course;
@@ -35,7 +41,6 @@ class ClassroomView extends ConsumerStatefulWidget {
   final Map<String, List<Subtopic>> subtopicsByUnit;
   final Map<String, ProgressStatus> subtopicStatus;
   final Map<String, double> subtopicScorePercent;
-  final void Function(Subtopic subtopic, ProgressStatus status) onTapSubtopic;
 
   @override
   ConsumerState<ClassroomView> createState() => _ClassroomViewState();
@@ -43,15 +48,75 @@ class ClassroomView extends ConsumerStatefulWidget {
 
 class _ClassroomViewState extends ConsumerState<ClassroomView> {
   String? _selectedUnitId;
+  Subtopic? _selectedSubtopic;
+  String? _lessonId;
+  String? _lessonTitle;
+  _PracticeTarget? _practice;
 
   @override
   void didUpdateWidget(covariant ClassroomView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Don't leave a unit from the previous course selected after switching
-    // courses in the grade dropdown.
+    // Don't leave a unit/subtopic/lesson/practice from the previous course
+    // showing after switching courses in the grade dropdown.
     if (oldWidget.course.id != widget.course.id) {
-      _selectedUnitId = null;
+      _goHome();
     }
+  }
+
+  void _goHome() {
+    setState(() {
+      _selectedUnitId = null;
+      _selectedSubtopic = null;
+      _lessonId = null;
+      _practice = null;
+    });
+  }
+
+  void _selectUnit(String unitId) {
+    setState(() {
+      _selectedUnitId = unitId;
+      _selectedSubtopic = null;
+      _lessonId = null;
+      _practice = null;
+    });
+  }
+
+  void _selectSubtopic(Subtopic subtopic) {
+    setState(() {
+      _selectedUnitId = subtopic.unitId;
+      _selectedSubtopic = subtopic;
+      _lessonId = null;
+      _practice = null;
+    });
+  }
+
+  void _openLesson(String lessonId, String lessonTitle) {
+    setState(() {
+      _lessonId = lessonId;
+      _lessonTitle = lessonTitle;
+      _practice = null;
+    });
+  }
+
+  void _openPractice(String unitCode, String subtopicCode, String title) {
+    setState(() {
+      _practice = _PracticeTarget(unitCode: unitCode, subtopicCode: subtopicCode, title: title);
+      _lessonId = null;
+    });
+  }
+
+  /// From a lesson or practice test, back goes to the subtopic overview
+  /// (or the unit list / home, if this was opened straight from there —
+  /// e.g. the dashboard's resume card, which doesn't select a subtopic).
+  void _backFromLeaf() {
+    setState(() {
+      _lessonId = null;
+      _practice = null;
+    });
+  }
+
+  void _backFromSubtopic() {
+    setState(() => _selectedSubtopic = null);
   }
 
   @override
@@ -76,28 +141,172 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
             subtopicsByUnit: widget.subtopicsByUnit,
             subtopicStatus: widget.subtopicStatus,
             selectedUnitId: _selectedUnitId,
-            onSelectHome: () => setState(() => _selectedUnitId = null),
-            onSelectUnit: (id) => setState(() => _selectedUnitId = id),
+            onSelectHome: _goHome,
+            onSelectUnit: _selectUnit,
           ),
         ),
         VerticalDivider(width: 1, color: scheme.outlineVariant.withValues(alpha: 0.3)),
-        Expanded(
-          child: selectedUnit == null
-              ? _HomePanel(
-                  course: widget.course,
-                  units: widget.units,
-                  subtopicsByUnit: widget.subtopicsByUnit,
-                  subtopicStatus: widget.subtopicStatus,
-                  onSelectUnit: (id) => setState(() => _selectedUnitId = id),
-                )
-              : _UnitPanel(
-                  unit: selectedUnit,
-                  subtopics: widget.subtopicsByUnit[selectedUnit.id] ?? const [],
-                  subtopicStatus: widget.subtopicStatus,
-                  subtopicScorePercent: widget.subtopicScorePercent,
-                  onTapSubtopic: widget.onTapSubtopic,
-                  onBack: () => setState(() => _selectedUnitId = null),
-                ),
+        Expanded(child: _buildMain(selectedUnit)),
+      ],
+    );
+  }
+
+  Widget _buildMain(Unit? selectedUnit) {
+    final practice = _practice;
+    if (practice != null) {
+      return _LeafPane(
+        title: practice.title,
+        onBack: _backFromLeaf,
+        child: PracticeTestPage(
+          key: ValueKey('practice-${practice.unitCode}-${practice.subtopicCode}'),
+          courseCode: widget.course.code,
+          unitCode: practice.unitCode,
+          subtopicCode: practice.subtopicCode,
+          subtopicTitle: practice.title,
+          embedded: true,
+          onFinished: _backFromLeaf,
+        ),
+      );
+    }
+    final lessonId = _lessonId;
+    if (lessonId != null) {
+      return _LeafPane(
+        title: _lessonTitle ?? 'Lesson',
+        onBack: _backFromLeaf,
+        child: LessonBody(key: ValueKey('lesson-$lessonId'), lessonId: lessonId),
+      );
+    }
+    final subtopic = _selectedSubtopic;
+    if (subtopic != null) {
+      return _SubtopicPane(
+        subtopic: subtopic,
+        courseCode: widget.course.code,
+        onBack: _backFromSubtopic,
+        onOpenLesson: _openLesson,
+        onOpenPractice: (unitCode) =>
+            _openPractice(unitCode, subtopic.code, subtopic.title),
+      );
+    }
+    if (selectedUnit == null) {
+      return _HomePanel(
+        course: widget.course,
+        units: widget.units,
+        subtopicsByUnit: widget.subtopicsByUnit,
+        subtopicStatus: widget.subtopicStatus,
+        onResume: _openPractice,
+      );
+    }
+    return _UnitPanel(
+      unit: selectedUnit,
+      subtopics: widget.subtopicsByUnit[selectedUnit.id] ?? const [],
+      subtopicStatus: widget.subtopicStatus,
+      subtopicScorePercent: widget.subtopicScorePercent,
+      onTapSubtopic: _selectSubtopic,
+      onBack: _goHome,
+    );
+  }
+}
+
+class _PracticeTarget {
+  const _PracticeTarget({
+    required this.unitCode,
+    required this.subtopicCode,
+    required this.title,
+  });
+
+  final String unitCode;
+  final String subtopicCode;
+  final String title;
+}
+
+/// A back button, optionally with a title next to it — the header every
+/// non-home main-panel state (unit, subtopic, lesson, practice) starts
+/// with, so "back" always lands in a predictable, consistent spot.
+class _PaneHeader extends StatelessWidget {
+  const _PaneHeader({required this.onBack, this.title});
+
+  final VoidCallback onBack;
+  final String? title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: onBack,
+          tooltip: 'Back',
+        ),
+        if (title != null) ...[
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              title!,
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// A lesson or a practice test, embedded in the main pane with a
+/// consistent back+title header above it instead of its own AppBar.
+class _LeafPane extends StatelessWidget {
+  const _LeafPane({required this.title, required this.onBack, required this.child});
+
+  final String title;
+  final VoidCallback onBack;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+          child: _PaneHeader(onBack: onBack, title: title),
+        ),
+        Expanded(child: child),
+      ],
+    );
+  }
+}
+
+/// The inline equivalent of the mindmap's modal subtopic-detail sheet —
+/// same [SubtopicOverview] content, just in the main pane with a back
+/// button instead of a dismissable sheet.
+class _SubtopicPane extends StatelessWidget {
+  const _SubtopicPane({
+    required this.subtopic,
+    required this.courseCode,
+    required this.onBack,
+    required this.onOpenLesson,
+    required this.onOpenPractice,
+  });
+
+  final Subtopic subtopic;
+  final String courseCode;
+  final VoidCallback onBack;
+  final void Function(String lessonId, String lessonTitle) onOpenLesson;
+  final void Function(String unitCode) onOpenPractice;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        _PaneHeader(onBack: onBack),
+        const SizedBox(height: 12),
+        SubtopicOverview(
+          subtopic: subtopic,
+          courseCode: courseCode,
+          onOpenLesson: onOpenLesson,
+          onOpenPractice: onOpenPractice,
         ),
       ],
     );
@@ -317,14 +526,16 @@ class _HomePanel extends ConsumerWidget {
     required this.units,
     required this.subtopicsByUnit,
     required this.subtopicStatus,
-    required this.onSelectUnit,
+    required this.onResume,
   });
 
   final Course course;
   final List<Unit> units;
   final Map<String, List<Subtopic>> subtopicsByUnit;
   final Map<String, ProgressStatus> subtopicStatus;
-  final void Function(String unitId) onSelectUnit;
+
+  /// (unitCode, subtopicCode, title) — opens that subtopic's practice test.
+  final void Function(String unitCode, String subtopicCode, String title) onResume;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -377,7 +588,8 @@ class _HomePanel extends ConsumerWidget {
               subtopic: subtopicById[recent.first.key],
               mastery: recent.first.value,
               unitCode: unitCodeById[subtopicById[recent.first.key]?.unitId],
-              courseCode: course.code,
+              onContinue: (unitCode, subtopicCode, title) =>
+                  onResume(unitCode, subtopicCode, title),
             )
           else
             _EmptyHomeCard(signedIn: user != null),
@@ -402,17 +614,19 @@ class _ResumeCard extends StatelessWidget {
     required this.subtopic,
     required this.mastery,
     required this.unitCode,
-    required this.courseCode,
+    required this.onContinue,
   });
 
   final Subtopic? subtopic;
   final SubtopicMastery mastery;
   final String? unitCode;
-  final String courseCode;
+  final void Function(String unitCode, String subtopicCode, String title) onContinue;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final subtopic = this.subtopic;
+    final unitCode = this.unitCode;
     if (subtopic == null || unitCode == null) {
       return const _EmptyHomeCard(signedIn: true);
     }
@@ -437,7 +651,7 @@ class _ResumeCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            subtopic!.title,
+            subtopic.title,
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
               color: scheme.onPrimary,
               fontWeight: FontWeight.bold,
@@ -466,13 +680,7 @@ class _ResumeCard extends StatelessWidget {
                 backgroundColor: scheme.onPrimary,
                 foregroundColor: scheme.primary,
               ),
-              onPressed: () {
-                final uri = Uri(
-                  path: '/practice/$courseCode/$unitCode/${subtopic!.code}',
-                  queryParameters: {'title': subtopic!.title},
-                );
-                context.push(uri.toString());
-              },
+              onPressed: () => onContinue(unitCode, subtopic.code, subtopic.title),
               child: const Text('Continue'),
             ),
           ),
@@ -553,7 +761,7 @@ class _UnitPanel extends StatelessWidget {
   final List<Subtopic> subtopics;
   final Map<String, ProgressStatus> subtopicStatus;
   final Map<String, double> subtopicScorePercent;
-  final void Function(Subtopic subtopic, ProgressStatus status) onTapSubtopic;
+  final void Function(Subtopic subtopic) onTapSubtopic;
   final VoidCallback onBack;
 
   @override
@@ -562,26 +770,9 @@ class _UnitPanel extends StatelessWidget {
       ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
 
     return ListView(
-      padding: const EdgeInsets.all(28),
+      padding: const EdgeInsets.all(20),
       children: [
-        Row(
-          children: [
-            IconButton(
-              icon: const Icon(Icons.arrow_back),
-              onPressed: onBack,
-              tooltip: 'Back to home',
-            ),
-            const SizedBox(width: 4),
-            Expanded(
-              child: Text(
-                unit.title,
-                style: Theme.of(
-                  context,
-                ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
-        ),
+        _PaneHeader(onBack: onBack, title: unit.title),
         if (unit.description != null) ...[
           const SizedBox(height: 4),
           Padding(
@@ -600,10 +791,7 @@ class _UnitPanel extends StatelessWidget {
               subtopic: subtopic,
               status: subtopicStatus[subtopic.id] ?? ProgressStatus.notStarted,
               scorePercent: subtopicScorePercent[subtopic.id],
-              onTap: () => onTapSubtopic(
-                subtopic,
-                subtopicStatus[subtopic.id] ?? ProgressStatus.notStarted,
-              ),
+              onTap: () => onTapSubtopic(subtopic),
             ),
           ),
       ],

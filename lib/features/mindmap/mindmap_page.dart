@@ -510,12 +510,6 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                     subtopicsByUnit: _subtopicsByUnit,
                     subtopicStatus: subtopicStatus,
                     subtopicScorePercent: subtopicScorePercent,
-                    onTapSubtopic: (subtopic, status) => showTopicDetailSheet(
-                      context,
-                      subtopic: subtopic,
-                      color: status.color,
-                      courseCode: course.code,
-                    ),
                   );
                 }
 

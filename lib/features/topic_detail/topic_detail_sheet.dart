@@ -11,6 +11,12 @@ import '../../state/lesson_providers.dart';
 import '../../state/practice_test_providers.dart';
 import '../../state/progress_providers.dart';
 
+/// Opens [SubtopicOverview] as a modal sheet — the spatial mindmap's way of
+/// showing a subtopic. Its Lesson/Practice Test links push full-screen
+/// routes, which is fine here since the mindmap has no side panel to lose.
+/// The classroom view (classroom_view.dart) uses [SubtopicOverview]
+/// directly instead, wired to swap its own main pane rather than navigate
+/// away, so its left-hand unit list stays on screen.
 void showTopicDetailSheet(
   BuildContext context, {
   required Subtopic subtopic,
@@ -21,36 +27,7 @@ void showTopicDetailSheet(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    builder: (context) => TopicDetailSheet(
-      subtopic: subtopic,
-      color: color,
-      courseCode: courseCode,
-    ),
-  );
-}
-
-class TopicDetailSheet extends ConsumerWidget {
-  const TopicDetailSheet({
-    super.key,
-    required this.subtopic,
-    required this.color,
-    required this.courseCode,
-  });
-
-  final Subtopic subtopic;
-  final Color color;
-  final String courseCode;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(currentUserProvider);
-    final mastery = ref.watch(subtopicMasteryProvider(subtopic.id));
-    final status = ProgressStatus.fromScorePercent(mastery?.scorePercent);
-    final lessonId = lessonIdFor(courseCode: courseCode, subtopicCode: subtopic.code);
-    final lesson = lessonId == null ? null : ref.watch(lessonProvider(lessonId));
-    final unitCode = ref.watch(unitCodeByIdProvider)[subtopic.unitId];
-
-    return DraggableScrollableSheet(
+    builder: (sheetContext) => DraggableScrollableSheet(
       initialChildSize: 0.45,
       minChildSize: 0.3,
       maxChildSize: 0.8,
@@ -73,40 +50,88 @@ class TopicDetailSheet extends ConsumerWidget {
                   ),
                 ),
               ),
-              Text(
-                subtopic.title,
-                style: Theme.of(context).textTheme.headlineSmall,
+              SubtopicOverview(
+                subtopic: subtopic,
+                courseCode: courseCode,
+                onOpenLesson: (lessonId, _) {
+                  Navigator.of(sheetContext).pop();
+                  context.push('/lesson/$lessonId');
+                },
+                onOpenPractice: (unitCode) {
+                  Navigator.of(sheetContext).pop();
+                  final uri = Uri(
+                    path: '/practice/$courseCode/$unitCode/${subtopic.code}',
+                    queryParameters: {'title': subtopic.title},
+                  );
+                  context.push(uri.toString());
+                },
               ),
-              if (subtopic.description != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  subtopic.description!,
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              ],
-              if (lesson != null) ...[
-                const SizedBox(height: 16),
-                _LessonLink(lesson: lesson),
-              ],
-              if (unitCode != null) ...[
-                const SizedBox(height: 10),
-                _PracticeTestLink(
-                  courseCode: courseCode,
-                  unitCode: unitCode,
-                  subtopic: subtopic,
-                ),
-              ],
-              const SizedBox(height: 20),
-              Text('Practice progress', style: Theme.of(context).textTheme.titleSmall),
-              const SizedBox(height: 8),
-              if (user == null)
-                const _SignInPrompt()
-              else
-                _PracticeProgressCard(status: status, mastery: mastery),
             ],
           ),
         );
       },
+    ),
+  );
+}
+
+/// A subtopic's title, description, Lesson/Practice Test links, and
+/// practice-progress card — the content of the mindmap's detail sheet,
+/// factored out so the classroom view's inline pane can show the exact
+/// same thing without a modal wrapper. [onOpenLesson]/[onOpenPractice]
+/// decide what "open" means for the caller (push a route, or swap a pane).
+class SubtopicOverview extends ConsumerWidget {
+  const SubtopicOverview({
+    super.key,
+    required this.subtopic,
+    required this.courseCode,
+    required this.onOpenLesson,
+    required this.onOpenPractice,
+  });
+
+  final Subtopic subtopic;
+  final String courseCode;
+  final void Function(String lessonId, String lessonTitle) onOpenLesson;
+  final void Function(String unitCode) onOpenPractice;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(currentUserProvider);
+    final mastery = ref.watch(subtopicMasteryProvider(subtopic.id));
+    final status = ProgressStatus.fromScorePercent(mastery?.scorePercent);
+    final lessonId = lessonIdFor(courseCode: courseCode, subtopicCode: subtopic.code);
+    final lesson = lessonId == null ? null : ref.watch(lessonProvider(lessonId));
+    final unitCode = ref.watch(unitCodeByIdProvider)[subtopic.unitId];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(subtopic.title, style: Theme.of(context).textTheme.headlineSmall),
+        if (subtopic.description != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            subtopic.description!,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        ],
+        if (lesson != null) ...[
+          const SizedBox(height: 16),
+          _LessonLink(
+            lesson: lesson,
+            onTap: () => onOpenLesson(lesson.id, lesson.title),
+          ),
+        ],
+        if (unitCode != null) ...[
+          const SizedBox(height: 10),
+          _PracticeTestLink(onTap: () => onOpenPractice(unitCode)),
+        ],
+        const SizedBox(height: 20),
+        Text('Practice progress', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 8),
+        if (user == null)
+          const _SignInPrompt()
+        else
+          _PracticeProgressCard(status: status, mastery: mastery),
+      ],
     );
   }
 }
@@ -170,9 +195,10 @@ String _formatDate(DateTime date) => '${_months[date.month - 1]} ${date.day}';
 /// read in about five minutes to get the idea before (or instead of)
 /// diving into practice questions.
 class _LessonLink extends StatelessWidget {
-  const _LessonLink({required this.lesson});
+  const _LessonLink({required this.lesson, required this.onTap});
 
   final Lesson lesson;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -182,7 +208,7 @@ class _LessonLink extends StatelessWidget {
       borderRadius: BorderRadius.circular(10),
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
-        onTap: () => context.push('/lesson/${lesson.id}'),
+        onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           child: Row(
@@ -216,20 +242,11 @@ class _LessonLink extends StatelessWidget {
   }
 }
 
-/// Opens the tap-through-questions practice test for this subtopic. Routed
-/// by the natural-key triple (course/unit/subtopic codes) the database's
-/// grading functions take, not by subtopic.id — see
-/// supabase/schema_practice.sql.
+/// Opens the tap-through-questions practice test for this subtopic.
 class _PracticeTestLink extends StatelessWidget {
-  const _PracticeTestLink({
-    required this.courseCode,
-    required this.unitCode,
-    required this.subtopic,
-  });
+  const _PracticeTestLink({required this.onTap});
 
-  final String courseCode;
-  final String unitCode;
-  final Subtopic subtopic;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -239,13 +256,7 @@ class _PracticeTestLink extends StatelessWidget {
       borderRadius: BorderRadius.circular(10),
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
-        onTap: () {
-          final uri = Uri(
-            path: '/practice/$courseCode/$unitCode/${subtopic.code}',
-            queryParameters: {'title': subtopic.title},
-          );
-          context.push(uri.toString());
-        },
+        onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           child: Row(
@@ -289,10 +300,11 @@ class _SignInPrompt extends StatelessWidget {
             child: Text('Sign in to see your practice test progress.'),
           ),
           TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              context.push('/login');
-            },
+            // No Navigator.pop() here — this prompt is shared between the
+            // mindmap's modal sheet (where popping first makes sense) and
+            // the classroom view's inline pane (where there's nothing to
+            // pop). Pushing login on top works fine either way.
+            onPressed: () => context.push('/login'),
             child: const Text('Sign in'),
           ),
         ],
