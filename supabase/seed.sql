@@ -1006,15 +1006,17 @@ with results (unit_code, subtopic_code, student_email, questions_total, question
     ('analytic-geometry', 'midpoint-of-a-line-segment', 'b@gmail.com', 10, 4),
     ('analytic-geometry', 'slope-and-equation-of-a-line', 'b@gmail.com', 10, 2)
     -- linear-systems: not attempted yet.
-)
+),
 -- subtopic_mastery keys on (course_code, unit_code, subtopic_code) text —
 -- not subtopic_id — so unlike the old practice_test_results insert, this
 -- needs no join against courses/units/subtopics at all; see
 -- supabase/schema_practice.sql for why. `ts` is computed once per row (in
 -- this CTE) rather than inline in the insert, so first_earned_at and
 -- updated_at get the same random demo timestamp instead of two different
--- ones.
-with results_ts as (
+-- ones. Chained onto `results` above with a comma rather than a second
+-- `with` — CTEs only exist within the one statement they're attached to,
+-- so a second `with` here couldn't see `results` at all.
+results_ts as (
   select r.*, now() - (random() * interval '14 days') as ts
   from results r
 )
