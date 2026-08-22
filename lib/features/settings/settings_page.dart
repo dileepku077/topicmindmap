@@ -5,12 +5,15 @@ import 'package:go_router/go_router.dart';
 import '../../models/profile.dart';
 import '../../state/auth_providers.dart';
 import '../../state/profile_providers.dart';
+import '../../state/theme_providers.dart';
 
-/// Profile and preferences — currently just the one preference: which
-/// screen a student sees first, the spatial mindmap or the classroom
-/// view (left-hand unit navigation + a resume-where-you-left-off
-/// dashboard, classroom_view.dart). Both show the same curriculum and
-/// progress; this only decides what loads first.
+/// Profile and preferences: appearance (light/dark/system, available to
+/// everyone including guests — it's a display setting, not tied to an
+/// account) and, once signed in, which screen a student sees first, the
+/// spatial mindmap or the classroom view (left-hand unit navigation + a
+/// resume-where-you-left-off dashboard, classroom_view.dart). Both views
+/// show the same curriculum and progress; that preference only decides
+/// what loads first.
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
 
@@ -20,18 +23,73 @@ class SettingsPage extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Profile & Preferences')),
-      body: user == null
-          ? const _SignInPrompt()
-          : _PreferencesBody(userId: user.id, email: user.email),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          if (user != null) ...[
+            Text(user.email ?? 'Signed in', style: Theme.of(context).textTheme.bodyMedium),
+            const SizedBox(height: 24),
+          ],
+          const _AppearanceSection(),
+          const SizedBox(height: 28),
+          if (user == null)
+            const _SignInPrompt()
+          else
+            _DefaultViewSection(userId: user.id),
+        ],
+      ),
     );
   }
 }
 
-class _PreferencesBody extends ConsumerWidget {
-  const _PreferencesBody({required this.userId, required this.email});
+class _AppearanceSection extends ConsumerWidget {
+  const _AppearanceSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final themeMode = ref.watch(themeModeProvider);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Appearance', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 4),
+        Text(
+          'Choose light, dark, or match your device.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 12),
+        _OptionTile(
+          icon: Icons.brightness_auto_outlined,
+          title: 'System',
+          subtitle: "Follows your device's setting.",
+          selected: themeMode == ThemeMode.system,
+          onTap: () => ref.read(themeModeProvider.notifier).set(ThemeMode.system),
+        ),
+        const SizedBox(height: 10),
+        _OptionTile(
+          icon: Icons.light_mode_outlined,
+          title: 'Light',
+          subtitle: 'A bright, warm theme.',
+          selected: themeMode == ThemeMode.light,
+          onTap: () => ref.read(themeModeProvider.notifier).set(ThemeMode.light),
+        ),
+        const SizedBox(height: 10),
+        _OptionTile(
+          icon: Icons.dark_mode_outlined,
+          title: 'Dark',
+          subtitle: 'Dim and easy on the eyes.',
+          selected: themeMode == ThemeMode.dark,
+          onTap: () => ref.read(themeModeProvider.notifier).set(ThemeMode.dark),
+        ),
+      ],
+    );
+  }
+}
+
+class _DefaultViewSection extends ConsumerWidget {
+  const _DefaultViewSection({required this.userId});
 
   final String userId;
-  final String? email;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -42,11 +100,9 @@ class _PreferencesBody extends ConsumerWidget {
       error: (error, _) => Center(child: Text('Failed to load profile: $error')),
       data: (profile) {
         final defaultView = profile?.defaultView ?? DefaultView.mindmap;
-        return ListView(
-          padding: const EdgeInsets.all(20),
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(email ?? 'Signed in', style: Theme.of(context).textTheme.bodyMedium),
-            const SizedBox(height: 24),
             Text('Default view', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 4),
             Text(
@@ -55,7 +111,7 @@ class _PreferencesBody extends ConsumerWidget {
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 12),
-            _ViewOptionTile(
+            _OptionTile(
               icon: Icons.hub_outlined,
               title: 'Mindmap',
               subtitle: 'A branching map you pan and zoom around.',
@@ -63,7 +119,7 @@ class _PreferencesBody extends ConsumerWidget {
               onTap: () => _setDefaultView(context, ref, DefaultView.mindmap),
             ),
             const SizedBox(height: 10),
-            _ViewOptionTile(
+            _OptionTile(
               icon: Icons.account_tree_outlined,
               title: 'Classroom',
               subtitle: 'A unit list on the left and a dashboard that '
@@ -94,8 +150,11 @@ class _PreferencesBody extends ConsumerWidget {
   }
 }
 
-class _ViewOptionTile extends StatelessWidget {
-  const _ViewOptionTile({
+/// One radio-style preference row — icon, title, subtitle, and a trailing
+/// selected/unselected marker — shared by the appearance and default-view
+/// sections above since both are "pick one of a few options" lists.
+class _OptionTile extends StatelessWidget {
+  const _OptionTile({
     required this.icon,
     required this.title,
     required this.subtitle,
@@ -162,20 +221,18 @@ class _SignInPrompt extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Sign in to set your preferences.'),
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed: () => context.push('/login'),
-              child: const Text('Sign in'),
-            ),
-          ],
-        ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Sign in to set your default view.'),
+          const SizedBox(height: 16),
+          FilledButton(
+            onPressed: () => context.push('/login'),
+            child: const Text('Sign in'),
+          ),
+        ],
       ),
     );
   }
