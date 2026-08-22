@@ -34,6 +34,11 @@ class _PracticeTestPageState extends ConsumerState<PracticeTestPage> {
   int _index = 0;
   AnswerResult? _lastResult;
   final _triedThisQuestion = <int>{};
+
+  /// The option index that was actually correct, once found — distinct
+  /// from [_triedThisQuestion], which also holds every wrong option tried
+  /// first. Only this one index should ever render green.
+  int? _correctIndex;
   bool _submitting = false;
   int _firstTryCorrectCount = 0;
 
@@ -65,6 +70,7 @@ class _PracticeTestPageState extends ConsumerState<PracticeTestPage> {
       setState(() {
         _lastResult = result;
         _triedThisQuestion.add(chosenIndex);
+        if (result.wasCorrect) _correctIndex = chosenIndex;
         _submitting = false;
       });
     } catch (error) {
@@ -84,6 +90,7 @@ class _PracticeTestPageState extends ConsumerState<PracticeTestPage> {
         _index += 1;
         _lastResult = null;
         _triedThisQuestion.clear();
+        _correctIndex = null;
         if (wasFirstTry) _firstTryCorrectCount += 1;
       });
       return;
@@ -163,6 +170,7 @@ class _PracticeTestPageState extends ConsumerState<PracticeTestPage> {
                       questionCount: questions.length,
                       lastResult: _lastResult,
                       triedIndices: _triedThisQuestion,
+                      correctIndex: _correctIndex,
                       submitting: _submitting || _awardingMedal,
                       onSelect: (i) => _submit(i, question.sortOrder),
                       onNext: () => _next(questions.length),
@@ -182,6 +190,7 @@ class _QuestionView extends StatelessWidget {
     required this.questionCount,
     required this.lastResult,
     required this.triedIndices,
+    required this.correctIndex,
     required this.submitting,
     required this.onSelect,
     required this.onNext,
@@ -192,6 +201,7 @@ class _QuestionView extends StatelessWidget {
   final int questionCount;
   final AnswerResult? lastResult;
   final Set<int> triedIndices;
+  final int? correctIndex;
   final bool submitting;
   final void Function(int chosenIndex) onSelect;
   final VoidCallback onNext;
@@ -231,7 +241,7 @@ class _QuestionView extends StatelessWidget {
               child: _OptionTile(
                 text: question.optionTexts[i],
                 tried: triedIndices.contains(i),
-                isCorrectAnswer: answeredCorrectly && triedIndices.contains(i),
+                isCorrectAnswer: correctIndex == i,
                 enabled: !submitting && !answeredCorrectly,
                 onTap: () => onSelect(i),
               ),
