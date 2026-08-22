@@ -39,8 +39,19 @@ const _canvasCenter = Offset(2200, 2200);
 // outward toward the left/right margins in a roughly horizontal row, the
 // way a horizontal mind map's primary branches do; only their subtopics
 // branch vertically off of that.
-const _unitOffsetX = 300.0;
-const _unitRowGap = 110.0;
+//
+// Shortened from the previous values (300/110) to bring units in closer,
+// now that _fitToContent below actually computes a zoom level to fit
+// everything on screen — a smaller natural footprint means less zooming
+// out is needed to do that, keeping node text more readable. Checked
+// analytically (not live — expanding a unit in the spatial mindmap has
+// been an unreliable click target all session) against every real
+// subtopics-per-unit count across all six courses (4 through 9): each
+// unit's own fan reach already leaves several hundred px of clearance to
+// its row-neighbor at this gap, so there's real headroom here even though
+// it looks tight on paper.
+const _unitOffsetX = 260.0;
+const _unitRowGap = 85.0;
 
 // Subtopics fan out around their unit like leaves around a branch tip
 // instead of stacking in a column to one side. They're spread across an
@@ -50,17 +61,25 @@ const _unitRowGap = 110.0;
 // crosses over the connecting line back to the parent.
 const _leafMaxSpanDeg = 230.0;
 const _leafSpanPerGap = 34.0;
-const _leafMinRadius = 130.0;
-// Widened alongside the node boxes themselves (see mindmap_node_widget's
-// maxWidth bumps) so wider titles don't need to wrap as tightly — without
-// a matching bump here, wider boxes at the old (tighter) chord spacing
-// would start overlapping their neighbours.
-const _leafTargetChord = 215.0;
+const _leafMinRadius = 110.0;
+// NOT safe to shorten below this: the "alternating leaves sit closer in"
+// styling below means the tightest pair isn't always the two immediate
+// neighbors at the target chord — computing every real leaf pair's
+// on-screen (dx, dy) against the subtopic box (210x~40) analytically
+// turned up an actual overlap at 215 (the previous value, in production
+// this whole session) for any unit with exactly 6 subtopics — which is a
+// real case (MPM2D's Analytic Geometry, MCR3U's two middle units). 225 is
+// the smallest value with zero overlap across every real subtopic count
+// (4 through 9) found in seed.sql.
+const _leafTargetChord = 225.0;
 
 // Zoom bounds for the mindmap canvas — shared by InteractiveViewer's own
-// pinch/drag-scale gestures and the explicit Cmd/Ctrl+scroll zoom below, so
-// both routes agree on how far in/out the student can go.
-const _minZoom = 0.3;
+// pinch/drag-scale gestures, the explicit Cmd/Ctrl+scroll zoom below, and
+// _fitToContent's own fit-to-viewport zoom, so all three agree on how far
+// in/out the student (or the auto-fit) can go. Lower than it used to be —
+// _fitToContent needs the headroom to actually fit a fully-expanded, dense
+// course (several units each showing 8-9 subtopics) without cropping it.
+const _minZoom = 0.18;
 const _maxZoom = 2.2;
 
 class MindmapPage extends ConsumerStatefulWidget {
@@ -264,11 +283,14 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
     }
   }
 
-  /// Re-centers the viewer on whatever's currently visible (the root,
-  /// every unit, and the subtopics of every expanded unit) — at whatever
-  /// zoom level the student currently has set (never auto-shrinking text
-  /// to force everything into view, and never resetting a manual zoom).
-  /// Called after the first layout and after every expand/collapse.
+  /// Re-fits the viewer to whatever's currently visible (the root, every
+  /// unit, and the subtopics of every expanded unit) — computing a zoom
+  /// level that fits it all in the viewport at once, so a student never
+  /// has to scroll or manually zoom out just to see the whole map. Called
+  /// after the first layout, after every expand/collapse, after a
+  /// viewport resize, and from the explicit "Reset view" button — every
+  /// one of those is a moment where what needs to fit on screen just
+  /// changed, which is exactly when re-fitting makes sense.
   void _fitToContent() {
     if (_lastViewportSize == Size.zero) return;
     final root = _positions[_rootId];
@@ -294,21 +316,39 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
     }
 
     final contentCenter = Offset((minX + maxX) / 2, (minY + maxY) / 2);
-    final scale = _transformController.value.getMaxScaleOnAxis();
+
+    // Padding around the bounding box of node *centers* gathered above, so
+    // the widest boxes (units, up to 280 logical px — see
+    // mindmap_node_widget.dart) don't end up flush against the viewport
+    // edge. Nodes are much shorter than they are wide, so less padding is
+    // needed vertically than horizontally.
+    const horizontalPadding = 170.0;
+    const verticalPadding = 90.0;
+    final contentWidth = (maxX - minX) + horizontalPadding * 2;
+    final contentHeight = (maxY - minY) + verticalPadding * 2;
+
+    final fitScale = math
+        .min(
+          contentWidth > 0 ? _lastViewportSize.width / contentWidth : _maxZoom,
+          contentHeight > 0
+              ? _lastViewportSize.height / contentHeight
+              : _maxZoom,
+        )
+        .clamp(_minZoom, _maxZoom);
 
     setState(() {
       _transformController.value = Matrix4.identity()
         ..translateByDouble(
-          _lastViewportSize.width / 2 - contentCenter.dx * scale,
-          _lastViewportSize.height / 2 - contentCenter.dy * scale,
+          _lastViewportSize.width / 2 - contentCenter.dx * fitScale,
+          _lastViewportSize.height / 2 - contentCenter.dy * fitScale,
           0,
           1,
         )
         // Scaling z too (not just x/y) matters: getMaxScaleOnAxis() (used
-        // to read this scale back out, e.g. next time this runs) takes the
-        // max across all three axes, so leaving z at 1 would make it
-        // impossible to ever read back a scale below 1.
-        ..scaleByDouble(scale, scale, scale, 1);
+        // to read this scale back out elsewhere, e.g. the tree view's own
+        // zoom) takes the max across all three axes, so leaving z at 1
+        // would make it impossible to ever read back a scale below 1.
+        ..scaleByDouble(fitScale, fitScale, fitScale, 1);
     });
   }
 
