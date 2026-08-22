@@ -8,6 +8,7 @@ import '../../models/subtopic.dart';
 import '../../models/subtopic_mastery.dart';
 import '../../state/auth_providers.dart';
 import '../../state/lesson_providers.dart';
+import '../../state/practice_test_providers.dart';
 import '../../state/progress_providers.dart';
 
 void showTopicDetailSheet(
@@ -47,6 +48,7 @@ class TopicDetailSheet extends ConsumerWidget {
     final status = ProgressStatus.fromScorePercent(mastery?.scorePercent);
     final lessonId = lessonIdFor(courseCode: courseCode, subtopicCode: subtopic.code);
     final lesson = lessonId == null ? null : ref.watch(lessonProvider(lessonId));
+    final unitCode = ref.watch(unitCodeByIdProvider)[subtopic.unitId];
 
     return DraggableScrollableSheet(
       initialChildSize: 0.45,
@@ -85,6 +87,14 @@ class TopicDetailSheet extends ConsumerWidget {
               if (lesson != null) ...[
                 const SizedBox(height: 16),
                 _LessonLink(lesson: lesson),
+              ],
+              if (unitCode != null) ...[
+                const SizedBox(height: 10),
+                _PracticeTestLink(
+                  courseCode: courseCode,
+                  unitCode: unitCode,
+                  subtopic: subtopic,
+                ),
               ],
               const SizedBox(height: 20),
               Text('Practice progress', style: Theme.of(context).textTheme.titleSmall),
@@ -198,6 +208,60 @@ class _LessonLink extends StatelessWidget {
                 ),
               const SizedBox(width: 4),
               Icon(Icons.chevron_right, color: scheme.primary, size: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Opens the tap-through-questions practice test for this subtopic. Routed
+/// by the natural-key triple (course/unit/subtopic codes) the database's
+/// grading functions take, not by subtopic.id — see
+/// supabase/schema_practice.sql.
+class _PracticeTestLink extends StatelessWidget {
+  const _PracticeTestLink({
+    required this.courseCode,
+    required this.unitCode,
+    required this.subtopic,
+  });
+
+  final String courseCode;
+  final String unitCode;
+  final Subtopic subtopic;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.secondary.withValues(alpha: 0.1),
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () {
+          final uri = Uri(
+            path: '/practice/$courseCode/$unitCode/${subtopic.code}',
+            queryParameters: {'title': subtopic.title},
+          );
+          context.push(uri.toString());
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              Icon(Icons.quiz_outlined, color: scheme.secondary, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Practice Test',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: scheme.secondary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Icon(Icons.chevron_right, color: scheme.secondary, size: 20),
             ],
           ),
         ),
