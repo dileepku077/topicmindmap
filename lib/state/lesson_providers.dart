@@ -25,14 +25,14 @@ final lessonProvider = Provider.family<Lesson?, String>((ref, lessonId) {
 });
 
 /// The lesson id covering [subtopicCode] in [courseCode]'s curriculum, if
-/// any. Lesson content exists for Grade 9 Math (MPM1D), Grade 10 Math
+/// any. Lesson content exists for Grade 9 Math (MTH1W), Grade 10 Math
 /// (MPM2D), Grade 10 Science (SNC2D), and Grade 11 Physics (SPH3U) today.
 String? lessonIdFor({
   required String courseCode,
   required String subtopicCode,
 }) {
   switch (courseCode) {
-    case 'MPM1D':
+    case 'MTH1W':
       return grade9LessonIdBySubtopicCode[subtopicCode];
     case 'MPM2D':
       return grade10LessonIdBySubtopicCode[subtopicCode];

@@ -8,14 +8,14 @@ import '../models/lesson.dart';
 /// tree of strands -> topics; this flattens every topic node (one with a
 /// `content` field) into a single id-keyed map regardless of nesting depth,
 /// so callers don't need to know the strand structure. Lesson ids are
-/// prefixed distinctly per course (e.g. `a1`/`b3` for MPM2D, `g9-n1` for
-/// MPM1D, `s10bio1`/`s10chem1` for SNC2D), so the flattened maps can merge
+/// prefixed distinctly per course (e.g. `a1`/`b3` for MPM2D, `g9-` for
+/// MTH1W, `s10bio1`/`s10chem1` for SNC2D), so the flattened maps can merge
 /// safely with no id collisions.
 class LessonRepository {
   const LessonRepository();
 
   static const _assetPaths = [
-    'assets/data/mpm1d_topics_mindmap.json',
+    'assets/data/mth1w_topics_mindmap.json',
     'assets/data/mpm2d_topics_mindmap.json',
     'assets/data/snc2d_topics_mindmap.json',
     'assets/data/sph3u_topics_mindmap.json',

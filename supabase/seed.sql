@@ -3,7 +3,7 @@
 -- Run after schema.sql. Safe to re-run (upserts on the unique `code` columns).
 --
 -- Content mirrors the common textbook breakdown of each course:
---   MPM1D  Grade 9  Academic Math
+--   MTH1W  Grade 9  Math (destreamed)
 --   MPM2D  Grade 10 Academic Math
 --   MCR3U  Grade 11 Functions (university prep)
 --   MHF4U  Grade 12 Advanced Functions (university prep)
@@ -11,10 +11,19 @@
 --   SPH3U  Grade 11 Physics (university prep)
 -- Adjust wording/order here to match your own board's course outline.
 
+-- Grade 9 used to be MPM1D (the pre-2021 academic-stream course). Ontario
+-- destreamed Grade 9 math in Sept 2021 — MPM1D no longer exists for current
+-- students, replaced by MTH1W for everyone, with a mandatory Data and
+-- Financial Literacy strand MPM1D never had. `on conflict (code)` below only
+-- upserts a matching code, so the old MPM1D row (and its units/subtopics,
+-- via the FK cascades in schema.sql) needs an explicit delete first, not
+-- just a rename.
+delete from public.courses where code = 'MPM1D';
+
 with course_data (grade, code, title, description, order_index) as (
   values
-    (9, 'MPM1D', 'Grade 9 Academic Math',
-     'Foundations of algebra, linear relations, and geometry.', 0),
+    (9, 'MTH1W', 'Grade 9 Math',
+     'Number, algebra, linear relations, geometry and measurement, and data and financial literacy.', 0),
     (10, 'MPM2D', 'Grade 10 Academic Math',
      'Linear systems, analytic geometry, quadratics, and trigonometry.', 1),
     (11, 'MCR3U', 'Grade 11 Functions',
@@ -35,20 +44,27 @@ on conflict (code) do update
       order_index = excluded.order_index;
 
 -- =============================================================================
--- Grade 9 — MPM1D
+-- Grade 9 — MTH1W
 -- =============================================================================
+-- Unit grouping matches how the practice-question bank (questions_seed.sql)
+-- is organized, which in turn follows the common textbook clustering of the
+-- 2021 destreamed curriculum's strands: Number and Algebra are usually
+-- taught as two separate units even though they're one strand; Data and
+-- Financial Literacy are one strand taught together.
 
-with c as (select id from public.courses where code = 'MPM1D'),
+with c as (select id from public.courses where code = 'MTH1W'),
 unit_data (code, title, description, color, order_index) as (
   values
-    ('number-sense-and-algebra', 'Number Sense and Algebra',
-     'Exponent rules and operations with polynomial expressions.', '#5B8DEF', 0),
+    ('number-sense', 'Number Sense',
+     'Order of operations, integer operations, exponent rules, fractions, ratios, and percent.', '#5B8DEF', 0),
+    ('algebraic-expressions', 'Algebraic Expressions',
+     'Simplifying, expanding, evaluating, and solving with algebraic expressions and equations.', '#4CAF93', 1),
     ('linear-relations', 'Linear Relations',
-     'Recognizing and representing relationships that change at a constant rate.', '#4CAF93', 1),
-    ('equations-of-lines', 'Equations of Lines',
-     'Determining and using the equation of a straight line.', '#E0834B', 2),
-    ('measurement-and-geometry', 'Measurement and Geometry',
-     'Surface area, volume, and geometric properties of shapes and solids.', '#B15BE0', 3)
+     'Slope, intercepts, and equations of lines, including real-world linear models.', '#E0834B', 2),
+    ('geometry-and-measurement', 'Geometry and Measurement',
+     'Area, perimeter, volume, surface area, and angle relationships.', '#B15BE0', 3),
+    ('data-and-financial-literacy', 'Data and Financial Literacy',
+     'Summarizing data sets, reading graphs, simple interest, and budgeting.', '#D4A017', 4)
 )
 insert into public.units (course_id, code, title, description, color, order_index)
 select c.id, u.code, u.title, u.description, u.color, u.order_index from unit_data u, c
@@ -58,24 +74,48 @@ on conflict (course_id, code) do update
       color = excluded.color,
       order_index = excluded.order_index;
 
--- Number Sense and Algebra ----------------------------------------------------
+-- Number Sense -----------------------------------------------------------------
 with u as (
   select un.id from public.units un
   join public.courses c on c.id = un.course_id
-  where c.code = 'MPM1D' and un.code = 'number-sense-and-algebra'
+  where c.code = 'MTH1W' and un.code = 'number-sense'
 ),
 subtopic_data (code, title, description, order_index) as (
   values
-    ('exponent-laws', 'Exponent Laws',
-     'Applying the laws of exponents to simplify numerical and algebraic expressions.', 0),
-    ('adding-subtracting-polynomials', 'Adding and Subtracting Polynomials',
-     'Collecting like terms to add and subtract polynomial expressions.', 1),
-    ('multiplying-polynomials', 'Multiplying Polynomials',
-     'Expanding products of monomials, binomials, and polynomials.', 2),
-    ('simplifying-algebraic-expressions', 'Simplifying Algebraic Expressions',
-     'Combining exponent rules and polynomial operations to simplify expressions.', 3),
-    ('polynomial-applications', 'Applications of Polynomials',
-     'Using polynomial expressions to model and solve real-world problems.', 4)
+    ('order-of-operations', 'Order of Operations',
+     'Evaluating numerical expressions with integers using the correct order of operations.', 0),
+    ('integer-operations', 'Operations with Integers',
+     'Adding, subtracting, multiplying, and dividing positive and negative integers.', 1),
+    ('exponent-rules', 'Exponent Rules',
+     'Evaluating powers of integers, including negative bases, and dividing powers with the same base.', 2),
+    ('fractions-and-ratios', 'Fractions and Ratios',
+     'Adding fractions, simplifying ratios, and comparing numbers in different forms.', 3),
+    ('percent-and-estimation', 'Percent and Estimation',
+     'Calculating a percent of a number and estimating the value of square roots.', 4)
+)
+insert into public.subtopics (unit_id, code, title, description, order_index)
+select u.id, s.code, s.title, s.description, s.order_index from subtopic_data s, u
+on conflict (unit_id, code) do update
+  set title = excluded.title, description = excluded.description, order_index = excluded.order_index;
+
+-- Algebraic Expressions ----------------------------------------------------------
+with u as (
+  select un.id from public.units un
+  join public.courses c on c.id = un.course_id
+  where c.code = 'MTH1W' and un.code = 'algebraic-expressions'
+),
+subtopic_data (code, title, description, order_index) as (
+  values
+    ('collecting-like-terms', 'Collecting Like Terms',
+     'Simplifying algebraic expressions by combining like terms.', 0),
+    ('expanding-expressions', 'Expanding Expressions',
+     'Using the distributive property to expand brackets, including with negative coefficients.', 1),
+    ('evaluating-expressions', 'Evaluating Expressions',
+     'Substituting values into algebraic and exponential expressions.', 2),
+    ('solving-two-step-equations', 'Solving Two-Step Equations',
+     'Solving linear equations that require two operations to isolate the variable.', 3),
+    ('solving-multi-step-equations', 'Solving Multi-Step Equations',
+     'Solving linear equations that require expanding brackets or collecting terms on both sides.', 4)
 )
 insert into public.subtopics (unit_id, code, title, description, order_index)
 select u.id, s.code, s.title, s.description, s.order_index from subtopic_data s, u
@@ -86,70 +126,66 @@ on conflict (unit_id, code) do update
 with u as (
   select un.id from public.units un
   join public.courses c on c.id = un.course_id
-  where c.code = 'MPM1D' and un.code = 'linear-relations'
+  where c.code = 'MTH1W' and un.code = 'linear-relations'
 ),
 subtopic_data (code, title, description, order_index) as (
   values
-    ('first-differences', 'First Differences',
-     'Using first differences in a table of values to identify a linear relation.', 0),
-    ('rate-of-change', 'Rate of Change',
-     'Calculating and interpreting the rate of change between two points.', 1),
-    ('direct-variation', 'Direct Variation',
-     'Relations of the form y = mx that pass through the origin.', 2),
-    ('partial-variation', 'Partial Variation',
-     'Relations of the form y = mx + b with a non-zero initial value.', 3),
-    ('graphing-linear-relations', 'Graphing Linear Relations',
-     'Creating tables of values and graphs to represent linear relations.', 4)
-)
-insert into public.subtopics (unit_id, code, title, description, order_index)
-select u.id, s.code, s.title, s.description, s.order_index from subtopic_data s, u
-on conflict (unit_id, code) do update
-  set title = excluded.title, description = excluded.description, order_index = excluded.order_index;
-
--- Equations of Lines -------------------------------------------------------------
-with u as (
-  select un.id from public.units un
-  join public.courses c on c.id = un.course_id
-  where c.code = 'MPM1D' and un.code = 'equations-of-lines'
-),
-subtopic_data (code, title, description, order_index) as (
-  values
-    ('slope', 'Slope',
-     'Calculating slope from a graph, table, or two points.', 0),
-    ('slope-intercept-form', 'Slope-Intercept Form',
+    ('slope-and-rate-of-change', 'Slope and Rate of Change',
+     'Finding the slope of a line from an equation, a graph, or two points.', 0),
+    ('equations-of-lines', 'Equations of Lines',
      'Writing and interpreting equations in the form y = mx + b.', 1),
-    ('standard-form', 'Standard Form',
-     'Converting linear equations between slope-intercept and standard form.', 2),
-    ('graphing-from-equations', 'Graphing from Equations',
-     'Sketching a line directly from its equation.', 3),
-    ('solving-linear-equations', 'Solving Linear Equations',
-     'Solving single-variable linear equations algebraically.', 4),
-    ('linear-system-intro', 'Introduction to Linear Systems',
-     'Finding the intersection of two lines by graphing.', 5)
+    ('intercepts', 'Intercepts',
+     'Finding and interpreting the x-intercept and y-intercept of a line.', 2),
+    ('verifying-points-on-a-line', 'Verifying Points on a Line',
+     'Checking whether a given point satisfies a linear equation.', 3),
+    ('linear-relations-in-context', 'Linear Relations in Context',
+     'Modelling real-world situations, like fixed and variable costs, with a linear equation.', 4)
 )
 insert into public.subtopics (unit_id, code, title, description, order_index)
 select u.id, s.code, s.title, s.description, s.order_index from subtopic_data s, u
 on conflict (unit_id, code) do update
   set title = excluded.title, description = excluded.description, order_index = excluded.order_index;
 
--- Measurement and Geometry -------------------------------------------------------
+-- Geometry and Measurement -------------------------------------------------------
 with u as (
   select un.id from public.units un
   join public.courses c on c.id = un.course_id
-  where c.code = 'MPM1D' and un.code = 'measurement-and-geometry'
+  where c.code = 'MTH1W' and un.code = 'geometry-and-measurement'
 ),
 subtopic_data (code, title, description, order_index) as (
   values
-    ('surface-area-of-solids', 'Surface Area of 3-D Solids',
-     'Calculating the surface area of prisms, cylinders, and composite solids.', 0),
-    ('volume-of-solids', 'Volume of 3-D Solids',
-     'Calculating the volume of prisms, cylinders, and composite solids.', 1),
-    ('optimization', 'Optimizing Measurements',
-     'Finding dimensions that minimize surface area or maximize volume.', 2),
-    ('similar-triangles-and-figures', 'Similar Triangles and Figures',
-     'Using proportional reasoning to solve problems with similar shapes.', 3),
-    ('angle-properties-of-polygons', 'Angle Properties of Polygons',
-     'Interior and exterior angle relationships in triangles and polygons.', 4)
+    ('area-of-2d-shapes', 'Area of 2-D Shapes',
+     'Finding the area of triangles, circles, and other polygons.', 0),
+    ('perimeter-and-circumference', 'Perimeter and Circumference',
+     'Finding the perimeter of polygons and the circumference of circles.', 1),
+    ('volume-and-surface-area', 'Volume and Surface Area',
+     'Finding the volume and surface area of prisms, cylinders, and cubes.', 2),
+    ('angle-relationships', 'Angle Relationships',
+     'Using angle sum properties of triangles and quadrilaterals, and complementary angles.', 3)
+)
+insert into public.subtopics (unit_id, code, title, description, order_index)
+select u.id, s.code, s.title, s.description, s.order_index from subtopic_data s, u
+on conflict (unit_id, code) do update
+  set title = excluded.title, description = excluded.description, order_index = excluded.order_index;
+
+-- Data and Financial Literacy -----------------------------------------------------
+with u as (
+  select un.id from public.units un
+  join public.courses c on c.id = un.course_id
+  where c.code = 'MTH1W' and un.code = 'data-and-financial-literacy'
+),
+subtopic_data (code, title, description, order_index) as (
+  values
+    ('measures-of-central-tendency', 'Measures of Central Tendency',
+     'Calculating the mean, median, and mode of a data set.', 0),
+    ('range-and-outliers', 'Range and Outliers',
+     'Finding the range of a data set and identifying outliers.', 1),
+    ('choosing-and-reading-graphs', 'Choosing and Reading Graphs',
+     'Selecting an appropriate graph type and interpreting data displays.', 2),
+    ('simple-interest', 'Simple Interest',
+     'Calculating simple interest and the total value of an investment or loan.', 3),
+    ('budgeting-and-discounts', 'Budgeting and Discounts',
+     'Applying percentages to discounts and personal budgets.', 4)
 )
 insert into public.subtopics (unit_id, code, title, description, order_index)
 select u.id, s.code, s.title, s.description, s.order_index from subtopic_data s, u
