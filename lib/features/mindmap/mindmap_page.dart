@@ -7,11 +7,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../models/course.dart';
+import '../../models/profile.dart';
 import '../../models/progress_status.dart';
 import '../../models/subtopic.dart';
 import '../../models/unit.dart';
 import '../../state/auth_providers.dart';
 import '../../state/curriculum_providers.dart';
+import '../../state/profile_providers.dart';
 import '../../state/progress_providers.dart';
 import '../topic_detail/topic_detail_sheet.dart';
 import 'widgets/hoverable_node.dart';
@@ -85,7 +87,10 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
   bool _canvasGesturesEnabled = true;
   Size _lastViewportSize = Size.zero;
   String? _layoutCourseId;
-  _TopicViewMode _viewMode = _TopicViewMode.mindmap;
+  /// The user's manual pick for this session, if they've toggled it —
+  /// takes priority over their saved default_view preference so a
+  /// deliberate switch never gets silently reverted mid-session.
+  _TopicViewMode? _viewModeOverride;
 
   /// Row/text scale for the tree view's Cmd/Ctrl+scroll zoom — the tree is a
   /// plain list, so "zoom" scales its rows rather than panning a canvas.
@@ -408,6 +413,15 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
     final subtopicStatus = ref.watch(subtopicStatusProvider);
     final subtopicScorePercent = ref.watch(subtopicScorePercentProvider);
 
+    // The saved preference only takes effect until the student manually
+    // toggles the view themselves this session (_viewModeOverride).
+    final savedDefaultView = ref.watch(profileProvider).value?.defaultView;
+    final viewMode =
+        _viewModeOverride ??
+        (savedDefaultView == DefaultView.classroom
+            ? _TopicViewMode.tree
+            : _TopicViewMode.mindmap);
+
     return Scaffold(
       appBar: AppBar(
         title: const Row(
@@ -434,17 +448,17 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                   tooltip: 'List view',
                 ),
               ],
-              selected: {_viewMode},
+              selected: {viewMode},
               showSelectedIcon: false,
               onSelectionChanged: (selection) =>
-                  setState(() => _viewMode = selection.first),
+                  setState(() => _viewModeOverride = selection.first),
               style: const ButtonStyle(
                 visualDensity: VisualDensity.compact,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ),
           ),
-          if (_viewMode == _TopicViewMode.mindmap)
+          if (viewMode == _TopicViewMode.mindmap)
             IconButton(
               tooltip: 'Reset view',
               icon: const Icon(Icons.center_focus_strong),
@@ -459,7 +473,9 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
             PopupMenuButton<String>(
               icon: const Icon(Icons.account_circle),
               onSelected: (value) {
-                if (value == 'sign_out') {
+                if (value == 'settings') {
+                  context.push('/settings');
+                } else if (value == 'sign_out') {
                   ref.read(supabaseClientProvider).auth.signOut();
                 }
               },
@@ -467,6 +483,10 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                 PopupMenuItem(
                   enabled: false,
                   child: Text(user.email ?? 'Signed in'),
+                ),
+                const PopupMenuItem(
+                  value: 'settings',
+                  child: Text('Profile & Preferences'),
                 ),
                 const PopupMenuItem(value: 'sign_out', child: Text('Sign out')),
               ],
@@ -508,7 +528,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                 final subtopics = ref.watch(courseSubtopicsProvider);
                 _ensureLayout(course.id, units, subtopics);
 
-                if (_viewMode == _TopicViewMode.tree) {
+                if (viewMode == _TopicViewMode.tree) {
                   return TopicTreeView(
                     course: course,
                     units: units,

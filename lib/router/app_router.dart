@@ -5,6 +5,7 @@ import '../features/auth/login_page.dart';
 import '../features/lesson/lesson_page.dart';
 import '../features/mindmap/mindmap_page.dart';
 import '../features/practice_test/practice_test_page.dart';
+import '../features/settings/settings_page.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -17,6 +18,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/login',
         builder: (context, state) => const LoginPage(),
+      ),
+      GoRoute(
+        path: '/settings',
+        builder: (context, state) => const SettingsPage(),
       ),
       GoRoute(
         path: '/lesson/:lessonId',
