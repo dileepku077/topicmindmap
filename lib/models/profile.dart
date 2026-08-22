@@ -1,5 +1,5 @@
 /// Which screen a student sees first when they open the app —
-/// the spatial mindmap, or the flat list (topic_tree_view.dart).
+/// the spatial mindmap, or the classroom view (classroom_view.dart).
 /// Persisted per-account so it's remembered across sign-ins.
 enum DefaultView {
   mindmap,

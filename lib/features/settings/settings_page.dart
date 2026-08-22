@@ -7,9 +7,10 @@ import '../../state/auth_providers.dart';
 import '../../state/profile_providers.dart';
 
 /// Profile and preferences — currently just the one preference: which
-/// screen a student sees first, the spatial mindmap or the flat
-/// classroom-style list (topic_tree_view.dart). Both show the same
-/// curriculum and progress; this only decides what loads first.
+/// screen a student sees first, the spatial mindmap or the classroom
+/// view (left-hand unit navigation + a resume-where-you-left-off
+/// dashboard, classroom_view.dart). Both show the same curriculum and
+/// progress; this only decides what loads first.
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
 
@@ -64,8 +65,9 @@ class _PreferencesBody extends ConsumerWidget {
             const SizedBox(height: 10),
             _ViewOptionTile(
               icon: Icons.account_tree_outlined,
-              title: 'Classroom list',
-              subtitle: 'A plain top-to-bottom outline of units and topics.',
+              title: 'Classroom',
+              subtitle: 'A unit list on the left and a dashboard that '
+                  'picks up where you left off.',
               selected: defaultView == DefaultView.classroom,
               onTap: () => _setDefaultView(context, ref, DefaultView.classroom),
             ),

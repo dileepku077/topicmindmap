@@ -15,16 +15,17 @@ import '../../state/auth_providers.dart';
 import '../../state/curriculum_providers.dart';
 import '../../state/profile_providers.dart';
 import '../../state/progress_providers.dart';
+import '../classroom/classroom_view.dart';
 import '../topic_detail/topic_detail_sheet.dart';
 import 'widgets/hoverable_node.dart';
 import 'widgets/mindmap_node_widget.dart';
-import 'widgets/topic_tree_view.dart';
 
 const _rootId = 'root';
 
-/// The two ways to browse the curriculum — a spatial mindmap, or a plain
-/// top-to-bottom outline. Same data and tap targets either way; some
-/// students read a list faster than they read a map.
+/// The two ways to browse the curriculum — a spatial mindmap, or the
+/// classroom view (left-hand unit list + a resume-where-you-left-off
+/// dashboard, ClassroomView). Same underlying data and subtopic detail
+/// sheet either way; some students navigate a list faster than a map.
 enum _TopicViewMode { mindmap, tree }
 
 // A large, fixed logical canvas the mindmap lives on. Nodes are positioned
@@ -62,11 +63,6 @@ const _leafTargetChord = 215.0;
 const _minZoom = 0.3;
 const _maxZoom = 2.2;
 
-// Zoom bounds for the tree/list view's text+row scale (no spatial canvas to
-// pinch there, so "zoom" just means bigger/smaller rows).
-const _minTreeScale = 0.75;
-const _maxTreeScale = 1.75;
-
 class MindmapPage extends ConsumerStatefulWidget {
   const MindmapPage({super.key});
 
@@ -91,10 +87,6 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
   /// takes priority over their saved default_view preference so a
   /// deliberate switch never gets silently reverted mid-session.
   _TopicViewMode? _viewModeOverride;
-
-  /// Row/text scale for the tree view's Cmd/Ctrl+scroll zoom — the tree is a
-  /// plain list, so "zoom" scales its rows rather than panning a canvas.
-  double _treeScale = 1.0;
 
   /// Whether Cmd/Ctrl is currently held — tracked from real keyboard events
   /// (not from the scroll event itself) so it's already up to date *before*
@@ -350,23 +342,6 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
     });
   }
 
-  /// Same Cmd/Ctrl+scroll convention for the tree view, but there's no
-  /// canvas to pan/zoom there — it just scales row text/icons up or down.
-  /// Only runs while [_zoomModifierHeld] is true, at which point the
-  /// ListView's own scroll physics are switched to non-scrollable (see
-  /// TopicTreeView's use of [_zoomModifierHeld]) so this doesn't also
-  /// scroll the list at the same time.
-  void _handleTreeScroll(PointerSignalEvent event) {
-    if (!_zoomModifierHeld || event is! PointerScrollEvent) return;
-    final zoomFactor = math.exp(-event.scrollDelta.dy / 200);
-    setState(() {
-      _treeScale = (_treeScale * zoomFactor).clamp(
-        _minTreeScale,
-        _maxTreeScale,
-      );
-    });
-  }
-
   void _moveNode(String nodeId, Offset delta) {
     final scale = _transformController.value.getMaxScaleOnAxis();
     setState(() {
@@ -445,7 +420,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                 ButtonSegment(
                   value: _TopicViewMode.tree,
                   icon: Icon(Icons.account_tree_outlined, size: 18),
-                  tooltip: 'List view',
+                  tooltip: 'Classroom view',
                 ),
               ],
               selected: {viewMode},
@@ -529,17 +504,12 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                 _ensureLayout(course.id, units, subtopics);
 
                 if (viewMode == _TopicViewMode.tree) {
-                  return TopicTreeView(
+                  return ClassroomView(
                     course: course,
                     units: units,
                     subtopicsByUnit: _subtopicsByUnit,
                     subtopicStatus: subtopicStatus,
                     subtopicScorePercent: subtopicScorePercent,
-                    expandedUnitIds: _expandedUnitIds,
-                    scale: _treeScale,
-                    zoomModifierHeld: _zoomModifierHeld,
-                    onScrollSignal: _handleTreeScroll,
-                    onToggleUnit: _toggleUnit,
                     onTapSubtopic: (subtopic, status) => showTopicDetailSheet(
                       context,
                       subtopic: subtopic,
