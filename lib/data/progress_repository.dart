@@ -1,22 +1,25 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../models/practice_test_result.dart';
+import '../models/subtopic_mastery.dart';
 
-/// Reads a student's practice-test history. Results are recorded by the
-/// practice-test system itself (service role) — this app only ever reads
-/// them to drive the mindmap's progress color-coding.
+/// Reads a student's practice-test mastery record — one row per subtopic
+/// they've completed at least once, updated in place by the database's
+/// award_medal() function as they improve. This app only ever reads them,
+/// to drive the mindmap's progress color-coding.
 class ProgressRepository {
   ProgressRepository(this._client);
 
   final SupabaseClient _client;
 
-  /// Streams every practice-test attempt for [studentId], updating live as
-  /// new results are recorded.
-  Stream<List<PracticeTestResult>> watchResults(String studentId) {
+  /// Streams every subtopic_mastery row for [studentId], updating live as
+  /// new medals are earned.
+  Stream<List<SubtopicMastery>> watchMastery(String studentId) {
     return _client
-        .from('practice_test_results')
-        .stream(primaryKey: ['id'])
+        .from('subtopic_mastery')
+        .stream(
+          primaryKey: ['student_id', 'course_code', 'unit_code', 'subtopic_code'],
+        )
         .eq('student_id', studentId)
-        .map((rows) => rows.map(PracticeTestResult.fromMap).toList());
+        .map((rows) => rows.map(SubtopicMastery.fromMap).toList());
   }
 }

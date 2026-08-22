@@ -12,17 +12,21 @@ create extension if not exists "pgcrypto";
 -- so unit/subtopic codes only need to be unique within their own course
 -- rather than globally. `create table if not exists` below won't retrofit
 -- that column onto an already-existing `units` table, so drop and recreate
--- instead of migrating in place — every row here (curriculum content and
--- demo practice-test results) is fully reproducible from seed.sql, so
--- there's nothing to preserve. Re-run seed.sql after this.
-drop table if exists public.practice_test_results cascade;
+-- instead of migrating in place — every row here is fully reproducible from
+-- seed.sql, so there's nothing to preserve. Re-run seed.sql after this.
+--
+-- IMPORTANT: practice-test data (supabase/schema_practice.sql) deliberately
+-- does NOT foreign-key against subtopics.id, precisely because of the drop
+-- here — it keys on the stable (course_code, unit_code, subtopic_code) text
+-- codes instead, so re-running this file never touches a student's practice
+-- history. Keep it that way; don't add a subtopic_id FK to those tables.
 drop table if exists public.subtopics cascade;
 drop table if exists public.units cascade;
 drop table if exists public.courses cascade;
 
--- One row per grade's academic-stream course (MPM1D, MPM2D, MCR3U, MHF4U).
--- The mindmap shows one course at a time; the grade dropdown in the app
--- switches which course's units/subtopics are loaded.
+-- One row per grade's course (MTH1W, MPM2D, MCR3U, MHF4U, plus SNC2D and
+-- SPH3U — see seed.sql). The mindmap shows one course at a time; the grade
+-- dropdown in the app switches which course's units/subtopics are loaded.
 create table if not exists public.courses (
   id uuid primary key default gen_random_uuid(),
   grade int not null,                     -- 9, 10, 11, 12
@@ -65,9 +69,10 @@ create index if not exists subtopics_unit_id_idx on public.subtopics (unit_id);
 -- ---------------------------------------------------------------------------
 
 -- Student comments/notes and manually-editable progress have been removed:
--- progress is now derived entirely from practice_test_results below. Drop
--- the old tables/type if they exist from a previous version of this schema
--- (this permanently deletes any notes or manually-set progress students had
+-- progress is now derived entirely from practice-test results (see
+-- supabase/schema_practice.sql, which must be run after this file). Drop the
+-- old tables/type if they exist from a previous version of this schema (this
+-- permanently deletes any notes or manually-set progress students had
 -- saved).
 drop table if exists public.notes cascade;
 drop table if exists public.user_progress cascade;
@@ -78,29 +83,6 @@ create table if not exists public.profiles (
   display_name text,
   created_at timestamptz not null default now()
 );
-
--- Practice-test results drive the mindmap's progress color-coding. Rows are
--- written by the practice-test system (service role) as a student completes
--- questions on a subtopic — the app only ever reads them. There is no
--- student-facing way to edit or fabricate a score.
-create table if not exists public.practice_test_results (
-  id uuid primary key default gen_random_uuid(),
-  student_id uuid not null references auth.users (id) on delete cascade,
-  subtopic_id uuid not null references public.subtopics (id) on delete cascade,
-  questions_total int not null check (questions_total > 0),
-  questions_correct int not null check (
-    questions_correct >= 0 and questions_correct <= questions_total
-  ),
-  score_percent numeric generated always as (
-    round((questions_correct::numeric / questions_total) * 100, 1)
-  ) stored,
-  attempted_at timestamptz not null default now()
-);
-
-create index if not exists practice_test_results_student_id_idx
-  on public.practice_test_results (student_id);
-create index if not exists practice_test_results_subtopic_id_idx
-  on public.practice_test_results (subtopic_id);
 
 -- ---------------------------------------------------------------------------
 -- Create a profile row automatically when a new auth user signs up.
@@ -131,7 +113,6 @@ alter table public.courses enable row level security;
 alter table public.units enable row level security;
 alter table public.subtopics enable row level security;
 alter table public.profiles enable row level security;
-alter table public.practice_test_results enable row level security;
 
 -- Curriculum content: readable by anyone (including anonymous), no client writes.
 drop policy if exists "courses are publicly readable" on public.courses;
@@ -160,11 +141,6 @@ create policy "profiles are self updatable"
   on public.profiles for update
   using (auth.uid() = id);
 
--- Practice test results: a student can only read their own results. There
--- are intentionally no insert/update/delete policies for the authenticated
--- role — scores are recorded by the (trusted, service-role) practice-test
--- system, not by students editing their own progress from the app.
-drop policy if exists "practice results are owner readable" on public.practice_test_results;
-create policy "practice results are owner readable"
-  on public.practice_test_results for select
-  using (auth.uid() = student_id);
+-- Practice-test tables (questions, attempts, progress_resets,
+-- subtopic_mastery) live in supabase/schema_practice.sql, which must be run
+-- after this file.

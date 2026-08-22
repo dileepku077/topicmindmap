@@ -3,9 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../models/lesson.dart';
-import '../../models/practice_test_result.dart';
 import '../../models/progress_status.dart';
 import '../../models/subtopic.dart';
+import '../../models/subtopic_mastery.dart';
 import '../../state/auth_providers.dart';
 import '../../state/lesson_providers.dart';
 import '../../state/progress_providers.dart';
@@ -43,11 +43,8 @@ class TopicDetailSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
-    final results = ref.watch(subtopicResultsProvider(subtopic.id));
-    final bestScore = results.isEmpty
-        ? null
-        : results.map((r) => r.scorePercent).reduce((a, b) => a > b ? a : b);
-    final status = ProgressStatus.fromScorePercent(bestScore);
+    final mastery = ref.watch(subtopicMasteryProvider(subtopic.id));
+    final status = ProgressStatus.fromScorePercent(mastery?.scorePercent);
     final lessonId = lessonIdFor(courseCode: courseCode, subtopicCode: subtopic.code);
     final lesson = lessonId == null ? null : ref.watch(lessonProvider(lessonId));
 
@@ -95,7 +92,7 @@ class TopicDetailSheet extends ConsumerWidget {
               if (user == null)
                 const _SignInPrompt()
               else
-                _PracticeProgressCard(status: status, results: results),
+                _PracticeProgressCard(status: status, mastery: mastery),
             ],
           ),
         );
@@ -105,10 +102,10 @@ class TopicDetailSheet extends ConsumerWidget {
 }
 
 class _PracticeProgressCard extends StatelessWidget {
-  const _PracticeProgressCard({required this.status, required this.results});
+  const _PracticeProgressCard({required this.status, required this.mastery});
 
   final ProgressStatus status;
-  final List<PracticeTestResult> results;
+  final SubtopicMastery? mastery;
 
   @override
   Widget build(BuildContext context) {
@@ -137,12 +134,13 @@ class _PracticeProgressCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            results.isEmpty
+            mastery == null
                 ? 'No practice test attempts yet. Complete a practice test on '
                     'this topic to see progress here.'
-                : 'Best score: ${_bestScore(results).round()}% · '
-                    '${results.length} ${results.length == 1 ? 'attempt' : 'attempts'} · '
-                    'Last practiced ${_formatDate(_lastAttemptDate(results))}',
+                : 'Best score: ${mastery!.scorePercent.round()}% · '
+                    'completed ${mastery!.timesCompleted} '
+                    '${mastery!.timesCompleted == 1 ? 'time' : 'times'} · '
+                    'Last practiced ${_formatDate(mastery!.updatedAt)}',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
         ],
@@ -150,12 +148,6 @@ class _PracticeProgressCard extends StatelessWidget {
     );
   }
 }
-
-double _bestScore(List<PracticeTestResult> results) =>
-    results.map((r) => r.scorePercent).reduce((a, b) => a > b ? a : b);
-
-DateTime _lastAttemptDate(List<PracticeTestResult> results) =>
-    results.map((r) => r.attemptedAt).reduce((a, b) => a.isAfter(b) ? a : b);
 
 const _months = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',

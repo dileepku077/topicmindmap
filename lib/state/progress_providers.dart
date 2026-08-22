@@ -1,62 +1,88 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/progress_repository.dart';
-import '../models/practice_test_result.dart';
 import '../models/progress_status.dart';
+import '../models/subtopic_mastery.dart';
 import 'auth_providers.dart';
+import 'curriculum_providers.dart';
 
 final progressRepositoryProvider = Provider<ProgressRepository>((ref) {
   return ProgressRepository(ref.watch(supabaseClientProvider));
 });
 
-/// Live subtopicId -> practice-test attempts for the signed-in student.
-/// Empty (and static) when browsing as a guest.
-final practiceResultsProvider =
-    StreamProvider<Map<String, List<PracticeTestResult>>>((ref) {
+/// subtopic_mastery keys on (course_code, unit_code, subtopic_code) — stable
+/// text codes — rather than subtopic.id, because schema.sql drops and
+/// recreates courses/units/subtopics (and every uuid with them) on every
+/// run; see supabase/schema_practice.sql for the full reasoning. This maps
+/// that natural key back to the subtopic.id the rest of the app already
+/// keys its UI state on, using whichever curriculum content is loaded.
+final _subtopicIdByCodeProvider = Provider<Map<String, String>>((ref) {
+  final courses = ref.watch(coursesProvider).value ?? const [];
+  final units = ref.watch(unitsProvider).value ?? const [];
+  final subtopics = ref.watch(subtopicsProvider).value ?? const [];
+
+  final courseCodeByCourseId = {for (final c in courses) c.id: c.code};
+  final unitByUnitId = {for (final u in units) u.id: u};
+
+  final byCode = <String, String>{};
+  for (final subtopic in subtopics) {
+    final unit = unitByUnitId[subtopic.unitId];
+    if (unit == null) continue;
+    final courseCode = courseCodeByCourseId[unit.courseId];
+    if (courseCode == null) continue;
+    byCode['$courseCode/${unit.code}/${subtopic.code}'] = subtopic.id;
+  }
+  return byCode;
+});
+
+/// Live subtopicId -> this student's mastery record, for every subtopic
+/// they've completed at least once. Empty (and static) when browsing as a
+/// guest, or before curriculum content has finished loading.
+final practiceMasteryProvider =
+    StreamProvider<Map<String, SubtopicMastery>>((ref) {
   final user = ref.watch(currentUserProvider);
   if (user == null) {
-    return Stream.value(const <String, List<PracticeTestResult>>{});
+    return Stream.value(const <String, SubtopicMastery>{});
   }
-  return ref.watch(progressRepositoryProvider).watchResults(user.id).map(
-    (results) {
-      final bySubtopic = <String, List<PracticeTestResult>>{};
-      for (final result in results) {
-        bySubtopic.putIfAbsent(result.subtopicId, () => []).add(result);
+  final subtopicIdByCode = ref.watch(_subtopicIdByCodeProvider);
+  return ref.watch(progressRepositoryProvider).watchMastery(user.id).map(
+    (rows) {
+      final bySubtopic = <String, SubtopicMastery>{};
+      for (final row in rows) {
+        final code = '${row.courseCode}/${row.unitCode}/${row.subtopicCode}';
+        final subtopicId = subtopicIdByCode[code];
+        if (subtopicId != null) bySubtopic[subtopicId] = row;
       }
       return bySubtopic;
     },
   );
 });
 
-/// This subtopic's recorded practice-test attempts for the signed-in student.
-final subtopicResultsProvider =
-    Provider.family<List<PracticeTestResult>, String>((ref, subtopicId) {
-  final bySubtopic = ref.watch(practiceResultsProvider).value ?? const {};
-  return bySubtopic[subtopicId] ?? const [];
+/// This subtopic's mastery record for the signed-in student, or null if
+/// they haven't completed a pass of it yet.
+final subtopicMasteryProvider =
+    Provider.family<SubtopicMastery?, String>((ref, subtopicId) {
+  return ref.watch(practiceMasteryProvider).value?[subtopicId];
 });
 
 /// Live subtopicId -> ProgressStatus, derived from each subtopic's best
-/// practice-test score so far.
+/// completed-pass score so far.
 final subtopicStatusProvider = Provider<Map<String, ProgressStatus>>((ref) {
-  final bySubtopic = ref.watch(practiceResultsProvider).value ?? const {};
+  final bySubtopic = ref.watch(practiceMasteryProvider).value ?? const {};
   return {
     for (final entry in bySubtopic.entries)
-      entry.key: ProgressStatus.fromScorePercent(_bestScore(entry.value)),
+      entry.key: ProgressStatus.fromScorePercent(entry.value.scorePercent),
   };
 });
 
-/// Live subtopicId -> best practice-test score (0-100) so far. A subtopic
-/// with no attempts simply has no entry — distinct from "scored 0%".
+/// Live subtopicId -> best completed-pass score (0-100) so far. A subtopic
+/// with no completed pass simply has no entry — distinct from "scored 0%".
 final subtopicScorePercentProvider = Provider<Map<String, double>>((ref) {
-  final bySubtopic = ref.watch(practiceResultsProvider).value ?? const {};
+  final bySubtopic = ref.watch(practiceMasteryProvider).value ?? const {};
   return {
-    for (final entry in bySubtopic.entries)
-      if (entry.value.isNotEmpty) entry.key: _bestScore(entry.value),
+    for (final entry in bySubtopic.entries) entry.key: entry.value.scorePercent,
   };
 });
-
-double _bestScore(List<PracticeTestResult> results) =>
-    results.map((r) => r.scorePercent).reduce((a, b) => a > b ? a : b);
 
 /// Aggregates a unit's overall status as the least-complete status among
 /// its attempted subtopics (relying on ProgressStatus being declared

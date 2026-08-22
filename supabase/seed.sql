@@ -914,7 +914,7 @@ from demo_users d
 on conflict (provider, provider_id) do nothing;
 
 -- Clear any previously-seeded demo results so this section is safe to re-run.
-delete from public.practice_test_results
+delete from public.subtopic_mastery
 where student_id in (select id from auth.users where email in ('a@gmail.com', 'b@gmail.com'));
 
 -- Progress colors are traffic-signal style, banded by best score per
@@ -971,14 +971,30 @@ with results (unit_code, subtopic_code, student_email, questions_total, question
     ('analytic-geometry', 'slope-and-equation-of-a-line', 'b@gmail.com', 10, 2)
     -- linear-systems: not attempted yet.
 )
-insert into public.practice_test_results (
-  student_id, subtopic_id, questions_total, questions_correct, attempted_at
+-- subtopic_mastery keys on (course_code, unit_code, subtopic_code) text —
+-- not subtopic_id — so unlike the old practice_test_results insert, this
+-- needs no join against courses/units/subtopics at all; see
+-- supabase/schema_practice.sql for why. `ts` is computed once per row (in
+-- this CTE) rather than inline in the insert, so first_earned_at and
+-- updated_at get the same random demo timestamp instead of two different
+-- ones.
+with results_ts as (
+  select r.*, now() - (random() * interval '14 days') as ts
+  from results r
+)
+insert into public.subtopic_mastery (
+  student_id, course_code, unit_code, subtopic_code,
+  best_first_try, total_questions, medal, times_completed,
+  first_earned_at, updated_at
 )
 select
-  au.id, s.id, r.questions_total, r.questions_correct,
-  now() - (random() * interval '14 days')
-from results r
-join auth.users au on au.email = r.student_email
-join public.courses c on c.code = 'MPM2D'
-join public.units un on un.code = r.unit_code and un.course_id = c.id
-join public.subtopics s on s.code = r.subtopic_code and s.unit_id = un.id;
+  au.id, 'MPM2D', r.unit_code, r.subtopic_code,
+  r.questions_correct, r.questions_total,
+  case
+    when r.questions_correct::numeric / r.questions_total >= 0.9 then 'Gold'
+    when r.questions_correct::numeric / r.questions_total >= 0.7 then 'Silver'
+    else 'Bronze'
+  end,
+  1, r.ts, r.ts
+from results_ts r
+join auth.users au on au.email = r.student_email;
