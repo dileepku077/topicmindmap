@@ -60,7 +60,15 @@ create trigger profiles_guard_subscription_tier
 --    correct_index and feedback text).
 -- ---------------------------------------------------------------------------
 
-create or replace function public.list_questions(
+-- Postgres won't let CREATE OR REPLACE change a function's return-table
+-- shape (it's adding the new `locked` column here) -- only its body. Has to
+-- be dropped first. Dropping also clears its privileges, so the REVOKE
+-- below re-applies the same "students yes, anonymous visitors no" grant
+-- schema_practice.sql originally set, rather than leaving the recreated
+-- function on Postgres's default (EXECUTE granted to PUBLIC).
+drop function if exists public.list_questions(text, text, text);
+
+create function public.list_questions(
   p_course_code   text,
   p_unit_code     text,
   p_subtopic_code text
@@ -106,6 +114,13 @@ begin
            q.sort_order;
 end;
 $$;
+
+-- Dropping the function above clears every privilege it had, including
+-- schema_practice.sql's original "students yes, anonymous visitors no"
+-- grants -- both the revoke and the grant need to be redone, not just the
+-- revoke, or no one (not even a signed-in student) could call this anymore.
+revoke all on function public.list_questions(text, text, text) from public, anon;
+grant execute on function public.list_questions(text, text, text) to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- 3. submit_answer() -- defense in depth. The app never lets a free student
