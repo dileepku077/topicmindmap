@@ -386,7 +386,13 @@ class _DifficultyChip extends StatelessWidget {
   Color _color(BuildContext context) => switch (difficulty) {
     'Easy' => Colors.green,
     'Medium' => const Color(0xFFD9A404),
-    'Hard' => Theme.of(context).colorScheme.error,
+    // Challenge/Advanced are MPM2D's own two tiers above Medium (see
+    // schema_difficulty_tiers.sql); Hard is still MCR3U/MHF4U's single top
+    // tier. Advanced and Hard share a color since neither ever appears
+    // alongside the other in the same subtopic — each is just "the hardest
+    // tier this course has."
+    'Challenge' => const Color(0xFFE8590C),
+    'Hard' || 'Advanced' => Theme.of(context).colorScheme.error,
     _ => Theme.of(context).colorScheme.outline,
   };
 
