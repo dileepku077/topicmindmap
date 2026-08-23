@@ -1,11 +1,11 @@
 {
-    "name": "Astro Math",
-    "short_name": "Astro Math",
+    "name": "Astro STEM Labs",
+    "short_name": "Astro STEM",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "An Ontario math curriculum mindmap and practice-test app.",
+    "description": "A lab where students practice their skills — starting with an Ontario math curriculum mindmap, lessons, and practice tests.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

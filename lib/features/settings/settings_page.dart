@@ -106,7 +106,7 @@ class _DefaultViewSection extends ConsumerWidget {
             Text('Default view', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 4),
             Text(
-              "What you see first when you open Astro Math. Both show the "
+              "What you see first when you open Astro STEM Labs. Both show the "
               'same topics and progress — pick whichever you read faster.',
               style: Theme.of(context).textTheme.bodySmall,
             ),

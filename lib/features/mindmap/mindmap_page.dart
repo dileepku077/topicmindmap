@@ -442,7 +442,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
         title: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Astro Math'),
+            Text('Astro STEM Labs'),
             SizedBox(width: 12),
             _GradeDropdown(),
           ],

@@ -1,5 +1,5 @@
-name: astro_math
-description: "Astro Math: an Ontario math curriculum mindmap and practice-test app."
+name: astro_stem_labs
+description: "Astro STEM Labs: a lab where students practice their skills, starting with an Ontario math curriculum mindmap and practice-test app."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev

@@ -2,7 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:astro_math/features/mindmap/widgets/hoverable_node.dart';
+import 'package:astro_stem_labs/features/mindmap/widgets/hoverable_node.dart';
 
 void main() {
   testWidgets('shows a tooltip bubble with the given message on hover', (

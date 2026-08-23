@@ -1,7 +1,8 @@
-# Astro Math
+# Astro STEM Labs
 
-A Flutter web app pairing an Ontario math curriculum mindmap with a
-classroom-style unit list, lessons, and practice tests.
+A Flutter web app where students practice their skills — starting with an
+Ontario math curriculum mindmap, a classroom-style unit list, lessons, and
+practice tests.
 
 ## Getting Started
 

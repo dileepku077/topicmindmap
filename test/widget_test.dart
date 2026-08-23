@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:astro_math/features/mindmap/widgets/mindmap_node_widget.dart';
-import 'package:astro_math/models/progress_status.dart';
-import 'package:astro_math/models/subtopic.dart';
+import 'package:astro_stem_labs/features/mindmap/widgets/mindmap_node_widget.dart';
+import 'package:astro_stem_labs/models/progress_status.dart';
+import 'package:astro_stem_labs/models/subtopic.dart';
 
 void main() {
   testWidgets('RootNodeWidget shows the given label', (tester) async {
