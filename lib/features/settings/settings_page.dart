@@ -69,7 +69,7 @@ class _AppearanceSection extends ConsumerWidget {
         _OptionTile(
           icon: Icons.light_mode_outlined,
           title: 'Light',
-          subtitle: 'A bright, warm theme.',
+          subtitle: 'A bright, clean theme.',
           selected: themeMode == ThemeMode.light,
           onTap: () => ref.read(themeModeProvider.notifier).set(ThemeMode.light),
         ),
