@@ -60,6 +60,13 @@ class _PracticeTestPageState extends ConsumerState<PracticeTestPage> {
   bool _awardingMedal = false;
   int _questionCount = 0;
 
+  /// How many Hard/Challenge/Advanced questions this subtopic has that
+  /// weren't included in this pass, because the signed-in student isn't on
+  /// Pro. Set once the pass finishes, so the completion screen can offer
+  /// the upgrade at exactly the moment a free student has run out of
+  /// questions to practice.
+  int _lockedCount = 0;
+
   late final PracticeSubtopicRef _ref = PracticeSubtopicRef(
     courseCode: widget.courseCode,
     unitCode: widget.unitCode,
@@ -95,7 +102,7 @@ class _PracticeTestPageState extends ConsumerState<PracticeTestPage> {
     }
   }
 
-  Future<void> _next(int questionCount) async {
+  Future<void> _next(int questionCount, int lockedCount) async {
     final wasFirstTry = _lastResult!.wasFirst;
 
     if (_index + 1 < questionCount) {
@@ -113,6 +120,7 @@ class _PracticeTestPageState extends ConsumerState<PracticeTestPage> {
     setState(() {
       if (wasFirstTry) _firstTryCorrectCount += 1;
       _questionCount = questionCount;
+      _lockedCount = lockedCount;
       _awardingMedal = true;
     });
     try {
@@ -149,6 +157,7 @@ class _PracticeTestPageState extends ConsumerState<PracticeTestPage> {
             medal: _medal ?? 'None',
             firstTryCorrectCount: _firstTryCorrectCount,
             questionCount: _questionCount,
+            lockedCount: _lockedCount,
             subtopicTitle: widget.subtopicTitle,
             onFinished: widget.onFinished ?? () => context.pop(),
           )
@@ -162,7 +171,14 @@ class _PracticeTestPageState extends ConsumerState<PracticeTestPage> {
                 error: (error, _) =>
                     Center(child: Text('Failed to load questions: $error')),
                 data: (questions) {
-                  if (questions.isEmpty) {
+                  // A free student's Hard/Challenge/Advanced questions come
+                  // back locked (no prompt/options — see PracticeQuestion),
+                  // so the quiz itself only ever runs through what's
+                  // unlocked; lockedCount drives the upsell on the
+                  // completion screen once they're out of free questions.
+                  final unlocked = questions.where((q) => !q.locked).toList();
+                  final lockedCount = questions.length - unlocked.length;
+                  if (unlocked.isEmpty) {
                     return const Center(
                       child: Padding(
                         padding: EdgeInsets.all(24),
@@ -174,17 +190,17 @@ class _PracticeTestPageState extends ConsumerState<PracticeTestPage> {
                       ),
                     );
                   }
-                  final question = questions[_index];
+                  final question = unlocked[_index];
                   return _QuestionView(
                     question: question,
                     questionNumber: _index + 1,
-                    questionCount: questions.length,
+                    questionCount: unlocked.length,
                     lastResult: _lastResult,
                     triedIndices: _triedThisQuestion,
                     correctIndex: _correctIndex,
                     submitting: _submitting || _awardingMedal,
                     onSelect: (i) => _submit(i, question.sortOrder),
-                    onNext: () => _next(questions.length),
+                    onNext: () => _next(unlocked.length, lockedCount),
                   );
                 },
               );
@@ -251,15 +267,18 @@ class _QuestionView extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           SelectableText(
-            question.prompt,
+            // Never null here: this view only ever renders an unlocked
+            // question (see PracticeTestPage, which filters to those
+            // before indexing) — a locked one has no prompt to show.
+            question.prompt!,
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 20),
-          for (var i = 0; i < question.optionTexts.length; i++)
+          for (var i = 0; i < question.optionTexts!.length; i++)
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: _OptionTile(
-                text: question.optionTexts[i],
+                text: question.optionTexts![i],
                 tried: triedIndices.contains(i),
                 isCorrectAnswer: correctIndex == i,
                 enabled: !submitting && !answeredCorrectly,
@@ -422,6 +441,7 @@ class _CompletionView extends StatelessWidget {
     required this.medal,
     required this.firstTryCorrectCount,
     required this.questionCount,
+    required this.lockedCount,
     required this.subtopicTitle,
     required this.onFinished,
   });
@@ -429,6 +449,11 @@ class _CompletionView extends StatelessWidget {
   final String medal;
   final int firstTryCorrectCount;
   final int questionCount;
+
+  /// Hard/Challenge/Advanced questions on this subtopic that weren't part
+  /// of this pass because the student isn't on Pro. Zero for a Pro student,
+  /// and for any subtopic with no gated tier at all.
+  final int lockedCount;
   final String subtopicTitle;
   final VoidCallback onFinished;
 
@@ -463,10 +488,62 @@ class _CompletionView extends StatelessWidget {
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium,
             ),
+            if (lockedCount > 0) ...[
+              const SizedBox(height: 16),
+              _ProUpsellCard(lockedCount: lockedCount),
+            ],
             const SizedBox(height: 24),
             FilledButton(onPressed: onFinished, child: const Text('Continue')),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Shown on the completion screen once a free student has answered every
+/// question available to them — names what's behind the paywall (rather
+/// than a vague "upgrade for more") and how to actually get it, since
+/// there's no in-app purchase flow yet: a parent pays by e-Transfer and an
+/// admin flips the student's account to Pro by hand.
+class _ProUpsellCard extends StatelessWidget {
+  const _ProUpsellCard({required this.lockedCount});
+
+  final int lockedCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: scheme.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: scheme.primary.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.lock_outline, size: 18, color: scheme.primary),
+              const SizedBox(width: 8),
+              Text(
+                '$lockedCount more question${lockedCount == 1 ? '' : 's'} with Pro',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: scheme.primary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Challenge and Advanced questions are a Pro feature. Ask a '
+            'parent to contact us to upgrade your account.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
       ),
     );
   }

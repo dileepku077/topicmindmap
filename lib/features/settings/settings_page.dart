@@ -28,6 +28,8 @@ class SettingsPage extends ConsumerWidget {
         children: [
           if (user != null) ...[
             Text(user.email ?? 'Signed in', style: Theme.of(context).textTheme.bodyMedium),
+            const SizedBox(height: 12),
+            const _PlanBadge(),
             const SizedBox(height: 24),
           ],
           const _AppearanceSection(),
@@ -82,6 +84,58 @@ class _AppearanceSection extends ConsumerWidget {
           onTap: () => ref.read(themeModeProvider.notifier).set(ThemeMode.dark),
         ),
       ],
+    );
+  }
+}
+
+/// Shows whether the signed-in student is on Free or Pro. Read-only here —
+/// there's no self-serve upgrade yet, so this only ever reflects what an
+/// admin has set on the account (see supabase/schema_subscriptions.sql).
+class _PlanBadge extends ConsumerWidget {
+  const _PlanBadge();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scheme = Theme.of(context).colorScheme;
+    final profileAsync = ref.watch(profileProvider);
+
+    return profileAsync.when(
+      loading: () => const SizedBox(height: 32),
+      error: (error, _) => const SizedBox.shrink(),
+      data: (profile) {
+        final isPro = profile?.isPro ?? false;
+        final color = isPro ? scheme.secondary : scheme.onSurfaceVariant;
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: color.withValues(alpha: 0.4)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                isPro ? Icons.workspace_premium : Icons.person_outline,
+                size: 16,
+                color: color,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                isPro ? 'Pro plan' : 'Free plan',
+                style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 13),
+              ),
+              if (!isPro) ...[
+                const SizedBox(width: 8),
+                Text(
+                  '· Challenge & Advanced questions need Pro',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 }
