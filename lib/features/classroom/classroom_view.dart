@@ -141,8 +141,10 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
             subtopicsByUnit: widget.subtopicsByUnit,
             subtopicStatus: widget.subtopicStatus,
             selectedUnitId: _selectedUnitId,
+            selectedSubtopicId: _selectedSubtopic?.id,
             onSelectHome: _goHome,
             onSelectUnit: _selectUnit,
+            onSelectSubtopic: _selectSubtopic,
           ),
         ),
         VerticalDivider(width: 1, color: scheme.outlineVariant.withValues(alpha: 0.3)),
@@ -320,8 +322,10 @@ class _Sidebar extends StatelessWidget {
     required this.subtopicsByUnit,
     required this.subtopicStatus,
     required this.selectedUnitId,
+    required this.selectedSubtopicId,
     required this.onSelectHome,
     required this.onSelectUnit,
+    required this.onSelectSubtopic,
   });
 
   final Course course;
@@ -329,8 +333,10 @@ class _Sidebar extends StatelessWidget {
   final Map<String, List<Subtopic>> subtopicsByUnit;
   final Map<String, ProgressStatus> subtopicStatus;
   final String? selectedUnitId;
+  final String? selectedSubtopicId;
   final VoidCallback onSelectHome;
   final void Function(String unitId) onSelectUnit;
+  final void Function(Subtopic subtopic) onSelectSubtopic;
 
   @override
   Widget build(BuildContext context) {
@@ -384,13 +390,16 @@ class _Sidebar extends StatelessWidget {
           for (final unit in sortedUnits)
             _UnitNavRow(
               unit: unit,
-              subtopicCount: subtopicsByUnit[unit.id]?.length ?? 0,
+              subtopics: subtopicsByUnit[unit.id] ?? const [],
+              subtopicStatus: subtopicStatus,
               status: aggregateUnitStatus(
                 (subtopicsByUnit[unit.id] ?? const []).map((s) => s.id),
                 subtopicStatus,
               ),
-              selected: unit.id == selectedUnitId,
+              expanded: unit.id == selectedUnitId,
+              selectedSubtopicId: selectedSubtopicId,
               onTap: () => onSelectUnit(unit.id),
+              onTapSubtopic: onSelectSubtopic,
             ),
         ],
       ),
@@ -448,17 +457,136 @@ class _NavRow extends StatelessWidget {
   }
 }
 
+/// A unit row that expands in place to list its subtopics directly in the
+/// sidebar when selected — [expanded] is driven by the parent's own
+/// selected-unit state (see [ClassroomView._selectUnit] /
+/// [ClassroomView._selectSubtopic]), so picking a different unit
+/// automatically collapses whichever one was open before: only one unit's
+/// subtopic list is ever expanded at a time, accordion-style.
 class _UnitNavRow extends StatelessWidget {
   const _UnitNavRow({
     required this.unit,
-    required this.subtopicCount,
+    required this.subtopics,
+    required this.subtopicStatus,
+    required this.status,
+    required this.expanded,
+    required this.selectedSubtopicId,
+    required this.onTap,
+    required this.onTapSubtopic,
+  });
+
+  final Unit unit;
+  final List<Subtopic> subtopics;
+  final Map<String, ProgressStatus> subtopicStatus;
+  final ProgressStatus status;
+  final bool expanded;
+  final String? selectedSubtopicId;
+  final VoidCallback onTap;
+  final void Function(Subtopic subtopic) onTapSubtopic;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final subtopicCount = subtopics.length;
+    final sortedSubtopics = [...subtopics]
+      ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Material(
+            color: expanded ? scheme.primary.withValues(alpha: 0.1) : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: onTap,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                decoration: BoxDecoration(
+                  border: Border(
+                    left: BorderSide(
+                      color: expanded ? scheme.primary : Colors.transparent,
+                      width: 3,
+                    ),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(status.icon, size: 15, color: status.color),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            unit.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontWeight: expanded ? FontWeight.w700 : FontWeight.w500,
+                              color: expanded ? scheme.primary : scheme.onSurface,
+                            ),
+                          ),
+                          Text(
+                            '$subtopicCount ${subtopicCount == 1 ? 'topic' : 'topics'}',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      expanded ? Icons.expand_more : Icons.chevron_right,
+                      size: 18,
+                      color: expanded ? scheme.primary : scheme.onSurfaceVariant,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOut,
+            alignment: Alignment.topCenter,
+            child: !expanded
+                ? const SizedBox(width: double.infinity)
+                : Padding(
+                    padding: const EdgeInsets.only(left: 27, top: 2, bottom: 4),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (final subtopic in sortedSubtopics)
+                          _SubtopicNavRow(
+                            subtopic: subtopic,
+                            status: subtopicStatus[subtopic.id] ?? ProgressStatus.notStarted,
+                            selected: subtopic.id == selectedSubtopicId,
+                            onTap: () => onTapSubtopic(subtopic),
+                          ),
+                      ],
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One subtopic, nested under its expanded unit in the sidebar — compact
+/// compared to [_SubtopicCard] (the main pane's version) since it only
+/// needs to support quick jumping straight to that subtopic, not carry a
+/// score badge.
+class _SubtopicNavRow extends StatelessWidget {
+  const _SubtopicNavRow({
+    required this.subtopic,
     required this.status,
     required this.selected,
     required this.onTap,
   });
 
-  final Unit unit;
-  final int subtopicCount;
+  final Subtopic subtopic;
   final ProgressStatus status;
   final bool selected;
   final VoidCallback onTap;
@@ -466,50 +594,31 @@ class _UnitNavRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      child: Material(
-        color: selected ? scheme.primary.withValues(alpha: 0.1) : Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(8),
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-            decoration: BoxDecoration(
-              border: Border(
-                left: BorderSide(
-                  color: selected ? scheme.primary : Colors.transparent,
-                  width: 3,
-                ),
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(status.icon, size: 15, color: status.color),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        unit.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                          color: selected ? scheme.primary : scheme.onSurface,
-                        ),
-                      ),
-                      Text(
-                        '$subtopicCount ${subtopicCount == 1 ? 'topic' : 'topics'}',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
+    return Material(
+      color: selected ? scheme.primary.withValues(alpha: 0.14) : Colors.transparent,
+      borderRadius: BorderRadius.circular(6),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(6),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+          child: Row(
+            children: [
+              Icon(status.icon, size: 13, color: status.color),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  subtopic.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: selected ? scheme.primary : scheme.onSurfaceVariant,
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
