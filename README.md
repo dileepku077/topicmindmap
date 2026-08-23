@@ -1,6 +1,7 @@
-# topicmindmap
+# Astro Math
 
-A new Flutter project.
+A Flutter web app pairing an Ontario math curriculum mindmap with a
+classroom-style unit list, lessons, and practice tests.
 
 ## Getting Started
 

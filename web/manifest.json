@@ -1,11 +1,11 @@
 {
-    "name": "topicmindmap",
-    "short_name": "topicmindmap",
+    "name": "Astro Math",
+    "short_name": "Astro Math",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "An Ontario math curriculum mindmap and practice-test app.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
