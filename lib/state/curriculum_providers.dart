@@ -5,6 +5,7 @@ import '../models/course.dart';
 import '../models/subtopic.dart';
 import '../models/unit.dart';
 import 'auth_providers.dart';
+import 'profile_providers.dart';
 
 final curriculumRepositoryProvider = Provider<CurriculumRepository>((ref) {
   return CurriculumRepository(ref.watch(supabaseClientProvider));
@@ -41,17 +42,40 @@ class _SelectedCourseId extends Notifier<String?> {
 final selectedCourseIdProvider =
     NotifierProvider<_SelectedCourseId, String?>(_SelectedCourseId.new);
 
-/// The course whose mindmap should be shown: the user's explicit pick if
-/// still valid, otherwise Grade 10 (the original course), otherwise
-/// whichever course sorts first.
-final selectedCourseProvider = Provider<Course?>((ref) {
+/// Courses for the student's own grade only — see the Grade dropdown in
+/// Profile & Preferences (Profile.grade). A Grade 10 student has no reason
+/// to see Grade 9/11/12 courses in the course picker. Falls back to every
+/// course when no grade preference is set yet (a brand-new student, or
+/// browsing as a guest), so there's still something sensible to show
+/// before that choice is made — and if a student's chosen grade somehow
+/// has no course yet, that's also better shown as "everything" than as an
+/// empty picker.
+final visibleCoursesProvider = Provider<List<Course>>((ref) {
   final courses = ref.watch(coursesProvider).value ?? const [];
+  final grade = ref.watch(profileProvider).value?.grade;
+  if (grade == null) return courses;
+  final filtered = courses.where((c) => c.grade == grade).toList();
+  return filtered.isEmpty ? courses : filtered;
+});
+
+/// The course whose mindmap should be shown: the user's explicit pick if
+/// still visible, otherwise their own grade's course, otherwise Grade 10
+/// (the original course), otherwise whichever course sorts first.
+final selectedCourseProvider = Provider<Course?>((ref) {
+  final courses = ref.watch(visibleCoursesProvider);
   if (courses.isEmpty) return null;
 
   final selectedId = ref.watch(selectedCourseIdProvider);
   if (selectedId != null) {
     for (final course in courses) {
       if (course.id == selectedId) return course;
+    }
+  }
+
+  final grade = ref.watch(profileProvider).value?.grade;
+  if (grade != null) {
+    for (final course in courses) {
+      if (course.grade == grade) return course;
     }
   }
 

@@ -6,12 +6,15 @@ import '../../models/practice_question.dart';
 import '../../state/auth_providers.dart';
 import '../../state/practice_test_providers.dart';
 
-/// One question at a time, four tappable options, immediate per-option
-/// feedback — the core loop this app's practice tests are built around. A
-/// wrong tap names the specific mistake it represents (never the right
-/// answer) and lets the student try again; the question only advances once
-/// they get it right. Medals are awarded server-side once every question
-/// in the subtopic has been answered correctly at least once this pass.
+/// A subtopic opens on a tier picker (Easy/Medium/Challenge/Advanced, or
+/// Easy/Medium/Hard — whatever this subtopic actually has), with a lock
+/// icon on any tier a free student can't reach. Picking an unlocked tier
+/// starts its quiz: one question at a time, four tappable options,
+/// immediate per-option feedback. A wrong tap names the specific mistake
+/// it represents (never the right answer) and lets the student try again;
+/// the question only advances once they get it right. Medals are awarded
+/// server-side and reflect every reachable question across every tier of
+/// the subtopic, not just the tier just finished.
 class PracticeTestPage extends ConsumerStatefulWidget {
   const PracticeTestPage({
     super.key,
@@ -44,6 +47,11 @@ class PracticeTestPage extends ConsumerStatefulWidget {
 }
 
 class _PracticeTestPageState extends ConsumerState<PracticeTestPage> {
+  /// Null while the student is choosing a difficulty on the tier picker;
+  /// set to 'Easy' / 'Medium' / 'Challenge' / 'Hard' / 'Advanced' once
+  /// they've picked one, which is what actually starts the quiz.
+  String? _selectedTier;
+
   int _index = 0;
   AnswerResult? _lastResult;
   final _triedThisQuestion = <int>{};
@@ -60,18 +68,31 @@ class _PracticeTestPageState extends ConsumerState<PracticeTestPage> {
   bool _awardingMedal = false;
   int _questionCount = 0;
 
-  /// How many Hard/Challenge/Advanced questions this subtopic has that
-  /// weren't included in this pass, because the signed-in student isn't on
-  /// Pro. Set once the pass finishes, so the completion screen can offer
-  /// the upgrade at exactly the moment a free student has run out of
-  /// questions to practice.
-  int _lockedCount = 0;
-
   late final PracticeSubtopicRef _ref = PracticeSubtopicRef(
     courseCode: widget.courseCode,
     unitCode: widget.unitCode,
     subtopicCode: widget.subtopicCode,
   );
+
+  void _selectTier(String tier) {
+    setState(() {
+      _selectedTier = tier;
+      _index = 0;
+      _lastResult = null;
+      _triedThisQuestion.clear();
+      _correctIndex = null;
+      _firstTryCorrectCount = 0;
+      _completed = false;
+      _medal = null;
+    });
+  }
+
+  void _backToTiers() {
+    setState(() {
+      _selectedTier = null;
+      _completed = false;
+    });
+  }
 
   Future<void> _submit(int chosenIndex, int sortOrder) async {
     if (_submitting) return;
@@ -102,7 +123,7 @@ class _PracticeTestPageState extends ConsumerState<PracticeTestPage> {
     }
   }
 
-  Future<void> _next(int questionCount, int lockedCount) async {
+  Future<void> _next(int questionCount) async {
     final wasFirstTry = _lastResult!.wasFirst;
 
     if (_index + 1 < questionCount) {
@@ -120,7 +141,6 @@ class _PracticeTestPageState extends ConsumerState<PracticeTestPage> {
     setState(() {
       if (wasFirstTry) _firstTryCorrectCount += 1;
       _questionCount = questionCount;
-      _lockedCount = lockedCount;
       _awardingMedal = true;
     });
     try {
@@ -157,8 +177,7 @@ class _PracticeTestPageState extends ConsumerState<PracticeTestPage> {
             medal: _medal ?? 'None',
             firstTryCorrectCount: _firstTryCorrectCount,
             questionCount: _questionCount,
-            lockedCount: _lockedCount,
-            subtopicTitle: widget.subtopicTitle,
+            onBackToTiers: _backToTiers,
             onFinished: widget.onFinished ?? () => context.pop(),
           )
         : Consumer(
@@ -171,36 +190,56 @@ class _PracticeTestPageState extends ConsumerState<PracticeTestPage> {
                 error: (error, _) =>
                     Center(child: Text('Failed to load questions: $error')),
                 data: (questions) {
+                  if (_selectedTier == null) {
+                    return _TierPickerView(
+                      questions: questions,
+                      subtopicTitle: widget.subtopicTitle,
+                      onSelectTier: _selectTier,
+                    );
+                  }
+
                   // A free student's Hard/Challenge/Advanced questions come
-                  // back locked (no prompt/options — see PracticeQuestion),
-                  // so the quiz itself only ever runs through what's
-                  // unlocked; lockedCount drives the upsell on the
-                  // completion screen once they're out of free questions.
-                  final unlocked = questions.where((q) => !q.locked).toList();
-                  final lockedCount = questions.length - unlocked.length;
-                  if (unlocked.isEmpty) {
-                    return const Center(
+                  // back locked (no prompt/options — see PracticeQuestion);
+                  // the tier picker already refuses to send them into a
+                  // locked tier, so this is just the selected tier's usable
+                  // questions.
+                  final tierUnlocked = questions
+                      .where((q) => q.difficulty == _selectedTier && !q.locked)
+                      .toList();
+
+                  if (tierUnlocked.isEmpty) {
+                    return Center(
                       child: Padding(
-                        padding: EdgeInsets.all(24),
-                        child: Text(
-                          'No practice questions for this topic yet — '
-                          'check back soon.',
-                          textAlign: TextAlign.center,
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text(
+                              'No questions available in this category.',
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 16),
+                            FilledButton(
+                              onPressed: _backToTiers,
+                              child: const Text('Choose another level'),
+                            ),
+                          ],
                         ),
                       ),
                     );
                   }
-                  final question = unlocked[_index];
+
+                  final question = tierUnlocked[_index];
                   return _QuestionView(
                     question: question,
                     questionNumber: _index + 1,
-                    questionCount: unlocked.length,
+                    questionCount: tierUnlocked.length,
                     lastResult: _lastResult,
                     triedIndices: _triedThisQuestion,
                     correctIndex: _correctIndex,
                     submitting: _submitting || _awardingMedal,
                     onSelect: (i) => _submit(i, question.sortOrder),
-                    onNext: () => _next(unlocked.length, lockedCount),
+                    onNext: () => _next(tierUnlocked.length),
                   );
                 },
               );
@@ -397,27 +436,29 @@ class _OptionTile extends StatelessWidget {
   }
 }
 
+/// Shared by [_DifficultyChip] (in-quiz badge) and [_TierTile] (picker
+/// tile) so a tier reads as the same color in both places.
+Color _tierColor(BuildContext context, String difficulty) => switch (difficulty) {
+  'Easy' => Colors.green,
+  'Medium' => const Color(0xFFD9A404),
+  // Challenge/Advanced are MPM2D's own two tiers above Medium (see
+  // schema_difficulty_tiers.sql); Hard is still MCR3U/MHF4U's single top
+  // tier. Advanced and Hard share a color since neither ever appears
+  // alongside the other in the same subtopic — each is just "the hardest
+  // tier this course has."
+  'Challenge' => const Color(0xFFE8590C),
+  'Hard' || 'Advanced' => Theme.of(context).colorScheme.error,
+  _ => Theme.of(context).colorScheme.outline,
+};
+
 class _DifficultyChip extends StatelessWidget {
   const _DifficultyChip({required this.difficulty});
 
   final String difficulty;
 
-  Color _color(BuildContext context) => switch (difficulty) {
-    'Easy' => Colors.green,
-    'Medium' => const Color(0xFFD9A404),
-    // Challenge/Advanced are MPM2D's own two tiers above Medium (see
-    // schema_difficulty_tiers.sql); Hard is still MCR3U/MHF4U's single top
-    // tier. Advanced and Hard share a color since neither ever appears
-    // alongside the other in the same subtopic — each is just "the hardest
-    // tier this course has."
-    'Challenge' => const Color(0xFFE8590C),
-    'Hard' || 'Advanced' => Theme.of(context).colorScheme.error,
-    _ => Theme.of(context).colorScheme.outline,
-  };
-
   @override
   Widget build(BuildContext context) {
-    final color = _color(context);
+    final color = _tierColor(context, difficulty);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
@@ -441,8 +482,7 @@ class _CompletionView extends StatelessWidget {
     required this.medal,
     required this.firstTryCorrectCount,
     required this.questionCount,
-    required this.lockedCount,
-    required this.subtopicTitle,
+    required this.onBackToTiers,
     required this.onFinished,
   });
 
@@ -450,11 +490,9 @@ class _CompletionView extends StatelessWidget {
   final int firstTryCorrectCount;
   final int questionCount;
 
-  /// Hard/Challenge/Advanced questions on this subtopic that weren't part
-  /// of this pass because the student isn't on Pro. Zero for a Pro student,
-  /// and for any subtopic with no gated tier at all.
-  final int lockedCount;
-  final String subtopicTitle;
+  /// Returns to this subtopic's tier picker so the student can practice
+  /// another difficulty without leaving the subtopic.
+  final VoidCallback onBackToTiers;
   final VoidCallback onFinished;
 
   Color _medalColor(BuildContext context) => switch (medal) {
@@ -483,17 +521,23 @@ class _CompletionView extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'You finished every question on $subtopicTitle — '
               '$firstTryCorrectCount of $questionCount correct on the first try.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium,
             ),
-            if (lockedCount > 0) ...[
-              const SizedBox(height: 16),
-              _ProUpsellCard(lockedCount: lockedCount),
-            ],
             const SizedBox(height: 24),
-            FilledButton(onPressed: onFinished, child: const Text('Continue')),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                OutlinedButton(
+                  onPressed: onBackToTiers,
+                  child: const Text('Choose another level'),
+                ),
+                FilledButton(onPressed: onFinished, child: const Text('Continue')),
+              ],
+            ),
           ],
         ),
       ),
@@ -501,49 +545,175 @@ class _CompletionView extends StatelessWidget {
   }
 }
 
-/// Shown on the completion screen once a free student has answered every
-/// question available to them — names what's behind the paywall (rather
-/// than a vague "upgrade for more") and how to actually get it, since
-/// there's no in-app purchase flow yet: a parent pays by e-Transfer and an
-/// admin flips the student's account to Pro by hand.
-class _ProUpsellCard extends StatelessWidget {
-  const _ProUpsellCard({required this.lockedCount});
+/// Shown up front, before any question loads: one tile per difficulty this
+/// subtopic actually has, in Easy → Medium → Challenge/Hard → Advanced
+/// order. A free student sees every tier that exists (so they know Challenge
+/// and Advanced exist at all) but a locked one shows a lock icon instead of
+/// a chevron and explains the paywall on tap rather than starting a quiz —
+/// this is what replaced the old end-of-quiz upsell card.
+class _TierPickerView extends StatelessWidget {
+  const _TierPickerView({
+    required this.questions,
+    required this.subtopicTitle,
+    required this.onSelectTier,
+  });
 
-  final int lockedCount;
+  final List<PracticeQuestion> questions;
+  final String subtopicTitle;
+  final void Function(String tier) onSelectTier;
+
+  static const _tierOrder = ['Easy', 'Medium', 'Challenge', 'Hard', 'Advanced'];
+
+  @override
+  Widget build(BuildContext context) {
+    final byTier = <String, List<PracticeQuestion>>{};
+    for (final q in questions) {
+      byTier.putIfAbsent(q.difficulty, () => []).add(q);
+    }
+    final tiers = _tierOrder.where(byTier.containsKey).toList();
+
+    if (tiers.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'No practice questions for this topic yet — check back soon.',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        Text('Choose a difficulty', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 4),
+        Text(
+          '$subtopicTitle — pick a level to practice.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 16),
+        for (final tier in tiers) ...[
+          _TierTile(
+            tier: tier,
+            count: byTier[tier]!.length,
+            // Locking is per-tier, not per-question — a free student's
+            // whole gated tier comes back with `locked: true` on every row
+            // (see list_questions() in schema_subscriptions.sql), so the
+            // first question's flag speaks for the tier.
+            locked: byTier[tier]!.first.locked,
+            onTap: () {
+              if (byTier[tier]!.first.locked) {
+                _showProDialog(context, tier);
+              } else {
+                onSelectTier(tier);
+              }
+            },
+          ),
+          const SizedBox(height: 10),
+        ],
+      ],
+    );
+  }
+
+  void _showProDialog(BuildContext context, String tier) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: const Icon(Icons.workspace_premium),
+        title: Text('$tier is a Pro feature'),
+        content: const Text(
+          'Challenge and Advanced questions need a Pro subscription. Ask '
+          'a parent to contact us to upgrade your account.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Got it'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TierTile extends StatelessWidget {
+  const _TierTile({
+    required this.tier,
+    required this.count,
+    required this.locked,
+    required this.onTap,
+  });
+
+  final String tier;
+  final int count;
+  final bool locked;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: scheme.primary.withValues(alpha: 0.08),
+    final tierColor = _tierColor(context, tier);
+    return Material(
+      color: scheme.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: scheme.primary.withValues(alpha: 0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: tierColor.withValues(alpha: 0.35), width: 1.5),
+          ),
+          child: Row(
             children: [
-              Icon(Icons.lock_outline, size: 18, color: scheme.primary),
-              const SizedBox(width: 8),
-              Text(
-                '$lockedCount more question${lockedCount == 1 ? '' : 's'} with Pro',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: scheme.primary,
-                  fontWeight: FontWeight.w700,
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(color: tierColor, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      tier,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$count question${count == 1 ? '' : 's'}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
                 ),
               ),
+              if (locked)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.lock_outline, size: 18, color: scheme.onSurfaceVariant),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Pro',
+                      style: TextStyle(
+                        color: scheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                )
+              else
+                Icon(Icons.chevron_right, color: scheme.onSurfaceVariant),
             ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            'Challenge and Advanced questions are a Pro feature. Ask a '
-            'parent to contact us to upgrade your account.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
+        ),
       ),
     );
   }

@@ -25,4 +25,8 @@ class ProfileRepository {
         .update({'default_view': view.name})
         .eq('id', userId);
   }
+
+  Future<void> updateGrade(String userId, int grade) {
+    return _client.from('profiles').update({'grade': grade}).eq('id', userId);
+  }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../models/progress_status.dart';
 import '../../../models/subtopic.dart';
+import '../../../models/subtopic_mastery.dart';
 import '../../../models/unit.dart';
 
 class RootNodeWidget extends StatelessWidget {
@@ -38,36 +39,42 @@ class RootNodeWidget extends StatelessWidget {
 }
 
 /// A unit ("branch") node — one of the high-level groups shown up front.
-/// Every color on this box — fill, border, badge, connecting lines — comes
-/// from a single traffic-signal palette (grey/orange/yellow/light-green/
-/// green) driven by the aggregated practice-test status of every subtopic
+/// Every color on this box — fill, border, connecting lines — comes from a
+/// single traffic-signal palette (grey/orange/yellow/light-green/green)
+/// driven by the aggregated practice-test status of every subtopic
 /// underneath it. Deliberately not tinted by the unit's own identity color
 /// anymore: one color channel, not two, keeps "how am I doing on this"
 /// unambiguous at a glance.
+///
+/// This used to also carry a sequence-number badge ("this is unit 3") and
+/// a subtopic-count badge — six visual elements crammed into ~11-14px
+/// text. Both were the weakest-value items on the node (a student rarely
+/// needs "3rd of 4" at a glance) and neither is gone, just relocated: both
+/// now live in the hover tooltip text built alongside this widget in
+/// mindmap_page.dart's `_buildNodes`, freeing the width this spends on a
+/// title and score percent a size up from before instead.
 class UnitNodeWidget extends StatelessWidget {
   const UnitNodeWidget({
     super.key,
     required this.unit,
     required this.status,
-    required this.subtopicCount,
     required this.collapsed,
-    required this.sequenceNumber,
     this.scorePercent,
+    this.medal,
   });
 
   final Unit unit;
   final ProgressStatus status;
-  final int subtopicCount;
   final bool collapsed;
-
-  /// This unit's 1-based position in the course's recommended learning
-  /// order (i.e. `unit.orderIndex + 1`) — shown as a small badge so a
-  /// student can tell at a glance which unit to tackle first.
-  final int sequenceNumber;
 
   /// Average best-score percent across this unit's subtopics, or null if
   /// none have been attempted yet (nothing worth showing).
   final double? scorePercent;
+
+  /// The worst medal among this unit's attempted subtopics — see
+  /// `aggregateUnitMedal` in progress_providers.dart — or null if nothing
+  /// in the unit has been attempted yet.
+  final String? medal;
 
   @override
   Widget build(BuildContext context) {
@@ -75,12 +82,12 @@ class UnitNodeWidget extends StatelessWidget {
     return Container(
       // Wide enough that even this course set's single longest unit-title
       // word ("Trigonometric", ~91px at this font) always fits within the
-      // title's share of the row, alongside the sequence/count badges and
-      // score%, without ever needing a mid-word break — see the width
-      // math worked out against real canvas text measurements while
-      // fixing the "Systems" word-split bug this replaced.
-      constraints: const BoxConstraints(maxWidth: 280),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      // title's share of the row, alongside the score%, without ever
+      // needing a mid-word break — see the width math worked out against
+      // real canvas text measurements while fixing the "Systems"
+      // word-split bug this replaced.
+      constraints: const BoxConstraints(maxWidth: 260),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: status.color,
         borderRadius: BorderRadius.circular(14),
@@ -96,96 +103,40 @@ class UnitNodeWidget extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _SequenceBadge(number: sequenceNumber, color: status.color),
-          const SizedBox(width: 6),
-          Icon(status.icon, color: Colors.white, size: 14),
-          const SizedBox(width: 6),
+          Icon(status.icon, color: Colors.white, size: 16),
+          const SizedBox(width: 8),
           Flexible(
             child: Text(
               unit.title,
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w700,
-                fontSize: 13,
+                fontSize: 14.5,
               ),
             ),
           ),
           if (scorePercent != null) ...[
-            const SizedBox(width: 6),
+            const SizedBox(width: 8),
             Text(
               '${scorePercent!.round()}%',
               style: const TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w800,
-                fontSize: 11,
+                fontSize: 12,
               ),
             ),
           ],
+          if (medal != null && medal != 'None') ...[
+            const SizedBox(width: 6),
+            MedalBadge(medal: medal, size: 16),
+          ],
           const SizedBox(width: 6),
-          _CountBadge(count: subtopicCount, color: status.color),
-          const SizedBox(width: 3),
           Icon(
             collapsed ? Icons.chevron_right : Icons.expand_more,
             color: Colors.white,
-            size: 16,
+            size: 18,
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// A small "N of the course/unit" pill, in the same visual language as
-/// [_CountBadge] (white pill, colored digits) but always shown first so a
-/// student scanning left-to-right sees the recommended order before
-/// anything else.
-class _SequenceBadge extends StatelessWidget {
-  const _SequenceBadge({required this.number, required this.color});
-
-  final int number;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        '$number',
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.w800,
-          fontSize: 10,
-        ),
-      ),
-    );
-  }
-}
-
-class _CountBadge extends StatelessWidget {
-  const _CountBadge({required this.count, required this.color});
-
-  final int count;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        '$count',
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.w800,
-          fontSize: 10,
-        ),
       ),
     );
   }
@@ -195,27 +146,30 @@ class _CountBadge extends StatelessWidget {
 /// status icon reflect this subtopic's own best practice-test score, on a
 /// plain (untinted) background — the traffic-signal color is the only
 /// color story here too.
+///
+/// Used to lead with a plain sequence number ("this is the 2nd topic in
+/// its unit") — the same decluttering as [UnitNodeWidget]: that number
+/// wasn't worth the space it took from the title, so it moved to the
+/// hover tooltip built in mindmap_page.dart's `_buildNodes` instead.
 class SubtopicNodeWidget extends StatelessWidget {
   const SubtopicNodeWidget({
     super.key,
     required this.subtopic,
     required this.status,
-    required this.sequenceNumber,
     this.scorePercent,
+    this.medal,
   });
 
   final Subtopic subtopic;
   final ProgressStatus status;
 
-  /// This subtopic's 1-based position within its unit (i.e.
-  /// `subtopic.orderIndex + 1`) — the recommended order to learn the
-  /// unit's subtopics in, shown as a plain small number since these
-  /// nodes are already tight on space.
-  final int sequenceNumber;
-
   /// This subtopic's best practice-test score percent, or null if it
   /// hasn't been attempted yet (nothing worth showing).
   final double? scorePercent;
+
+  /// This subtopic's best-earned medal ('None' · 'Bronze' · 'Silver' ·
+  /// 'Gold'), or null if it hasn't been attempted yet.
+  final String? medal;
 
   @override
   Widget build(BuildContext context) {
@@ -225,8 +179,8 @@ class SubtopicNodeWidget extends StatelessWidget {
       // always fits within the title's share of the row without a
       // mid-word break — see mindmap_node_widget's UnitNodeWidget for
       // the same reasoning.
-      constraints: const BoxConstraints(maxWidth: 210),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      constraints: const BoxConstraints(maxWidth: 200),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(11),
@@ -242,33 +196,28 @@ class SubtopicNodeWidget extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            '$sequenceNumber',
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              color: Theme.of(context).colorScheme.outline,
-            ),
-          ),
-          const SizedBox(width: 4),
-          Icon(status.icon, color: status.color, size: 13),
-          const SizedBox(width: 6),
+          Icon(status.icon, color: status.color, size: 14),
+          const SizedBox(width: 7),
           Flexible(
             child: Text(
               subtopic.title,
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
             ),
           ),
           if (scorePercent != null) ...[
-            const SizedBox(width: 5),
+            const SizedBox(width: 6),
             Text(
               '${scorePercent!.round()}%',
               style: TextStyle(
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: FontWeight.w800,
                 color: status.color,
               ),
             ),
+          ],
+          if (medal != null && medal != 'None') ...[
+            const SizedBox(width: 5),
+            MedalBadge(medal: medal, size: 13),
           ],
         ],
       ),

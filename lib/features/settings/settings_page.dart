@@ -36,8 +36,11 @@ class SettingsPage extends ConsumerWidget {
           const SizedBox(height: 28),
           if (user == null)
             const _SignInPrompt()
-          else
+          else ...[
+            _GradeSection(userId: user.id),
+            const SizedBox(height: 28),
             _DefaultViewSection(userId: user.id),
+          ],
         ],
       ),
     );
@@ -137,6 +140,79 @@ class _PlanBadge extends ConsumerWidget {
         );
       },
     );
+  }
+}
+
+/// Which grade's courses show up in the mindmap/classroom course picker
+/// (see visibleCoursesProvider in curriculum_providers.dart) — a Grade 10
+/// student has no reason to browse Grade 9/11/12 courses. Unset until the
+/// student picks one, at which point every course view falls back to
+/// showing everything rather than guessing wrong.
+class _GradeSection extends ConsumerWidget {
+  const _GradeSection({required this.userId});
+
+  final String userId;
+
+  static const _grades = [9, 10, 11, 12];
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scheme = Theme.of(context).colorScheme;
+    final profileAsync = ref.watch(profileProvider);
+
+    return profileAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, _) => Center(child: Text('Failed to load profile: $error')),
+      data: (profile) {
+        final grade = profile?.grade;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Grade', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Text(
+              'Astro STEM Labs only shows courses for your own grade once '
+              "you've picked one below.",
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: scheme.outlineVariant),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<int>(
+                  value: grade,
+                  isExpanded: true,
+                  hint: const Text('Choose your grade'),
+                  items: [
+                    for (final g in _grades)
+                      DropdownMenuItem(value: g, child: Text('Grade $g')),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) _setGrade(context, ref, value);
+                  },
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _setGrade(BuildContext context, WidgetRef ref, int grade) async {
+    try {
+      await ref.read(profileRepositoryProvider).updateGrade(userId, grade);
+      ref.invalidate(profileProvider);
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Couldn't save your grade: $error")),
+      );
+    }
   }
 }
 

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../models/course.dart';
 import '../../models/progress_status.dart';
@@ -14,6 +13,7 @@ import '../../state/progress_providers.dart';
 import '../lesson/lesson_page.dart';
 import '../practice_test/practice_test_page.dart';
 import '../topic_detail/topic_detail_sheet.dart';
+import 'curriculum_sidebar.dart';
 
 /// The "classroom" alternative to the spatial mindmap: a left-hand list of
 /// units to navigate by, and a main panel that shows a dashboard, a unit's
@@ -34,6 +34,7 @@ class ClassroomView extends ConsumerStatefulWidget {
     required this.subtopicsByUnit,
     required this.subtopicStatus,
     required this.subtopicScorePercent,
+    required this.subtopicMedal,
   });
 
   final Course course;
@@ -41,6 +42,7 @@ class ClassroomView extends ConsumerStatefulWidget {
   final Map<String, List<Subtopic>> subtopicsByUnit;
   final Map<String, ProgressStatus> subtopicStatus;
   final Map<String, double> subtopicScorePercent;
+  final Map<String, String> subtopicMedal;
 
   @override
   ConsumerState<ClassroomView> createState() => _ClassroomViewState();
@@ -135,14 +137,16 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       children: [
         SizedBox(
           width: 260,
-          child: _Sidebar(
+          child: CurriculumSidebar(
             course: widget.course,
             units: widget.units,
             subtopicsByUnit: widget.subtopicsByUnit,
             subtopicStatus: widget.subtopicStatus,
-            selectedUnitId: _selectedUnitId,
+            subtopicMedal: widget.subtopicMedal,
+            isUnitExpanded: (unitId) => unitId == _selectedUnitId,
             selectedSubtopicId: _selectedSubtopic?.id,
             onSelectHome: _goHome,
+            homeSelected: _selectedUnitId == null,
             onSelectUnit: _selectUnit,
             onSelectSubtopic: _selectSubtopic,
           ),
@@ -203,6 +207,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       subtopics: widget.subtopicsByUnit[selectedUnit.id] ?? const [],
       subtopicStatus: widget.subtopicStatus,
       subtopicScorePercent: widget.subtopicScorePercent,
+      subtopicMedal: widget.subtopicMedal,
       onTapSubtopic: _selectSubtopic,
       onBack: _goHome,
     );
@@ -311,317 +316,6 @@ class _SubtopicPane extends StatelessWidget {
           onOpenPractice: onOpenPractice,
         ),
       ],
-    );
-  }
-}
-
-class _Sidebar extends StatelessWidget {
-  const _Sidebar({
-    required this.course,
-    required this.units,
-    required this.subtopicsByUnit,
-    required this.subtopicStatus,
-    required this.selectedUnitId,
-    required this.selectedSubtopicId,
-    required this.onSelectHome,
-    required this.onSelectUnit,
-    required this.onSelectSubtopic,
-  });
-
-  final Course course;
-  final List<Unit> units;
-  final Map<String, List<Subtopic>> subtopicsByUnit;
-  final Map<String, ProgressStatus> subtopicStatus;
-  final String? selectedUnitId;
-  final String? selectedSubtopicId;
-  final VoidCallback onSelectHome;
-  final void Function(String unitId) onSelectUnit;
-  final void Function(Subtopic subtopic) onSelectSubtopic;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final sortedUnits = [...units]
-      ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
-
-    return Container(
-      color: scheme.surfaceContainerLow,
-      child: ListView(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-            child: Text(
-              course.title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            child: Text(
-              course.gradeLabel,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ),
-          _NavRow(
-            icon: Icons.dashboard_outlined,
-            label: 'Home',
-            selected: selectedUnitId == null,
-            onTap: onSelectHome,
-          ),
-          _NavRow(
-            icon: Icons.person_outline,
-            label: 'Profile & Preferences',
-            selected: false,
-            onTap: () => context.push('/settings'),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 20, 16, 6),
-            child: Text(
-              'UNITS',
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: scheme.onSurfaceVariant,
-                letterSpacing: 0.8,
-              ),
-            ),
-          ),
-          for (final unit in sortedUnits)
-            _UnitNavRow(
-              unit: unit,
-              subtopics: subtopicsByUnit[unit.id] ?? const [],
-              subtopicStatus: subtopicStatus,
-              status: aggregateUnitStatus(
-                (subtopicsByUnit[unit.id] ?? const []).map((s) => s.id),
-                subtopicStatus,
-              ),
-              expanded: unit.id == selectedUnitId,
-              selectedSubtopicId: selectedSubtopicId,
-              onTap: () => onSelectUnit(unit.id),
-              onTapSubtopic: onSelectSubtopic,
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _NavRow extends StatelessWidget {
-  const _NavRow({
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      child: Material(
-        color: selected ? scheme.primary.withValues(alpha: 0.12) : Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(8),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-            child: Row(
-              children: [
-                Icon(
-                  icon,
-                  size: 19,
-                  color: selected ? scheme.primary : scheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    color: selected ? scheme.primary : scheme.onSurface,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// A unit row that expands in place to list its subtopics directly in the
-/// sidebar when selected — [expanded] is driven by the parent's own
-/// selected-unit state (see [ClassroomView._selectUnit] /
-/// [ClassroomView._selectSubtopic]), so picking a different unit
-/// automatically collapses whichever one was open before: only one unit's
-/// subtopic list is ever expanded at a time, accordion-style.
-class _UnitNavRow extends StatelessWidget {
-  const _UnitNavRow({
-    required this.unit,
-    required this.subtopics,
-    required this.subtopicStatus,
-    required this.status,
-    required this.expanded,
-    required this.selectedSubtopicId,
-    required this.onTap,
-    required this.onTapSubtopic,
-  });
-
-  final Unit unit;
-  final List<Subtopic> subtopics;
-  final Map<String, ProgressStatus> subtopicStatus;
-  final ProgressStatus status;
-  final bool expanded;
-  final String? selectedSubtopicId;
-  final VoidCallback onTap;
-  final void Function(Subtopic subtopic) onTapSubtopic;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final subtopicCount = subtopics.length;
-    final sortedSubtopics = [...subtopics]
-      ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Material(
-            color: expanded ? scheme.primary.withValues(alpha: 0.1) : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(8),
-              onTap: onTap,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                decoration: BoxDecoration(
-                  border: Border(
-                    left: BorderSide(
-                      color: expanded ? scheme.primary : Colors.transparent,
-                      width: 3,
-                    ),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(status.icon, size: 15, color: status.color),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            unit.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontWeight: expanded ? FontWeight.w700 : FontWeight.w500,
-                              color: expanded ? scheme.primary : scheme.onSurface,
-                            ),
-                          ),
-                          Text(
-                            '$subtopicCount ${subtopicCount == 1 ? 'topic' : 'topics'}',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-                    ),
-                    Icon(
-                      expanded ? Icons.expand_more : Icons.chevron_right,
-                      size: 18,
-                      color: expanded ? scheme.primary : scheme.onSurfaceVariant,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 150),
-            curve: Curves.easeOut,
-            alignment: Alignment.topCenter,
-            child: !expanded
-                ? const SizedBox(width: double.infinity)
-                : Padding(
-                    padding: const EdgeInsets.only(left: 27, top: 2, bottom: 4),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        for (final subtopic in sortedSubtopics)
-                          _SubtopicNavRow(
-                            subtopic: subtopic,
-                            status: subtopicStatus[subtopic.id] ?? ProgressStatus.notStarted,
-                            selected: subtopic.id == selectedSubtopicId,
-                            onTap: () => onTapSubtopic(subtopic),
-                          ),
-                      ],
-                    ),
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// One subtopic, nested under its expanded unit in the sidebar — compact
-/// compared to [_SubtopicCard] (the main pane's version) since it only
-/// needs to support quick jumping straight to that subtopic, not carry a
-/// score badge.
-class _SubtopicNavRow extends StatelessWidget {
-  const _SubtopicNavRow({
-    required this.subtopic,
-    required this.status,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final Subtopic subtopic;
-  final ProgressStatus status;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Material(
-      color: selected ? scheme.primary.withValues(alpha: 0.14) : Colors.transparent,
-      borderRadius: BorderRadius.circular(6),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(6),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-          child: Row(
-            children: [
-              Icon(status.icon, size: 13, color: status.color),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  subtopic.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    color: selected ? scheme.primary : scheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }
@@ -862,6 +556,7 @@ class _UnitPanel extends StatelessWidget {
     required this.subtopics,
     required this.subtopicStatus,
     required this.subtopicScorePercent,
+    required this.subtopicMedal,
     required this.onTapSubtopic,
     required this.onBack,
   });
@@ -870,6 +565,7 @@ class _UnitPanel extends StatelessWidget {
   final List<Subtopic> subtopics;
   final Map<String, ProgressStatus> subtopicStatus;
   final Map<String, double> subtopicScorePercent;
+  final Map<String, String> subtopicMedal;
   final void Function(Subtopic subtopic) onTapSubtopic;
   final VoidCallback onBack;
 
@@ -900,6 +596,7 @@ class _UnitPanel extends StatelessWidget {
               subtopic: subtopic,
               status: subtopicStatus[subtopic.id] ?? ProgressStatus.notStarted,
               scorePercent: subtopicScorePercent[subtopic.id],
+              medal: subtopicMedal[subtopic.id],
               onTap: () => onTapSubtopic(subtopic),
             ),
           ),
@@ -913,12 +610,14 @@ class _SubtopicCard extends StatelessWidget {
     required this.subtopic,
     required this.status,
     required this.scorePercent,
+    required this.medal,
     required this.onTap,
   });
 
   final Subtopic subtopic;
   final ProgressStatus status;
   final double? scorePercent;
+  final String? medal;
   final VoidCallback onTap;
 
   @override
@@ -947,6 +646,10 @@ class _SubtopicCard extends StatelessWidget {
                   '${scorePercent!.round()}%',
                   style: TextStyle(color: status.color, fontWeight: FontWeight.w800),
                 ),
+                const SizedBox(width: 10),
+              ],
+              if (medal != null && medal != 'None') ...[
+                MedalBadge(medal: medal, size: 18),
                 const SizedBox(width: 10),
               ],
               Icon(Icons.chevron_right, color: scheme.outline, size: 20),

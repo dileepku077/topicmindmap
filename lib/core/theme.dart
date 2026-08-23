@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-const _seedColor = Color(0xFF5B8DEF);
-
 /// Explicit (not seed-generated) light palette: the "trustworthy academic"
 /// combination — navy blue, teal, and off-white — used by mainstream
 /// education/productivity products (Google Classroom, Coursera, Edmodo,
@@ -44,12 +42,42 @@ ThemeData buildLightTheme() {
   );
 }
 
+/// The same navy/teal identity as the light theme, tuned for a dark
+/// surface instead of built from scratch — seeded from the same navy hue
+/// ([_lightPrimary]) so [ColorScheme.fromSeed]'s own dark-mode tonal math
+/// (not hand-picked guesses) produces a primary/tertiary/container set that
+/// actually reads as "the same app, dark version" rather than the generic
+/// Material blue this used to fall back to. Only the roles a student
+/// actually sees get hand-tuned on top, same philosophy as the light
+/// theme: a cool near-black background (not pure grey) and a brightened
+/// teal secondary, since teal auto-derived from a navy seed reads as a
+/// muted blue-grey rather than the light theme's actual teal accent.
+const _darkBackground = Color(0xFF10141A);
+const _darkSurfaceContainerHighest = Color(0xFF1E2530);
+const _darkOnSurface = Color(0xFFE7ECF2);
+const _darkOnSurfaceVariant = Color(0xFF9AA6B4);
+const _darkOutline = Color(0xFF3A4451);
+const _darkOutlineVariant = Color(0xFF2A323D);
+const _darkSecondary = Color(0xFF4DBDBE);
+const _darkOnSecondary = Color(0xFF08302F);
+
 ThemeData buildDarkTheme() {
+  final scheme = ColorScheme.fromSeed(
+    seedColor: _lightPrimary,
+    brightness: Brightness.dark,
+  ).copyWith(
+    secondary: _darkSecondary,
+    onSecondary: _darkOnSecondary,
+    surface: _darkBackground,
+    onSurface: _darkOnSurface,
+    onSurfaceVariant: _darkOnSurfaceVariant,
+    surfaceContainerHighest: _darkSurfaceContainerHighest,
+    outline: _darkOutline,
+    outlineVariant: _darkOutlineVariant,
+  );
   return ThemeData(
     useMaterial3: true,
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: _seedColor,
-      brightness: Brightness.dark,
-    ),
+    colorScheme: scheme,
+    scaffoldBackgroundColor: _darkBackground,
   );
 }
