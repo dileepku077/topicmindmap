@@ -15,6 +15,7 @@ import 'package:markdown/markdown.dart' as md;
 String buildLessonHtml(
   String markdownContent, {
   required String frameId,
+  required bool isDark,
   String? videoTitle,
   String? videoUrl,
   String? videoSource,
@@ -36,7 +37,7 @@ String buildLessonHtml(
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
-$_lessonCss
+${_lessonCss(isDark)}
 </style>
 </head>
 <body>
@@ -213,37 +214,49 @@ String _buildVideoCard({required String? title, required String? url, required S
 ''';
 }
 
-const _lessonCss = '''
-  :root {
-    --bg: #f3f5f9;
+/// The lesson iframe used to pick its palette from its own
+/// `prefers-color-scheme` media query — i.e. the OS's raw setting, not the
+/// app's actual Light/Dark/System choice (an in-app Riverpod preference an
+/// iframe's CSS has no way to see). That mismatch is exactly what made
+/// lesson text unreadable after adding the app's own theme toggle: picking
+/// "Light" in-app while the OS was set to dark left this iframe still
+/// rendering its dark palette's near-white body text, transparent over the
+/// app's now-light background behind it. [isDark] is threaded in from
+/// Flutter's already-resolved `Theme.of(context).brightness` instead (see
+/// HtmlLessonView), so the two always agree regardless of the OS setting.
+String _lessonCss(bool isDark) {
+  final vars = isDark
+      ? '''
+    --bg: #10131c;
+    --surface: #171b27;
+    --text: #e7eaf2;
+    --text-2: #9aa2b6;
+    --accent: #85a4ff;
+    --accent-rgb: 133, 164, 255;
+    --accent-2: #ff8fa3;
+    --accent-2-rgb: 255, 143, 163;
+    --code-accent: #4fd6bc;
+    --code-accent-rgb: 79, 214, 188;
+    --border: #2a2f3d;
+    --border-rgb: 42, 47, 61;
+'''
+      : '''
+    --bg: #f5f7f8;
     --surface: #ffffff;
-    --text: #1b2333;
-    --text-2: #5b6478;
-    --accent: #2554c7;
-    --accent-rgb: 37, 84, 199;
+    --text: #1b2430;
+    --text-2: #5c6670;
+    --accent: #1d3557;
+    --accent-rgb: 29, 53, 87;
     --accent-2: #c62f4c;
     --accent-2-rgb: 198, 47, 76;
-    --code-accent: #0e8f7a;
-    --code-accent-rgb: 14, 143, 122;
-    --border: #dde2ec;
-    --border-rgb: 221, 226, 236;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #10131c;
-      --surface: #171b27;
-      --text: #e7eaf2;
-      --text-2: #9aa2b6;
-      --accent: #85a4ff;
-      --accent-rgb: 133, 164, 255;
-      --accent-2: #ff8fa3;
-      --accent-2-rgb: 255, 143, 163;
-      --code-accent: #4fd6bc;
-      --code-accent-rgb: 79, 214, 188;
-      --border: #2a2f3d;
-      --border-rgb: 42, 47, 61;
-    }
-  }
+    --code-accent: #0f8b8d;
+    --code-accent-rgb: 15, 139, 141;
+    --border: #d4d9dd;
+    --border-rgb: 212, 217, 221;
+''';
+  return '''
+  :root {
+$vars  }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: transparent; }
   body {
@@ -496,3 +509,4 @@ const _lessonCss = '''
     background: none;
   }
 ''';
+}

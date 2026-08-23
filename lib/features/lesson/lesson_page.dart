@@ -70,6 +70,7 @@ class LessonBody extends ConsumerWidget {
             key: ValueKey(lesson.id),
             frameId: '${lesson.id}-full',
             markdown: lesson.content,
+            isDark: Theme.of(context).brightness == Brightness.dark,
             videoTitle: lesson.videoTitle,
             videoUrl: lesson.videoUrl,
             videoSource: lesson.videoSource,

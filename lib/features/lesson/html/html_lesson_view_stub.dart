@@ -8,6 +8,7 @@ class HtmlLessonView extends StatelessWidget {
     super.key,
     required this.frameId,
     required this.markdown,
+    required this.isDark,
     this.videoTitle,
     this.videoUrl,
     this.videoSource,
@@ -15,6 +16,7 @@ class HtmlLessonView extends StatelessWidget {
 
   final String frameId;
   final String markdown;
+  final bool isDark;
   final String? videoTitle;
   final String? videoUrl;
   final String? videoSource;

@@ -23,6 +23,7 @@ class HtmlLessonView extends StatefulWidget {
     super.key,
     required this.frameId,
     required this.markdown,
+    required this.isDark,
     this.videoTitle,
     this.videoUrl,
     this.videoSource,
@@ -30,6 +31,11 @@ class HtmlLessonView extends StatefulWidget {
 
   final String frameId;
   final String markdown;
+
+  /// The app's actual resolved theme brightness (from `Theme.of(context)`,
+  /// not the OS's raw setting) — see lesson_html_builder's doc comment on
+  /// why the iframe can't determine this on its own.
+  final bool isDark;
 
   /// Shown as a "go deeper" card at the end of this section — pass these
   /// only on the last HtmlLessonView of a lesson (see lesson_page.dart).
@@ -45,13 +51,14 @@ class _HtmlLessonViewState extends State<HtmlLessonView> {
   double _height = 1;
   StreamSubscription<html.MessageEvent>? _subscription;
   late final String _viewType;
+  late final html.IFrameElement _iframe;
 
   @override
   void initState() {
     super.initState();
     _viewType = 'html-lesson-view-${widget.frameId}-${_viewCounter++}';
 
-    final iframe = html.IFrameElement()
+    _iframe = html.IFrameElement()
       ..style.border = 'none'
       ..style.width = '100%'
       ..style.height = '100%'
@@ -59,13 +66,14 @@ class _HtmlLessonViewState extends State<HtmlLessonView> {
       ..srcdoc = buildLessonHtml(
         widget.markdown,
         frameId: widget.frameId,
+        isDark: widget.isDark,
         videoTitle: widget.videoTitle,
         videoUrl: widget.videoUrl,
         videoSource: widget.videoSource,
       );
 
     try {
-      ui_web.platformViewRegistry.registerViewFactory(_viewType, (int viewId) => iframe);
+      ui_web.platformViewRegistry.registerViewFactory(_viewType, (int viewId) => _iframe);
     } catch (_) {
       // Already registered — can happen across a hot reload; the existing
       // factory still points at a live element, so this is safe to ignore.
@@ -102,6 +110,26 @@ class _HtmlLessonViewState extends State<HtmlLessonView> {
           position.jumpTo(target);
       }
     });
+  }
+
+  @override
+  void didUpdateWidget(HtmlLessonView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // The iframe's document is built once (as srcdoc) and never re-derives
+    // its own colors afterward, so a theme flip while this page is still
+    // mounted (student opens Settings in another tab, or the OS flips
+    // under a "System" pick) needs an explicit re-render, not just a
+    // rebuild of the Flutter side.
+    if (widget.isDark != oldWidget.isDark || widget.markdown != oldWidget.markdown) {
+      _iframe.srcdoc = buildLessonHtml(
+        widget.markdown,
+        frameId: widget.frameId,
+        isDark: widget.isDark,
+        videoTitle: widget.videoTitle,
+        videoUrl: widget.videoUrl,
+        videoSource: widget.videoSource,
+      );
+    }
   }
 
   @override
