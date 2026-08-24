@@ -13,8 +13,9 @@ import '../../state/practice_test_providers.dart';
 /// immediate per-option feedback. A wrong tap names the specific mistake
 /// it represents (never the right answer) and lets the student try again;
 /// the question only advances once they get it right. Medals are awarded
-/// server-side and reflect every reachable question across every tier of
-/// the subtopic, not just the tier just finished.
+/// server-side, scored entirely within the tier just finished (see
+/// schema_tier_medals.sql) — acing "Easy" alone earns its own medal rather
+/// than needing every tier in the subtopic done in one sitting.
 class PracticeTestPage extends ConsumerStatefulWidget {
   const PracticeTestPage({
     super.key,
@@ -150,6 +151,7 @@ class _PracticeTestPageState extends ConsumerState<PracticeTestPage> {
             courseCode: widget.courseCode,
             unitCode: widget.unitCode,
             subtopicCode: widget.subtopicCode,
+            difficulty: _selectedTier!,
           );
       if (!mounted) return;
       setState(() {

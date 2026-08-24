@@ -408,12 +408,25 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
     });
   }
 
-  /// The mindmap has no separate dashboard to go home to the way the
-  /// classroom view does — its "Home" collapses every expanded unit and
-  /// re-fits the view, back to the same top-level map a student sees on
-  /// first opening this course.
+  /// Bumped to force-remount [ClassroomView] (via its key) back to its own
+  /// initial state — its unit/subtopic/lesson/practice selection is
+  /// private to its State, so short of threading a reset callback all the
+  /// way down, a fresh instance is the simplest way to land it back on its
+  /// dashboard from outside. Harmless to also do this while the mindmap is
+  /// showing instead — ClassroomView just isn't mounted then.
+  int _classroomResetNonce = 0;
+
+  /// Resets both surfaces' notion of "home" at once — whichever one is
+  /// actually visible is what the student sees change. The mindmap has no
+  /// separate dashboard to go home to the way the classroom view does, so
+  /// its own "home" is just collapsing every expanded unit and re-fitting
+  /// the view, back to the same top-level map a student sees on first
+  /// opening this course.
   void _goHome() {
-    setState(() => _expandedUnitIds.clear());
+    setState(() {
+      _expandedUnitIds.clear();
+      _classroomResetNonce++;
+    });
     _fitToContent();
   }
 
@@ -495,12 +508,22 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Row(
+        title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Astro STEM Labs'),
-            SizedBox(width: 12),
-            _GradeDropdown(),
+            Tooltip(
+              message: 'Home',
+              child: InkWell(
+                onTap: _goHome,
+                borderRadius: BorderRadius.circular(6),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                  child: Text('Astro STEM Labs'),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            const _GradeDropdown(),
           ],
         ),
         actions: [
@@ -601,6 +624,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
 
                 if (viewMode == _TopicViewMode.tree) {
                   return ClassroomView(
+                    key: ValueKey('classroom-$_classroomResetNonce'),
                     course: course,
                     units: units,
                     subtopicsByUnit: _subtopicsByUnit,

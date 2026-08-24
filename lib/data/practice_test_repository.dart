@@ -53,13 +53,18 @@ class PracticeTestRepository {
     return AnswerResult.fromMap((rows as List).first as Map<String, dynamic>);
   }
 
-  /// Recomputes and stores the medal for a just-finished pass. Returns
-  /// 'None' if the subtopic isn't actually complete yet (shouldn't happen
-  /// if this is only called after every question has been answered).
+  /// Recomputes and stores the medal for the tier the student just
+  /// finished. Scored entirely within that tier (see schema_tier_medals.sql)
+  /// so acing just "Easy" earns its own medal instead of needing every tier
+  /// in the subtopic done in one sitting. Returns 'None' if the tier isn't
+  /// actually complete yet (shouldn't happen if this is only called after
+  /// every question in it has been answered) or didn't reach the Bronze
+  /// bar.
   Future<String> awardMedal({
     required String courseCode,
     required String unitCode,
     required String subtopicCode,
+    required String difficulty,
   }) async {
     final result = await _client.rpc(
       'award_medal',
@@ -67,6 +72,7 @@ class PracticeTestRepository {
         'p_course_code': courseCode,
         'p_unit_code': unitCode,
         'p_subtopic_code': subtopicCode,
+        'p_difficulty': difficulty,
       },
     );
     return result as String;

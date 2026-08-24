@@ -7,10 +7,10 @@ import '../../state/auth_providers.dart';
 
 /// The gold-to-coral gradient and near-black badge below are lifted
 /// straight from the astrostemlabs.com wordmark (a black square, a
-/// gold/orange rocket, "Trust Science" underneath) — this is the one
-/// screen in the app that's explicitly the company's front door rather
-/// than the math app's own navy/teal system, so it gets the parent
-/// brand's marks instead of blending into the rest of the app.
+/// gold/orange rocket, "Makes STEM learning fun and exciting" underneath)
+/// — this is the one screen in the app that's explicitly the company's
+/// front door rather than the math app's own navy/teal system, so it gets
+/// the parent brand's marks instead of blending into the rest of the app.
 const _brandBadgeColor = Color(0xFF12192B);
 const _brandGradient = LinearGradient(
   colors: [Color(0xFFF4A93B), Color(0xFFE8604C)],
@@ -106,13 +106,12 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'TRUST SCIENCE',
+                      'Makes STEM learning fun and exciting',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: _brandCoral,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
-                        letterSpacing: 2.2,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
                       ),
                     ),
                     const SizedBox(height: 28),

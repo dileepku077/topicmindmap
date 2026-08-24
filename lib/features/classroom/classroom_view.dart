@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/course.dart';
 import '../../models/progress_status.dart';
@@ -117,8 +118,38 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
     });
   }
 
-  void _backFromSubtopic() {
-    setState(() => _selectedSubtopic = null);
+  /// From a lesson/practice/subtopic, back to the unit's own subtopic
+  /// list — what tapping the unit's own breadcrumb crumb does.
+  void _backToUnit() {
+    setState(() {
+      _selectedSubtopic = null;
+      _lessonId = null;
+      _practice = null;
+    });
+  }
+
+  /// The full path from Home down to whatever's currently on screen, one
+  /// [_Crumb] per level — every crumb but the last carries the callback
+  /// that jumps straight back to it, so e.g. tapping "Home" from three
+  /// levels deep is one tap instead of three taps of a single back arrow.
+  /// The last crumb is always the current page and never tappable.
+  List<_Crumb> _buildCrumbs(Unit? selectedUnit) {
+    final crumbs = <_Crumb>[_Crumb('Home', _goHome)];
+    if (selectedUnit != null) {
+      crumbs.add(_Crumb(selectedUnit.title, _backToUnit));
+    }
+    final subtopic = _selectedSubtopic;
+    if (subtopic != null) {
+      crumbs.add(_Crumb(subtopic.title, _backFromLeaf));
+    }
+    if (_practice != null) {
+      crumbs.add(_Crumb('Practice Test', _backFromLeaf));
+    } else if (_lessonId != null) {
+      crumbs.add(_Crumb(_lessonTitle ?? 'Lesson', _backFromLeaf));
+    }
+    final current = crumbs.removeLast();
+    crumbs.add(_Crumb(current.label, null));
+    return crumbs;
   }
 
   @override
@@ -158,11 +189,15 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
   }
 
   Widget _buildMain(Unit? selectedUnit) {
+    // Built once per state change and threaded into whichever pane is
+    // showing — every non-home pane starts with the same trail instead of
+    // each rebuilding its own single-level back header.
+    final breadcrumb = _BreadcrumbTrail(crumbs: _buildCrumbs(selectedUnit));
+
     final practice = _practice;
     if (practice != null) {
       return _LeafPane(
-        title: practice.title,
-        onBack: _backFromLeaf,
+        breadcrumb: breadcrumb,
         child: PracticeTestPage(
           key: ValueKey('practice-${practice.unitCode}-${practice.subtopicCode}'),
           courseCode: widget.course.code,
@@ -177,17 +212,16 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
     final lessonId = _lessonId;
     if (lessonId != null) {
       return _LeafPane(
-        title: _lessonTitle ?? 'Lesson',
-        onBack: _backFromLeaf,
+        breadcrumb: breadcrumb,
         child: LessonBody(key: ValueKey('lesson-$lessonId'), lessonId: lessonId),
       );
     }
     final subtopic = _selectedSubtopic;
     if (subtopic != null) {
       return _SubtopicPane(
+        breadcrumb: breadcrumb,
         subtopic: subtopic,
         courseCode: widget.course.code,
-        onBack: _backFromSubtopic,
         onOpenLesson: _openLesson,
         onOpenPractice: (unitCode) =>
             _openPractice(unitCode, subtopic.code, subtopic.title),
@@ -203,13 +237,13 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       );
     }
     return _UnitPanel(
+      breadcrumb: breadcrumb,
       unit: selectedUnit,
       subtopics: widget.subtopicsByUnit[selectedUnit.id] ?? const [],
       subtopicStatus: widget.subtopicStatus,
       subtopicScorePercent: widget.subtopicScorePercent,
       subtopicMedal: widget.subtopicMedal,
       onTapSubtopic: _selectSubtopic,
-      onBack: _goHome,
     );
   }
 }
@@ -226,47 +260,81 @@ class _PracticeTarget {
   final String title;
 }
 
-/// A back button, optionally with a title next to it — the header every
-/// non-home main-panel state (unit, subtopic, lesson, practice) starts
-/// with, so "back" always lands in a predictable, consistent spot.
-class _PaneHeader extends StatelessWidget {
-  const _PaneHeader({required this.onBack, this.title});
+/// One step in a [_BreadcrumbTrail] — a label and how to jump straight
+/// back to it. `onTap == null` marks the current page: always the last
+/// crumb in the trail, never tappable, and styled as the pane's own big
+/// title rather than another link.
+class _Crumb {
+  const _Crumb(this.label, this.onTap);
 
-  final VoidCallback onBack;
-  final String? title;
+  final String label;
+  final VoidCallback? onTap;
+}
+
+/// The full path every non-home main-panel state (unit, subtopic, lesson,
+/// practice) starts with — Home › Unit › Subtopic › Lesson, say — with
+/// every step but the current one tappable. Replaces a single back arrow:
+/// jumping from a lesson straight to Home is one tap on the first crumb
+/// instead of three taps working back up one level at a time.
+class _BreadcrumbTrail extends StatelessWidget {
+  const _BreadcrumbTrail({required this.crumbs});
+
+  final List<_Crumb> crumbs;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final scheme = Theme.of(context).colorScheme;
+    final current = crumbs.last;
+    final trail = crumbs.sublist(0, crumbs.length - 1);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: onBack,
-          tooltip: 'Back',
-        ),
-        if (title != null) ...[
-          const SizedBox(width: 4),
-          Expanded(
-            child: Text(
-              title!,
-              style: Theme.of(
-                context,
-              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+        if (trail.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                for (var i = 0; i < trail.length; i++) ...[
+                  if (i > 0)
+                    Icon(Icons.chevron_right, size: 15, color: scheme.outline),
+                  InkWell(
+                    onTap: trail[i].onTap,
+                    borderRadius: BorderRadius.circular(4),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                      child: Text(
+                        trail[i].label,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: scheme.primary,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
-        ],
+        Text(
+          current.label,
+          style: Theme.of(
+            context,
+          ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+        ),
       ],
     );
   }
 }
 
 /// A lesson or a practice test, embedded in the main pane with a
-/// consistent back+title header above it instead of its own AppBar.
+/// consistent breadcrumb trail above it instead of its own AppBar.
 class _LeafPane extends StatelessWidget {
-  const _LeafPane({required this.title, required this.onBack, required this.child});
+  const _LeafPane({required this.breadcrumb, required this.child});
 
-  final String title;
-  final VoidCallback onBack;
+  final Widget breadcrumb;
   final Widget child;
 
   @override
@@ -276,7 +344,7 @@ class _LeafPane extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-          child: _PaneHeader(onBack: onBack, title: title),
+          child: breadcrumb,
         ),
         Expanded(child: child),
       ],
@@ -285,20 +353,20 @@ class _LeafPane extends StatelessWidget {
 }
 
 /// The inline equivalent of the mindmap's modal subtopic-detail sheet —
-/// same [SubtopicOverview] content, just in the main pane with a back
-/// button instead of a dismissable sheet.
+/// same [SubtopicOverview] content, just in the main pane with a
+/// breadcrumb trail instead of a dismissable sheet.
 class _SubtopicPane extends StatelessWidget {
   const _SubtopicPane({
+    required this.breadcrumb,
     required this.subtopic,
     required this.courseCode,
-    required this.onBack,
     required this.onOpenLesson,
     required this.onOpenPractice,
   });
 
+  final Widget breadcrumb;
   final Subtopic subtopic;
   final String courseCode;
-  final VoidCallback onBack;
   final void Function(String lessonId, String lessonTitle) onOpenLesson;
   final void Function(String unitCode) onOpenPractice;
 
@@ -307,7 +375,7 @@ class _SubtopicPane extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        _PaneHeader(onBack: onBack),
+        breadcrumb,
         const SizedBox(height: 12),
         SubtopicOverview(
           subtopic: subtopic,
@@ -399,6 +467,8 @@ class _HomePanel extends ConsumerWidget {
           const SizedBox(height: 16),
           if (user != null && units.isNotEmpty)
             _MedalSummaryRow(mastered: mastered, total: units.length),
+          const SizedBox(height: 16),
+          const _CommunityCard(),
         ],
       ),
     );
@@ -549,25 +619,82 @@ class _MedalSummaryRow extends StatelessWidget {
   }
 }
 
+/// A hand-maintained link out to the parent company's own site for STEM
+/// events, competitions, and volunteer/part-time opportunities relevant
+/// to high school students — deliberately just a card someone updates by
+/// visiting astrostemlabs.com's own events page every so often, not a
+/// content pipeline: no CMS, no admin UI, nothing in this app to keep in
+/// sync. Uses the app's own navy/teal system rather than the coral/gold
+/// brand marks reserved for the login page's actual front door — this
+/// card lives deep in the app, not at the door.
+class _CommunityCard extends StatelessWidget {
+  const _CommunityCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.campaign_outlined, color: scheme.secondary, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'From Astro STEM Labs',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'STEM events, competitions, and volunteer or part-time '
+            'opportunities for high school students, from our parent program.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 14),
+          OutlinedButton.icon(
+            onPressed: () => launchUrl(
+              Uri.parse('https://www.astrostemlabs.com/'),
+              webOnlyWindowName: '_blank',
+            ),
+            icon: const Icon(Icons.open_in_new, size: 16),
+            label: const Text('Visit astrostemlabs.com'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// The subtopics of whichever unit is selected in the sidebar.
 class _UnitPanel extends StatelessWidget {
   const _UnitPanel({
+    required this.breadcrumb,
     required this.unit,
     required this.subtopics,
     required this.subtopicStatus,
     required this.subtopicScorePercent,
     required this.subtopicMedal,
     required this.onTapSubtopic,
-    required this.onBack,
   });
 
+  final Widget breadcrumb;
   final Unit unit;
   final List<Subtopic> subtopics;
   final Map<String, ProgressStatus> subtopicStatus;
   final Map<String, double> subtopicScorePercent;
   final Map<String, String> subtopicMedal;
   final void Function(Subtopic subtopic) onTapSubtopic;
-  final VoidCallback onBack;
 
   @override
   Widget build(BuildContext context) {
@@ -577,15 +704,12 @@ class _UnitPanel extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        _PaneHeader(onBack: onBack, title: unit.title),
+        breadcrumb,
         if (unit.description != null) ...[
           const SizedBox(height: 4),
-          Padding(
-            padding: const EdgeInsets.only(left: 48),
-            child: Text(
-              unit.description!,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
+          Text(
+            unit.description!,
+            style: Theme.of(context).textTheme.bodyMedium,
           ),
         ],
         const SizedBox(height: 20),
