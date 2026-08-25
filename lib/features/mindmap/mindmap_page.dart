@@ -506,52 +506,17 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
             ? _TopicViewMode.tree
             : _TopicViewMode.mindmap);
 
-    // Below this width there isn't room for a permanent 260px unit list
-    // next to a usable mindmap canvas (this is what a phone hits) -- the
-    // list moves into a drawer instead, opened from the AppBar's
-    // automatic menu button. The classroom (tree) view handles its own
-    // narrow layout separately, since it has its own sidebar state.
+    // Below this width there isn't room for the mindmap canvas to be
+    // usable at all (this is what a phone hits) -- the classroom (tree)
+    // view is the only one offered, and it handles its own narrow layout
+    // (its unit list becomes a drawer) independently. This overrides the
+    // student's own mindmap/classroom choice only for display purposes;
+    // their actual preference is untouched, so widening the window back
+    // out returns to whichever view they'd picked.
     final isNarrow = MediaQuery.sizeOf(context).width < 720;
+    final effectiveViewMode = isNarrow ? _TopicViewMode.tree : viewMode;
 
     return Scaffold(
-      drawer: viewMode == _TopicViewMode.mindmap && isNarrow
-          ? Drawer(
-              child: SafeArea(
-                child: coursesAsync.maybeWhen(
-                  data: (_) => unitsAsync.maybeWhen(
-                    data: (_) => subtopicsAsync.maybeWhen(
-                      data: (_) {
-                        final course = ref.watch(selectedCourseProvider);
-                        if (course == null) return const SizedBox.shrink();
-                        final units = ref.watch(courseUnitsProvider);
-                        return CurriculumSidebar(
-                          course: course,
-                          units: units,
-                          subtopicsByUnit: _subtopicsByUnit,
-                          subtopicStatus: subtopicStatus,
-                          subtopicMedal: subtopicMedal,
-                          isUnitExpanded: (unitId) => _expandedUnitIds.contains(unitId),
-                          onSelectHome: () {
-                            _goHome();
-                            Navigator.pop(context);
-                          },
-                          homeSelected: _expandedUnitIds.isEmpty,
-                          onSelectUnit: (unitId) => _toggleUnitById(unitId, units),
-                          onSelectSubtopic: (subtopic) {
-                            Navigator.pop(context);
-                            _openSubtopicFromSidebar(subtopic, units, course, subtopicStatus);
-                          },
-                        );
-                      },
-                      orElse: () => const SizedBox.shrink(),
-                    ),
-                    orElse: () => const SizedBox.shrink(),
-                  ),
-                  orElse: () => const SizedBox.shrink(),
-                ),
-              ),
-            )
-          : null,
       appBar: AppBar(
         title: Row(
           mainAxisSize: MainAxisSize.min,
@@ -572,32 +537,37 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
           ],
         ),
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 4),
-            child: SegmentedButton<_TopicViewMode>(
-              segments: const [
-                ButtonSegment(
-                  value: _TopicViewMode.mindmap,
-                  icon: Icon(Icons.hub_outlined, size: 18),
-                  tooltip: 'Mindmap view',
+          // The mindmap canvas isn't usable at phone width, so there's
+          // nothing to toggle to there -- classroom is the only view on
+          // offer, silently, rather than showing a picker that does
+          // nothing visible.
+          if (!isNarrow)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: SegmentedButton<_TopicViewMode>(
+                segments: const [
+                  ButtonSegment(
+                    value: _TopicViewMode.mindmap,
+                    icon: Icon(Icons.hub_outlined, size: 18),
+                    tooltip: 'Mindmap view',
+                  ),
+                  ButtonSegment(
+                    value: _TopicViewMode.tree,
+                    icon: Icon(Icons.account_tree_outlined, size: 18),
+                    tooltip: 'Classroom view',
+                  ),
+                ],
+                selected: {viewMode},
+                showSelectedIcon: false,
+                onSelectionChanged: (selection) =>
+                    setState(() => _viewModeOverride = selection.first),
+                style: const ButtonStyle(
+                  visualDensity: VisualDensity.compact,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                ButtonSegment(
-                  value: _TopicViewMode.tree,
-                  icon: Icon(Icons.account_tree_outlined, size: 18),
-                  tooltip: 'Classroom view',
-                ),
-              ],
-              selected: {viewMode},
-              showSelectedIcon: false,
-              onSelectionChanged: (selection) =>
-                  setState(() => _viewModeOverride = selection.first),
-              style: const ButtonStyle(
-                visualDensity: VisualDensity.compact,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ),
-          ),
-          if (viewMode == _TopicViewMode.mindmap)
+          if (effectiveViewMode == _TopicViewMode.mindmap)
             IconButton(
               tooltip: 'Reset view',
               icon: const Icon(Icons.center_focus_strong),
@@ -667,7 +637,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                 final subtopics = ref.watch(courseSubtopicsProvider);
                 _ensureLayout(course.id, units, subtopics);
 
-                if (viewMode == _TopicViewMode.tree) {
+                if (effectiveViewMode == _TopicViewMode.tree) {
                   return ClassroomView(
                     key: ValueKey('classroom-$_classroomResetNonce'),
                     course: course,
@@ -679,38 +649,40 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                   );
                 }
 
+                // Only reachable at >=720px -- effectiveViewMode forces
+                // tree below that, so the sidebar here never has to
+                // collapse into a drawer the way the classroom view's
+                // own does.
                 return Row(
                   children: [
-                    if (!isNarrow) ...[
-                      SizedBox(
-                        width: 260,
-                        child: CurriculumSidebar(
-                          course: course,
-                          units: units,
-                          subtopicsByUnit: _subtopicsByUnit,
-                          subtopicStatus: subtopicStatus,
-                          subtopicMedal: subtopicMedal,
-                          isUnitExpanded: (unitId) =>
-                              _expandedUnitIds.contains(unitId),
-                          onSelectHome: _goHome,
-                          homeSelected: _expandedUnitIds.isEmpty,
-                          onSelectUnit: (unitId) =>
-                              _toggleUnitById(unitId, units),
-                          onSelectSubtopic: (subtopic) => _openSubtopicFromSidebar(
-                            subtopic,
-                            units,
-                            course,
-                            subtopicStatus,
-                          ),
+                    SizedBox(
+                      width: 260,
+                      child: CurriculumSidebar(
+                        course: course,
+                        units: units,
+                        subtopicsByUnit: _subtopicsByUnit,
+                        subtopicStatus: subtopicStatus,
+                        subtopicMedal: subtopicMedal,
+                        isUnitExpanded: (unitId) =>
+                            _expandedUnitIds.contains(unitId),
+                        onSelectHome: _goHome,
+                        homeSelected: _expandedUnitIds.isEmpty,
+                        onSelectUnit: (unitId) =>
+                            _toggleUnitById(unitId, units),
+                        onSelectSubtopic: (subtopic) => _openSubtopicFromSidebar(
+                          subtopic,
+                          units,
+                          course,
+                          subtopicStatus,
                         ),
                       ),
-                      VerticalDivider(
-                        width: 1,
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.outlineVariant.withValues(alpha: 0.3),
-                      ),
-                    ],
+                    ),
+                    VerticalDivider(
+                      width: 1,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.outlineVariant.withValues(alpha: 0.3),
+                    ),
                     Expanded(
                       child: LayoutBuilder(
                         builder: (context, constraints) {
