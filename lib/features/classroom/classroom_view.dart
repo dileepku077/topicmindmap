@@ -50,6 +50,7 @@ class ClassroomView extends ConsumerStatefulWidget {
 }
 
 class _ClassroomViewState extends ConsumerState<ClassroomView> {
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
   String? _selectedUnitId;
   Subtopic? _selectedSubtopic;
   String? _lessonId;
@@ -152,6 +153,31 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
     return crumbs;
   }
 
+  Widget _buildSidebar({VoidCallback? afterSelect}) {
+    return CurriculumSidebar(
+      course: widget.course,
+      units: widget.units,
+      subtopicsByUnit: widget.subtopicsByUnit,
+      subtopicStatus: widget.subtopicStatus,
+      subtopicMedal: widget.subtopicMedal,
+      isUnitExpanded: (unitId) => unitId == _selectedUnitId,
+      selectedSubtopicId: _selectedSubtopic?.id,
+      onSelectHome: () {
+        _goHome();
+        afterSelect?.call();
+      },
+      homeSelected: _selectedUnitId == null,
+      onSelectUnit: (unitId) {
+        _selectUnit(unitId);
+        afterSelect?.call();
+      },
+      onSelectSubtopic: (subtopic) {
+        _selectSubtopic(subtopic);
+        afterSelect?.call();
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -164,27 +190,61 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       }
     }
 
-    return Row(
-      children: [
-        SizedBox(
-          width: 260,
-          child: CurriculumSidebar(
-            course: widget.course,
-            units: widget.units,
-            subtopicsByUnit: widget.subtopicsByUnit,
-            subtopicStatus: widget.subtopicStatus,
-            subtopicMedal: widget.subtopicMedal,
-            isUnitExpanded: (unitId) => unitId == _selectedUnitId,
-            selectedSubtopicId: _selectedSubtopic?.id,
-            onSelectHome: _goHome,
-            homeSelected: _selectedUnitId == null,
-            onSelectUnit: _selectUnit,
-            onSelectSubtopic: _selectSubtopic,
+    // Below this width there isn't room for a permanent 260px unit list
+    // next to any usable amount of content (this is what a phone hits) --
+    // the list moves into a drawer instead, opened from the menu button in
+    // its own slim local bar. Above it, the list stays pinned on screen as
+    // it always has, same as the mindmap view's own sidebar.
+    final isNarrow = MediaQuery.sizeOf(context).width < 720;
+
+    if (!isNarrow) {
+      return Row(
+        children: [
+          SizedBox(width: 260, child: _buildSidebar()),
+          VerticalDivider(width: 1, color: scheme.outlineVariant.withValues(alpha: 0.3)),
+          Expanded(child: _buildMain(selectedUnit)),
+        ],
+      );
+    }
+
+    return Scaffold(
+      key: _scaffoldKey,
+      backgroundColor: Colors.transparent,
+      drawer: Drawer(child: SafeArea(child: _buildSidebar(afterSelect: () => Navigator.pop(context)))),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Material(
+            color: scheme.surfaceContainerLow,
+            child: SafeArea(
+              bottom: false,
+              child: SizedBox(
+                height: 44,
+                child: Row(
+                  children: [
+                    IconButton(
+                      tooltip: 'Units',
+                      icon: const Icon(Icons.menu),
+                      onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+                    ),
+                    Expanded(
+                      child: Text(
+                        widget.course.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                  ],
+                ),
+              ),
+            ),
           ),
-        ),
-        VerticalDivider(width: 1, color: scheme.outlineVariant.withValues(alpha: 0.3)),
-        Expanded(child: _buildMain(selectedUnit)),
-      ],
+          Divider(height: 1, color: scheme.outlineVariant.withValues(alpha: 0.3)),
+          Expanded(child: _buildMain(selectedUnit)),
+        ],
+      ),
     );
   }
 

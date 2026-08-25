@@ -506,7 +506,52 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
             ? _TopicViewMode.tree
             : _TopicViewMode.mindmap);
 
+    // Below this width there isn't room for a permanent 260px unit list
+    // next to a usable mindmap canvas (this is what a phone hits) -- the
+    // list moves into a drawer instead, opened from the AppBar's
+    // automatic menu button. The classroom (tree) view handles its own
+    // narrow layout separately, since it has its own sidebar state.
+    final isNarrow = MediaQuery.sizeOf(context).width < 720;
+
     return Scaffold(
+      drawer: viewMode == _TopicViewMode.mindmap && isNarrow
+          ? Drawer(
+              child: SafeArea(
+                child: coursesAsync.maybeWhen(
+                  data: (_) => unitsAsync.maybeWhen(
+                    data: (_) => subtopicsAsync.maybeWhen(
+                      data: (_) {
+                        final course = ref.watch(selectedCourseProvider);
+                        if (course == null) return const SizedBox.shrink();
+                        final units = ref.watch(courseUnitsProvider);
+                        return CurriculumSidebar(
+                          course: course,
+                          units: units,
+                          subtopicsByUnit: _subtopicsByUnit,
+                          subtopicStatus: subtopicStatus,
+                          subtopicMedal: subtopicMedal,
+                          isUnitExpanded: (unitId) => _expandedUnitIds.contains(unitId),
+                          onSelectHome: () {
+                            _goHome();
+                            Navigator.pop(context);
+                          },
+                          homeSelected: _expandedUnitIds.isEmpty,
+                          onSelectUnit: (unitId) => _toggleUnitById(unitId, units),
+                          onSelectSubtopic: (subtopic) {
+                            Navigator.pop(context);
+                            _openSubtopicFromSidebar(subtopic, units, course, subtopicStatus);
+                          },
+                        );
+                      },
+                      orElse: () => const SizedBox.shrink(),
+                    ),
+                    orElse: () => const SizedBox.shrink(),
+                  ),
+                  orElse: () => const SizedBox.shrink(),
+                ),
+              ),
+            )
+          : null,
       appBar: AppBar(
         title: Row(
           mainAxisSize: MainAxisSize.min,
@@ -636,34 +681,36 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
 
                 return Row(
                   children: [
-                    SizedBox(
-                      width: 260,
-                      child: CurriculumSidebar(
-                        course: course,
-                        units: units,
-                        subtopicsByUnit: _subtopicsByUnit,
-                        subtopicStatus: subtopicStatus,
-                        subtopicMedal: subtopicMedal,
-                        isUnitExpanded: (unitId) =>
-                            _expandedUnitIds.contains(unitId),
-                        onSelectHome: _goHome,
-                        homeSelected: _expandedUnitIds.isEmpty,
-                        onSelectUnit: (unitId) =>
-                            _toggleUnitById(unitId, units),
-                        onSelectSubtopic: (subtopic) => _openSubtopicFromSidebar(
-                          subtopic,
-                          units,
-                          course,
-                          subtopicStatus,
+                    if (!isNarrow) ...[
+                      SizedBox(
+                        width: 260,
+                        child: CurriculumSidebar(
+                          course: course,
+                          units: units,
+                          subtopicsByUnit: _subtopicsByUnit,
+                          subtopicStatus: subtopicStatus,
+                          subtopicMedal: subtopicMedal,
+                          isUnitExpanded: (unitId) =>
+                              _expandedUnitIds.contains(unitId),
+                          onSelectHome: _goHome,
+                          homeSelected: _expandedUnitIds.isEmpty,
+                          onSelectUnit: (unitId) =>
+                              _toggleUnitById(unitId, units),
+                          onSelectSubtopic: (subtopic) => _openSubtopicFromSidebar(
+                            subtopic,
+                            units,
+                            course,
+                            subtopicStatus,
+                          ),
                         ),
                       ),
-                    ),
-                    VerticalDivider(
-                      width: 1,
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.outlineVariant.withValues(alpha: 0.3),
-                    ),
+                      VerticalDivider(
+                        width: 1,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.outlineVariant.withValues(alpha: 0.3),
+                      ),
+                    ],
                     Expanded(
                       child: LayoutBuilder(
                         builder: (context, constraints) {
