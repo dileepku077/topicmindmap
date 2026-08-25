@@ -1,5 +1,32 @@
 import 'package:flutter/material.dart';
 
+/// A serif face for headline-tier text only (app name, course/unit page
+/// titles, subtopic titles, medal callouts) — see every `headlineSmall`
+/// usage across the app. System-available, so no webfont to load and no
+/// flash-of-unstyled-text risk on web; `fontFamilyFallback` covers
+/// platforms where the first choice isn't installed. Body/title/label
+/// text stays on the platform's own default sans, unchanged — this is a
+/// display accent, not a full typeface swap, so the identity moments read
+/// as considered without making dense UI chrome (buttons, list rows, form
+/// fields) harder to scan.
+const _headlineFontFamily = 'Georgia';
+const _headlineFontFamilyFallback = ['Times New Roman', 'serif'];
+
+TextTheme _withHeadlineSerif(TextTheme base) {
+  TextStyle? serif(TextStyle? style) => style?.copyWith(
+    fontFamily: _headlineFontFamily,
+    fontFamilyFallback: _headlineFontFamilyFallback,
+  );
+  return base.copyWith(
+    displayLarge: serif(base.displayLarge),
+    displayMedium: serif(base.displayMedium),
+    displaySmall: serif(base.displaySmall),
+    headlineLarge: serif(base.headlineLarge),
+    headlineMedium: serif(base.headlineMedium),
+    headlineSmall: serif(base.headlineSmall),
+  );
+}
+
 /// Explicit (not seed-generated) light palette: the "trustworthy academic"
 /// combination — navy blue, teal, and off-white — used by mainstream
 /// education/productivity products (Google Classroom, Coursera, Edmodo,
@@ -35,10 +62,22 @@ ThemeData buildLightTheme() {
     outline: _lightOutline,
     outlineVariant: _lightOutlineVariant,
   );
-  return ThemeData(
+  final base = ThemeData(
     useMaterial3: true,
     colorScheme: scheme,
     scaffoldBackgroundColor: _lightBackground,
+  );
+  final textTheme = _withHeadlineSerif(base.textTheme);
+  return base.copyWith(
+    textTheme: textTheme,
+    // The AppBar's own title (the "Astro STEM Labs" wordmark shown on
+    // every page, not just login) defaults to titleLarge, which stays
+    // sans on purpose -- explicitly point it at the now-serif
+    // headlineSmall instead so the app's most-seen brand moment gets the
+    // same treatment as the login page's.
+    appBarTheme: AppBarTheme(
+      titleTextStyle: textTheme.headlineSmall?.copyWith(color: scheme.onSurface),
+    ),
   );
 }
 
@@ -75,9 +114,16 @@ ThemeData buildDarkTheme() {
     outline: _darkOutline,
     outlineVariant: _darkOutlineVariant,
   );
-  return ThemeData(
+  final base = ThemeData(
     useMaterial3: true,
     colorScheme: scheme,
     scaffoldBackgroundColor: _darkBackground,
+  );
+  final textTheme = _withHeadlineSerif(base.textTheme);
+  return base.copyWith(
+    textTheme: textTheme,
+    appBarTheme: AppBarTheme(
+      titleTextStyle: textTheme.headlineSmall?.copyWith(color: scheme.onSurface),
+    ),
   );
 }
