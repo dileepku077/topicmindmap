@@ -1,42 +1,47 @@
 /// Maps Grade 10 (MPM2D) subtopic codes to the lesson id that covers them
 /// in `assets/data/mpm2d_topics_mindmap.json`.
 ///
-/// Every subtopic in the Grade 10 curriculum has a matching lesson as of
-/// this revision. Keyed by subtopic code only (not course + code) because
-/// none of these codes are reused by another grade's curriculum.
+/// Remapped onto the finer MPM2D subtopic taxonomy introduced alongside the
+/// codeveloper question bank (see supabase/seed.sql / questions_seed.sql).
+/// A few old subtopics collapsed onto the same new subtopic; where that
+/// happened only one of the two lessons could keep a direct link here (a
+/// student can still reach both lessons' material through the practice
+/// questions either way) -- b8, b10, c6, and c7 lost their direct subtopic
+/// link for that reason. The new 'trig-for-angles' subtopic has no lesson
+/// of its own yet.
+///
+/// Keyed by subtopic code only (not course + code) because none of these
+/// codes are reused by another grade's curriculum.
 const grade10LessonIdBySubtopicCode = <String, String>{
   // Linear Systems
   'solving-by-graphing': 'b3',
   'solving-by-substitution': 'b2',
   'solving-by-elimination': 'b1',
-  'number-of-solutions': 'b8',
   'linear-system-applications': 'b9',
 
   // Analytic Geometry
-  'length-of-a-line-segment': 'b4',
-  'midpoint-of-a-line-segment': 'b4',
-  'slope-and-equation-of-a-line': 'b10',
+  'midpoint-and-length-of-a-line-segment': 'b4',
+  'geometric-properties-of-shapes': 'b11',
   'equation-of-a-circle': 'b5',
-  'classifying-shapes': 'b11',
-  'verifying-properties': 'b7',
+  'medians-right-bisectors-and-altitudes': 'b7',
 
-  // Quadratic Relations
-  'investigating-parabolas': 'a1',
-  'transformations-vertex-form': 'a2',
-  'expanding-and-simplifying': 'a3',
-  'factoring-quadratics': 'a4',
-  'solving-by-factoring': 'a5',
+  // Quadratics / Solving Quadratic Equations
+  'properties-of-quadratics': 'a1',
+  'vertex-form': 'a2',
   'completing-the-square': 'a6',
-  'quadratic-formula': 'a7',
-  'graphing-quadratics': 'a9',
-  'quadratic-applications': 'a8',
+  'factored-form-and-zeros': 'a9',
+  'solving-by-factoring': 'a5',
+  'the-quadratic-formula': 'a7',
+  'applications-of-quadratics': 'a8',
+
+  // Factoring
+  'multiplying-binomials': 'a3',
+  'factoring-x-bx-c': 'a4',
 
   // Trigonometry
   'similar-triangles': 'c1',
-  'primary-trig-ratios': 'c2',
-  'solving-right-triangles': 'c3',
-  'elevation-and-depression': 'c6',
+  'the-primary-trig-ratios': 'c2',
+  'trig-for-side-lengths': 'c3',
   'sine-law': 'c4',
   'cosine-law': 'c5',
-  'acute-triangle-applications': 'c7',
 };
