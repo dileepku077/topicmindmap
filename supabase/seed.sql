@@ -60,6 +60,33 @@ on conflict (code) do update
 -- Grade 9 — MTH1W
 -- ===========================================================================
 
+-- Old units that no longer exist under any of the new codes below, plus
+-- old subtopics under units whose code persisted but whose subtopic list
+-- changed -- see the equivalent note above MHF4U.
+delete from public.units
+where course_id = (select id from public.courses where code = 'MTH1W')
+  and code in ('linear-relations', 'geometry-and-measurement', 'data-and-financial-literacy');
+
+delete from public.subtopics
+where unit_id = (
+  select un.id from public.units un
+  join public.courses c on c.id = un.course_id
+  where c.code = 'MTH1W' and un.code = 'number-sense'
+) and code in (
+  'order-of-operations', 'integer-operations', 'exponent-rules',
+  'fractions-and-ratios', 'percent-and-estimation'
+);
+
+delete from public.subtopics
+where unit_id = (
+  select un.id from public.units un
+  join public.courses c on c.id = un.course_id
+  where c.code = 'MTH1W' and un.code = 'algebraic-expressions'
+) and code in (
+  'expanding-expressions', 'evaluating-expressions',
+  'solving-two-step-equations', 'solving-multi-step-equations'
+);
+
 with c as (select id from public.courses where code = 'MTH1W'),
 unit_data (code, title, description, color, order_index) as (
   values
@@ -316,6 +343,40 @@ on conflict (unit_id, code) do update
 -- Grade 10 — MPM2D
 -- ===========================================================================
 
+-- Old unit that no longer exists under any of the new codes below, plus
+-- old subtopics under units whose code persisted but whose subtopic list
+-- changed -- see the equivalent note above MHF4U.
+delete from public.units
+where course_id = (select id from public.courses where code = 'MPM2D')
+  and code = 'quadratic-relations';
+
+delete from public.subtopics
+where unit_id = (
+  select un.id from public.units un
+  join public.courses c on c.id = un.course_id
+  where c.code = 'MPM2D' and un.code = 'linear-systems'
+) and code = 'number-of-solutions';
+
+delete from public.subtopics
+where unit_id = (
+  select un.id from public.units un
+  join public.courses c on c.id = un.course_id
+  where c.code = 'MPM2D' and un.code = 'analytic-geometry'
+) and code in (
+  'length-of-a-line-segment', 'midpoint-of-a-line-segment',
+  'slope-and-equation-of-a-line', 'classifying-shapes', 'verifying-properties'
+);
+
+delete from public.subtopics
+where unit_id = (
+  select un.id from public.units un
+  join public.courses c on c.id = un.course_id
+  where c.code = 'MPM2D' and un.code = 'trigonometry'
+) and code in (
+  'primary-trig-ratios', 'solving-right-triangles',
+  'elevation-and-depression', 'acute-triangle-applications'
+);
+
 with c as (select id from public.courses where code = 'MPM2D'),
 unit_data (code, title, description, color, order_index) as (
   values
@@ -483,6 +544,15 @@ on conflict (unit_id, code) do update
 -- ===========================================================================
 -- Grade 11 — MCR3U
 -- ===========================================================================
+
+-- Old units that no longer exist under any of the new codes below -- see
+-- the equivalent note above MHF4U.
+delete from public.units
+where course_id = (select id from public.courses where code = 'MCR3U')
+  and code in (
+    'functions-fundamentals', 'quadratic-and-exponential-functions',
+    'trigonometric-functions', 'sequences-and-series'
+  );
 
 with c as (select id from public.courses where code = 'MCR3U'),
 unit_data (code, title, description, color, order_index) as (
@@ -687,6 +757,17 @@ on conflict (unit_id, code) do update
 -- ===========================================================================
 -- Grade 12 — MHF4U
 -- ===========================================================================
+
+-- Old units that no longer exist under any of the new codes below --
+-- delete explicitly so re-running this file doesn't leave stale
+-- units/subtopics behind (see the MPM1D note near the top of this file
+-- for why `on conflict` alone can't do this).
+delete from public.units
+where course_id = (select id from public.courses where code = 'MHF4U')
+  and code in (
+    'polynomial-and-rational-functions', 'exponential-and-logarithmic-functions',
+    'trigonometric-functions', 'combining-functions'
+  );
 
 with c as (select id from public.courses where code = 'MHF4U'),
 unit_data (code, title, description, color, order_index) as (
