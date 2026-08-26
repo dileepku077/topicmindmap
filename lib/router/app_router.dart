@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/admin/admin_page.dart';
 import '../features/auth/login_page.dart';
 import '../features/lesson/lesson_page.dart';
 import '../features/mindmap/mindmap_page.dart';
@@ -22,6 +23,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/settings',
         builder: (context, state) => const SettingsPage(),
+      ),
+      GoRoute(
+        path: '/admin',
+        builder: (context, state) => const AdminPage(),
       ),
       GoRoute(
         path: '/lesson/:lessonId',

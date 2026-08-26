@@ -38,6 +38,7 @@ class Profile {
     required this.grade,
     required this.defaultView,
     required this.subscriptionTier,
+    required this.isAdmin,
   });
 
   final String id;
@@ -45,6 +46,11 @@ class Profile {
   final int? grade;
   final DefaultView defaultView;
   final SubscriptionTier subscriptionTier;
+
+  /// Whether this account can reach the admin student-management screen
+  /// (lib/features/admin) — see supabase/schema_admin.sql. Set by hand in
+  /// the database; there's no self-serve way to become an admin.
+  final bool isAdmin;
 
   bool get isPro => subscriptionTier == SubscriptionTier.pro;
 
@@ -57,6 +63,7 @@ class Profile {
       subscriptionTier: SubscriptionTier.fromName(
         map['subscription_tier'] as String?,
       ),
+      isAdmin: map['is_admin'] as bool? ?? false,
     );
   }
 }

@@ -540,7 +540,8 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
 
     // The saved preference only takes effect until the student manually
     // toggles the view themselves this session (_viewModeOverride).
-    final savedDefaultView = ref.watch(profileProvider).value?.defaultView;
+    final profile = ref.watch(profileProvider).value;
+    final savedDefaultView = profile?.defaultView;
     final viewMode =
         _viewModeOverride ??
         (savedDefaultView == DefaultView.classroom
@@ -632,6 +633,8 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
               onSelected: (value) {
                 if (value == 'settings') {
                   context.push('/settings');
+                } else if (value == 'admin') {
+                  context.push('/admin');
                 } else if (value == 'sign_out') {
                   ref.read(supabaseClientProvider).auth.signOut();
                 }
@@ -645,6 +648,8 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                   value: 'settings',
                   child: Text('Profile & Preferences'),
                 ),
+                if (profile?.isAdmin == true)
+                  const PopupMenuItem(value: 'admin', child: Text('Student Admin')),
                 const PopupMenuItem(value: 'sign_out', child: Text('Sign out')),
               ],
             ),
