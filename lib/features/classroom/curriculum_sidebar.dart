@@ -38,6 +38,8 @@ class CurriculumSidebar extends StatelessWidget {
     this.selectedSubtopicId,
     this.onSelectHome,
     this.homeSelected = false,
+    this.collapsed = false,
+    this.onToggleCollapsed,
   });
 
   final Course course;
@@ -67,80 +69,126 @@ class CurriculumSidebar extends StatelessWidget {
   /// ignored) when [onSelectHome] is null.
   final bool homeSelected;
 
+  /// Whether the sidebar is shrunk to an icon-only rail — set by the
+  /// caller, which also owns the width of the box this sits in (see
+  /// mindmap_page.dart / classroom_view.dart). Rows just change how they
+  /// render; the caller decides how much horizontal room they get.
+  final bool collapsed;
+
+  /// Null hides the collapse/expand button entirely — used when this
+  /// sidebar is inside a Drawer (narrow layout), where minimizing it in
+  /// place doesn't make sense.
+  final VoidCallback? onToggleCollapsed;
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final sortedUnits = [...units]
       ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
     final onSelectHome = this.onSelectHome;
+    final onToggleCollapsed = this.onToggleCollapsed;
 
     return Container(
       color: scheme.surfaceContainerLow,
-      child: ListView(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-            child: Text(
-              course.title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            child: Text(
-              course.gradeLabel,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ),
-          if (onSelectHome != null)
-            _NavRow(
-              icon: Icons.dashboard_outlined,
-              label: 'Home',
-              selected: homeSelected,
-              onTap: onSelectHome,
-            ),
-          _NavRow(
-            icon: Icons.person_outline,
-            label: 'Profile & Preferences',
-            selected: false,
-            onTap: () => context.push('/settings'),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 20, 16, 6),
-            child: Text(
-              'UNITS',
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: scheme.onSurfaceVariant,
-                letterSpacing: 0.8,
+          if (onToggleCollapsed != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
+              child: Row(
+                mainAxisAlignment:
+                    collapsed ? MainAxisAlignment.center : MainAxisAlignment.end,
+                children: [
+                  Tooltip(
+                    message: collapsed ? 'Show full sidebar' : 'Minimize sidebar',
+                    child: IconButton(
+                      visualDensity: VisualDensity.compact,
+                      icon: Icon(
+                        collapsed ? Icons.chevron_right : Icons.chevron_left,
+                        size: 20,
+                      ),
+                      onPressed: onToggleCollapsed,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
-          for (final unit in sortedUnits)
-            _UnitNavRow(
-              unit: unit,
-              subtopics: subtopicsByUnit[unit.id] ?? const [],
-              subtopicStatus: subtopicStatus,
-              subtopicMedal: subtopicMedal,
-              status: aggregateUnitStatus(
-                (subtopicsByUnit[unit.id] ?? const []).map((s) => s.id),
-                subtopicStatus,
-              ),
-              medal: aggregateUnitMedal(
-                (subtopicsByUnit[unit.id] ?? const []).map((s) => s.id),
-                subtopicMedal,
-              ),
-              scorePercent: aggregateUnitScorePercent(
-                (subtopicsByUnit[unit.id] ?? const []).map((s) => s.id),
-                subtopicScorePercent,
-              ),
-              expanded: isUnitExpanded(unit.id),
-              selectedSubtopicId: selectedSubtopicId,
-              onTap: () => onSelectUnit(unit.id),
-              onTapSubtopic: onSelectSubtopic,
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              children: [
+                if (!collapsed) ...[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                    child: Text(
+                      course.title,
+                      style: Theme.of(context).textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: Text(
+                      course.gradeLabel,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                ],
+                if (onSelectHome != null)
+                  _NavRow(
+                    icon: Icons.dashboard_outlined,
+                    label: 'Home',
+                    selected: homeSelected,
+                    onTap: onSelectHome,
+                    collapsed: collapsed,
+                  ),
+                _NavRow(
+                  icon: Icons.person_outline,
+                  label: 'Profile & Preferences',
+                  selected: false,
+                  onTap: () => context.push('/settings'),
+                  collapsed: collapsed,
+                ),
+                if (!collapsed)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 6),
+                    child: Text(
+                      'UNITS',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                  )
+                else
+                  const SizedBox(height: 12),
+                for (final unit in sortedUnits)
+                  _UnitNavRow(
+                    unit: unit,
+                    subtopics: subtopicsByUnit[unit.id] ?? const [],
+                    subtopicStatus: subtopicStatus,
+                    subtopicMedal: subtopicMedal,
+                    status: aggregateUnitStatus(
+                      (subtopicsByUnit[unit.id] ?? const []).map((s) => s.id),
+                      subtopicStatus,
+                    ),
+                    medal: aggregateUnitMedal(
+                      (subtopicsByUnit[unit.id] ?? const []).map((s) => s.id),
+                      subtopicMedal,
+                    ),
+                    scorePercent: aggregateUnitScorePercent(
+                      (subtopicsByUnit[unit.id] ?? const []).map((s) => s.id),
+                      subtopicScorePercent,
+                    ),
+                    expanded: isUnitExpanded(unit.id),
+                    selectedSubtopicId: selectedSubtopicId,
+                    onTap: () => onSelectUnit(unit.id),
+                    onTapSubtopic: onSelectSubtopic,
+                    collapsed: collapsed,
+                  ),
+              ],
             ),
+          ),
         ],
       ),
     );
@@ -153,33 +201,30 @@ class _NavRow extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.collapsed = false,
   });
 
   final IconData icon;
   final String label;
   final bool selected;
   final VoidCallback onTap;
+  final bool collapsed;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      child: Material(
-        color: selected ? scheme.primary.withValues(alpha: 0.12) : Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(8),
-          onTap: onTap,
-          child: Padding(
+    final iconColor = selected ? scheme.primary : scheme.onSurfaceVariant;
+
+    final row = collapsed
+        ? Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Center(child: Icon(icon, size: 19, color: iconColor)),
+          )
+        : Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
             child: Row(
               children: [
-                Icon(
-                  icon,
-                  size: 19,
-                  color: selected ? scheme.primary : scheme.onSurfaceVariant,
-                ),
+                Icon(icon, size: 19, color: iconColor),
                 const SizedBox(width: 12),
                 Text(
                   label,
@@ -190,7 +235,17 @@ class _NavRow extends StatelessWidget {
                 ),
               ],
             ),
-          ),
+          );
+
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: collapsed ? 4 : 8, vertical: 2),
+      child: Material(
+        color: selected ? scheme.primary.withValues(alpha: 0.12) : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: onTap,
+          child: collapsed ? Tooltip(message: label, child: row) : row,
         ),
       ),
     );
@@ -214,6 +269,7 @@ class _UnitNavRow extends StatelessWidget {
     required this.selectedSubtopicId,
     required this.onTap,
     required this.onTapSubtopic,
+    this.collapsed = false,
   });
 
   final Unit unit;
@@ -235,6 +291,7 @@ class _UnitNavRow extends StatelessWidget {
   final String? selectedSubtopicId;
   final VoidCallback onTap;
   final void Function(Subtopic subtopic) onTapSubtopic;
+  final bool collapsed;
 
   @override
   Widget build(BuildContext context) {
@@ -242,6 +299,32 @@ class _UnitNavRow extends StatelessWidget {
     final subtopicCount = subtopics.length;
     final sortedSubtopics = [...subtopics]
       ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+
+    if (collapsed) {
+      // No room for the title, progress bar, or an expanded subtopic list
+      // at rail width — just a tappable status icon. Tapping still drives
+      // the caller's normal select/expand logic (it just isn't visible
+      // here), so switching back to full width picks up right where the
+      // rail left off.
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        child: Material(
+          color: expanded ? scheme.primary.withValues(alpha: 0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: onTap,
+            child: Tooltip(
+              message: unit.title,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Center(child: Icon(status.icon, size: 16, color: status.color)),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),

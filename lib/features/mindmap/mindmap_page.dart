@@ -112,11 +112,12 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
   /// deliberate switch never gets silently reverted mid-session.
   _TopicViewMode? _viewModeOverride;
 
-  /// Whether the left-hand curriculum sidebar is hidden, freeing its width
-  /// for the canvas/content next to it. A manual per-session toggle (via
-  /// the AppBar button below), not a saved preference — same treatment as
-  /// _viewModeOverride. Only meaningful at >=720px; below that the sidebar
-  /// is already a drawer and this has no effect.
+  /// Whether the left-hand curriculum sidebar is shrunk to an icon-only
+  /// rail instead of its normal width — toggled by the button inside
+  /// [CurriculumSidebar] itself, not the AppBar. A manual per-session
+  /// choice, not a saved preference — same treatment as _viewModeOverride.
+  /// Only meaningful at >=720px; below that the sidebar is already a
+  /// drawer and this has no effect.
   bool _sidebarCollapsed = false;
 
   /// A lesson or practice test opened from the mindmap canvas, shown in
@@ -605,17 +606,6 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
           ],
         ),
         actions: [
-          // Sidebar collapse only makes sense where the sidebar is a
-          // permanent column rather than a drawer.
-          if (!isNarrow)
-            IconButton(
-              tooltip: _sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar',
-              icon: Icon(
-                _sidebarCollapsed ? Icons.view_sidebar_outlined : Icons.view_sidebar,
-              ),
-              onPressed: () =>
-                  setState(() => _sidebarCollapsed = !_sidebarCollapsed),
-            ),
           // The mindmap canvas isn't usable at phone width, so there's
           // nothing to toggle to there -- classroom is the only view on
           // offer, silently, rather than showing a picker that does
@@ -726,6 +716,8 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                     subtopicScorePercent: subtopicScorePercent,
                     subtopicMedal: subtopicMedal,
                     sidebarCollapsed: _sidebarCollapsed,
+                    onToggleSidebarCollapsed: () =>
+                        setState(() => _sidebarCollapsed = !_sidebarCollapsed),
                   );
                 }
 
@@ -735,37 +727,38 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                 // own does.
                 return Row(
                   children: [
-                    if (!_sidebarCollapsed) ...[
-                      SizedBox(
-                        width: 260,
-                        child: CurriculumSidebar(
-                          course: course,
-                          units: units,
-                          subtopicsByUnit: _subtopicsByUnit,
-                          subtopicStatus: subtopicStatus,
-                          subtopicMedal: subtopicMedal,
-                          subtopicScorePercent: subtopicScorePercent,
-                          isUnitExpanded: (unitId) =>
-                              _expandedUnitIds.contains(unitId),
-                          onSelectHome: _goHome,
-                          homeSelected: _expandedUnitIds.isEmpty,
-                          onSelectUnit: (unitId) =>
-                              _toggleUnitById(unitId, units),
-                          onSelectSubtopic: (subtopic) => _openSubtopicFromSidebar(
-                            subtopic,
-                            units,
-                            course,
-                            subtopicStatus,
-                          ),
+                    SizedBox(
+                      width: _sidebarCollapsed ? 64 : 260,
+                      child: CurriculumSidebar(
+                        course: course,
+                        units: units,
+                        subtopicsByUnit: _subtopicsByUnit,
+                        subtopicStatus: subtopicStatus,
+                        subtopicMedal: subtopicMedal,
+                        subtopicScorePercent: subtopicScorePercent,
+                        isUnitExpanded: (unitId) =>
+                            _expandedUnitIds.contains(unitId),
+                        onSelectHome: _goHome,
+                        homeSelected: _expandedUnitIds.isEmpty,
+                        onSelectUnit: (unitId) =>
+                            _toggleUnitById(unitId, units),
+                        onSelectSubtopic: (subtopic) => _openSubtopicFromSidebar(
+                          subtopic,
+                          units,
+                          course,
+                          subtopicStatus,
                         ),
+                        collapsed: _sidebarCollapsed,
+                        onToggleCollapsed: () =>
+                            setState(() => _sidebarCollapsed = !_sidebarCollapsed),
                       ),
-                      VerticalDivider(
-                        width: 1,
-                        color: Theme.of(
-                          context,
-                        ).colorScheme.outlineVariant.withValues(alpha: 0.3),
-                      ),
-                    ],
+                    ),
+                    VerticalDivider(
+                      width: 1,
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.outlineVariant.withValues(alpha: 0.3),
+                    ),
                     Expanded(
                       child: _embeddedPractice != null
                           ? _MindmapEmbeddedPane(

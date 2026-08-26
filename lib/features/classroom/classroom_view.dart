@@ -38,6 +38,7 @@ class ClassroomView extends ConsumerStatefulWidget {
     required this.subtopicScorePercent,
     required this.subtopicMedal,
     this.sidebarCollapsed = false,
+    this.onToggleSidebarCollapsed,
   });
 
   final Course course;
@@ -46,11 +47,13 @@ class ClassroomView extends ConsumerStatefulWidget {
   final Map<String, ProgressStatus> subtopicStatus;
   final Map<String, double> subtopicScorePercent;
   final Map<String, String> subtopicMedal;
-  /// Mirrors the mindmap view's own sidebar toggle (see mindmap_page.dart)
-  /// so hiding the left-hand unit list is consistent across both views.
-  /// Only takes effect at >=720px; below that the sidebar is already a
-  /// drawer, opened by its own menu button regardless of this flag.
+  /// Mirrors the mindmap view's own sidebar state (see mindmap_page.dart)
+  /// so minimizing the left-hand unit list to an icon rail is consistent
+  /// across both views. Only takes effect at >=720px; below that the
+  /// sidebar is already a drawer, opened by its own menu button regardless
+  /// of this flag.
   final bool sidebarCollapsed;
+  final VoidCallback? onToggleSidebarCollapsed;
 
   @override
   ConsumerState<ClassroomView> createState() => _ClassroomViewState();
@@ -160,7 +163,11 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
     return crumbs;
   }
 
-  Widget _buildSidebar({VoidCallback? afterSelect}) {
+  Widget _buildSidebar({
+    VoidCallback? afterSelect,
+    bool collapsed = false,
+    VoidCallback? onToggleCollapsed,
+  }) {
     return CurriculumSidebar(
       course: widget.course,
       units: widget.units,
@@ -183,6 +190,8 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
         _selectSubtopic(subtopic);
         afterSelect?.call();
       },
+      collapsed: collapsed,
+      onToggleCollapsed: onToggleCollapsed,
     );
   }
 
@@ -208,10 +217,14 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
     if (!isNarrow) {
       return Row(
         children: [
-          if (!widget.sidebarCollapsed) ...[
-            SizedBox(width: 260, child: _buildSidebar()),
-            VerticalDivider(width: 1, color: scheme.outlineVariant.withValues(alpha: 0.3)),
-          ],
+          SizedBox(
+            width: widget.sidebarCollapsed ? 64 : 260,
+            child: _buildSidebar(
+              collapsed: widget.sidebarCollapsed,
+              onToggleCollapsed: widget.onToggleSidebarCollapsed,
+            ),
+          ),
+          VerticalDivider(width: 1, color: scheme.outlineVariant.withValues(alpha: 0.3)),
           Expanded(child: _buildMain(selectedUnit)),
         ],
       );
