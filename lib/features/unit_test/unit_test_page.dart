@@ -22,11 +22,21 @@ class UnitTestPage extends ConsumerStatefulWidget {
     required this.courseCode,
     required this.unitCode,
     required this.unitTitle,
+    this.embedded = false,
   });
 
   final String courseCode;
   final String unitCode;
   final String unitTitle;
+
+  /// True when embedded in the classroom view's main pane (with its own
+  /// breadcrumb trail above it, see classroom_view.dart) instead of shown
+  /// as a full-screen route — same convention PracticeTestPage already
+  /// uses. Embedded mode skips this widget's own Scaffold/AppBar/close
+  /// button entirely; the breadcrumb's own crumbs are the way back, and
+  /// since every answer is saved as it's picked, there's nothing to
+  /// confirm on the way out.
+  final bool embedded;
 
   @override
   ConsumerState<UnitTestPage> createState() => _UnitTestPageState();
@@ -180,6 +190,35 @@ class _UnitTestPageState extends ConsumerState<UnitTestPage> {
     final answered = _answers.length;
     final total = _paper.length;
 
+    final content = Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 680),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
+          child: _body(context),
+        ),
+      ),
+    );
+
+    if (widget.embedded) {
+      return Column(
+        children: [
+          if (_score == null && total > 0)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  '$answered / $total answered',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            ),
+          Expanded(child: content),
+        ],
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -213,17 +252,7 @@ class _UnitTestPageState extends ConsumerState<UnitTestPage> {
             ),
         ],
       ),
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 680),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
-              child: _body(context),
-            ),
-          ),
-        ),
-      ),
+      body: SafeArea(child: content),
     );
   }
 

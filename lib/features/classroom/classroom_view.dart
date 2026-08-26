@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/course.dart';
@@ -15,6 +14,7 @@ import '../../state/progress_providers.dart';
 import '../lesson/lesson_page.dart';
 import '../practice_test/practice_test_page.dart';
 import '../topic_detail/topic_detail_sheet.dart';
+import '../unit_test/unit_test_page.dart';
 import 'curriculum_sidebar.dart';
 
 /// The "classroom" alternative to the spatial mindmap: a left-hand list of
@@ -66,6 +66,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
   String? _lessonId;
   String? _lessonTitle;
   _PracticeTarget? _practice;
+  _UnitTestTarget? _unitTest;
 
   @override
   void didUpdateWidget(covariant ClassroomView oldWidget) {
@@ -83,6 +84,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _selectedSubtopic = null;
       _lessonId = null;
       _practice = null;
+      _unitTest = null;
     });
   }
 
@@ -92,6 +94,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _selectedSubtopic = null;
       _lessonId = null;
       _practice = null;
+      _unitTest = null;
     });
   }
 
@@ -101,6 +104,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _selectedSubtopic = subtopic;
       _lessonId = null;
       _practice = null;
+      _unitTest = null;
     });
   }
 
@@ -109,6 +113,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _lessonId = lessonId;
       _lessonTitle = lessonTitle;
       _practice = null;
+      _unitTest = null;
     });
   }
 
@@ -116,26 +121,39 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
     setState(() {
       _practice = _PracticeTarget(unitCode: unitCode, subtopicCode: subtopicCode, title: title);
       _lessonId = null;
+      _unitTest = null;
     });
   }
 
-  /// From a lesson or practice test, back goes to the subtopic overview
-  /// (or the unit list / home, if this was opened straight from there —
-  /// e.g. the dashboard's resume card, which doesn't select a subtopic).
-  void _backFromLeaf() {
+  void _openUnitTest(String unitCode, String unitTitle) {
     setState(() {
+      _unitTest = _UnitTestTarget(unitCode: unitCode, title: unitTitle);
       _lessonId = null;
       _practice = null;
     });
   }
 
-  /// From a lesson/practice/subtopic, back to the unit's own subtopic
+  /// From a lesson, practice test, or unit test, back goes to the subtopic
+  /// overview (or the unit list / home, if this was opened straight from
+  /// there — e.g. the dashboard's resume card, which doesn't select a
+  /// subtopic). Every answer is already saved server-side as it's picked,
+  /// so leaving a unit test mid-way loses nothing — no confirmation needed.
+  void _backFromLeaf() {
+    setState(() {
+      _lessonId = null;
+      _practice = null;
+      _unitTest = null;
+    });
+  }
+
+  /// From a lesson/practice/test/subtopic, back to the unit's own subtopic
   /// list — what tapping the unit's own breadcrumb crumb does.
   void _backToUnit() {
     setState(() {
       _selectedSubtopic = null;
       _lessonId = null;
       _practice = null;
+      _unitTest = null;
     });
   }
 
@@ -157,6 +175,8 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       crumbs.add(_Crumb('Practice Test', _backFromLeaf));
     } else if (_lessonId != null) {
       crumbs.add(_Crumb(_lessonTitle ?? 'Lesson', _backFromLeaf));
+    } else if (_unitTest != null) {
+      crumbs.add(_Crumb('Test', _backFromLeaf));
     }
     final current = crumbs.removeLast();
     crumbs.add(_Crumb(current.label, null));
@@ -299,6 +319,19 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
         child: LessonBody(key: ValueKey('lesson-$lessonId'), lessonId: lessonId),
       );
     }
+    final unitTest = _unitTest;
+    if (unitTest != null) {
+      return _LeafPane(
+        breadcrumb: breadcrumb,
+        child: UnitTestPage(
+          key: ValueKey('unit-test-${unitTest.unitCode}'),
+          courseCode: widget.course.code,
+          unitCode: unitTest.unitCode,
+          unitTitle: unitTest.title,
+          embedded: true,
+        ),
+      );
+    }
     final subtopic = _selectedSubtopic;
     if (subtopic != null) {
       return _SubtopicPane(
@@ -327,13 +360,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       subtopicScorePercent: widget.subtopicScorePercent,
       subtopicMedal: widget.subtopicMedal,
       onTapSubtopic: _selectSubtopic,
-      onStartUnitTest: () {
-        final uri = Uri(
-          path: '/unit-test/${widget.course.code}/${selectedUnit.code}',
-          queryParameters: {'title': selectedUnit.title},
-        );
-        context.push(uri.toString());
-      },
+      onStartUnitTest: () => _openUnitTest(selectedUnit.code, selectedUnit.title),
     );
   }
 }
@@ -347,6 +374,13 @@ class _PracticeTarget {
 
   final String unitCode;
   final String subtopicCode;
+  final String title;
+}
+
+class _UnitTestTarget {
+  const _UnitTestTarget({required this.unitCode, required this.title});
+
+  final String unitCode;
   final String title;
 }
 
