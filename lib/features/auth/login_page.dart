@@ -162,10 +162,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                           ? 'Already have an account? Sign in'
                           : "Don't have an account? Create one"),
                     ),
-                    TextButton(
-                      onPressed: _isSubmitting ? null : () => context.go('/'),
-                      child: const Text('Continue as guest'),
-                    ),
                   ],
                 ),
               ),
