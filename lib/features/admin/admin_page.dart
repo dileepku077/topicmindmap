@@ -83,27 +83,78 @@ class AdminPage extends ConsumerWidget {
   }
 }
 
-class _StudentList extends ConsumerWidget {
+class _StudentList extends ConsumerStatefulWidget {
   const _StudentList();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_StudentList> createState() => _StudentListState();
+}
+
+class _StudentListState extends ConsumerState<_StudentList> {
+  final _searchController = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final studentsAsync = ref.watch(adminStudentsProvider);
 
-    return studentsAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, _) => Center(child: Text('Failed to load students: $error')),
-      data: (students) {
-        if (students.isEmpty) {
-          return const Center(child: Text('No student accounts yet.'));
-        }
-        return ListView.separated(
-          padding: const EdgeInsets.all(20),
-          itemCount: students.length,
-          separatorBuilder: (_, _) => const SizedBox(height: 10),
-          itemBuilder: (context, index) => _StudentRow(student: students[index]),
-        );
-      },
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+          child: TextField(
+            controller: _searchController,
+            onChanged: (value) => setState(() => _query = value.trim().toLowerCase()),
+            decoration: InputDecoration(
+              hintText: 'Search by email',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _query.isEmpty
+                  ? null
+                  : IconButton(
+                      icon: const Icon(Icons.close),
+                      tooltip: 'Clear search',
+                      onPressed: () => setState(() {
+                        _searchController.clear();
+                        _query = '';
+                      }),
+                    ),
+              isDense: true,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ),
+        Expanded(
+          child: studentsAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (error, _) => Center(child: Text('Failed to load students: $error')),
+            data: (students) {
+              if (students.isEmpty) {
+                return const Center(child: Text('No student accounts yet.'));
+              }
+              final filtered = _query.isEmpty
+                  ? students
+                  : students
+                        .where((s) => s.email.toLowerCase().contains(_query))
+                        .toList();
+              if (filtered.isEmpty) {
+                return Center(child: Text('No student matches "$_query".'));
+              }
+              return ListView.separated(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                itemCount: filtered.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 10),
+                itemBuilder: (context, index) => _StudentRow(student: filtered[index]),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }
