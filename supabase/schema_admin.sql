@@ -193,6 +193,16 @@ grant execute on function public.admin_update_student(uuid, int, text, text) to 
 -- 5. admin_reset_student_password() -- see the file header for why this
 --    writes auth.users directly instead of calling a service-role admin
 --    API.
+--
+--    search_path includes `extensions`: Supabase-managed projects install
+--    pgcrypto's functions there, not into `public`, even though
+--    schema.sql's `create extension if not exists "pgcrypto"` doesn't say
+--    so explicitly -- a plain SQL-editor session's default search_path
+--    already includes it (which is why seed.sql's demo-account creation,
+--    plain top-level SQL, calls crypt()/gen_salt() unqualified just
+--    fine), but a function's own `set search_path` replaces that
+--    default rather than extending it, so this one has to list it too or
+--    every call fails with "function gen_salt(unknown) does not exist".
 -- ---------------------------------------------------------------------------
 
 create or replace function public.admin_reset_student_password(
@@ -202,7 +212,7 @@ create or replace function public.admin_reset_student_password(
 returns void
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 begin
   if not is_admin(auth.uid()) then
