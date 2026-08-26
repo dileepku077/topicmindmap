@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/course.dart';
@@ -305,6 +306,13 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       subtopicScorePercent: widget.subtopicScorePercent,
       subtopicMedal: widget.subtopicMedal,
       onTapSubtopic: _selectSubtopic,
+      onStartUnitTest: () {
+        final uri = Uri(
+          path: '/unit-test/${widget.course.code}/${selectedUnit.code}',
+          queryParameters: {'title': selectedUnit.title},
+        );
+        context.push(uri.toString());
+      },
     );
   }
 }
@@ -747,6 +755,7 @@ class _UnitPanel extends StatelessWidget {
     required this.subtopicScorePercent,
     required this.subtopicMedal,
     required this.onTapSubtopic,
+    required this.onStartUnitTest,
   });
 
   final Widget breadcrumb;
@@ -757,8 +766,15 @@ class _UnitPanel extends StatelessWidget {
   final Map<String, String> subtopicMedal;
   final void Function(Subtopic subtopic) onTapSubtopic;
 
+  /// Opens a graded mock test across every subtopic in this unit — see
+  /// unit_test_page.dart. A different thing from tapping into one
+  /// subtopic's own Practice Test below: no feedback until the whole
+  /// paper is handed in, and it never moves a medal or a mindmap colour.
+  final VoidCallback onStartUnitTest;
+
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final sorted = [...subtopics]
       ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
 
@@ -773,6 +789,45 @@ class _UnitPanel extends StatelessWidget {
             style: Theme.of(context).textTheme.bodyMedium,
           ),
         ],
+        const SizedBox(height: 16),
+        Material(
+          color: scheme.primary.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: onStartUnitTest,
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                children: [
+                  Icon(Icons.fact_check_outlined, color: scheme.primary),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Take a mock test',
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: scheme.primary,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'A graded paper across every topic in this unit — no '
+                          "feedback until you're done.",
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.chevron_right, color: scheme.primary),
+                ],
+              ),
+            ),
+          ),
+        ),
         const SizedBox(height: 20),
         for (final subtopic in sorted)
           Padding(

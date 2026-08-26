@@ -10,6 +10,7 @@ import '../features/lesson/lesson_page.dart';
 import '../features/mindmap/mindmap_page.dart';
 import '../features/practice_test/practice_test_page.dart';
 import '../features/settings/settings_page.dart';
+import '../features/unit_test/unit_test_page.dart';
 import '../state/auth_providers.dart';
 
 /// Course content (the mindmap/classroom home, lessons, practice tests,
@@ -69,6 +70,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           subtopicCode: state.pathParameters['subtopicCode']!,
           subtopicTitle:
               state.uri.queryParameters['title'] ?? 'Practice Test',
+        ),
+      ),
+      // courseCode/unitCode, not the unit's uuid — same natural-key
+      // reasoning as the practice route above. unitTitle rides along as a
+      // query param purely for display.
+      GoRoute(
+        path: '/unit-test/:courseCode/:unitCode',
+        builder: (context, state) => UnitTestPage(
+          courseCode: state.pathParameters['courseCode']!,
+          unitCode: state.pathParameters['unitCode']!,
+          unitTitle: state.uri.queryParameters['title'] ?? 'Unit Test',
         ),
       ),
     ],
