@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/brand_badge.dart';
 import '../../models/practice_question.dart';
 import '../../state/auth_providers.dart';
 import '../../state/practice_test_providers.dart';
@@ -251,7 +252,21 @@ class _PracticeTestPageState extends ConsumerState<PracticeTestPage> {
     if (widget.embedded) return body;
 
     return Scaffold(
-      appBar: AppBar(title: Text('Practice: ${widget.subtopicTitle}')),
+      appBar: AppBar(
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const BrandBadge(size: 28),
+            const SizedBox(width: 10),
+            Flexible(
+              child: Text(
+                'Practice: ${widget.subtopicTitle}',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
       body: body,
     );
   }

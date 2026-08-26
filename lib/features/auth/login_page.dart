@@ -3,19 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../core/brand_badge.dart';
 import '../../state/auth_providers.dart';
-
-/// The gold-to-coral gradient and near-black badge below are lifted
-/// straight from the astrostemlabs.com wordmark (a black square, a
-/// gold/orange rocket, "Makes STEM learning fun and exciting" underneath)
-/// — this is the one screen in the app that's explicitly the company's
-/// front door rather than the math app's own navy/teal system, so it gets
-/// the parent brand's marks instead of blending into the rest of the app.
-const _brandBadgeColor = Color(0xFF12192B);
-const _brandGradient = LinearGradient(
-  colors: [Color(0xFFF4A93B), Color(0xFFE8604C)],
-);
-const _brandCoral = Color(0xFFE8604C);
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
@@ -94,7 +83,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Center(child: _BrandBadge()),
+                    const Center(child: BrandBadge()),
                     const SizedBox(height: 18),
                     Text(
                       'Astro STEM Labs',
@@ -109,7 +98,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       'Makes STEM learning fun and exciting',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: _brandCoral,
+                        color: brandCoral,
                         fontWeight: FontWeight.w600,
                         fontSize: 13,
                       ),
@@ -205,35 +194,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       focusedBorder: OutlineInputBorder(
         borderRadius: radius,
         borderSide: BorderSide(color: scheme.primary, width: 1.5),
-      ),
-    );
-  }
-}
-
-class _BrandBadge extends StatelessWidget {
-  const _BrandBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 76,
-      height: 76,
-      decoration: BoxDecoration(
-        color: _brandBadgeColor,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: _brandCoral.withValues(alpha: 0.35),
-            blurRadius: 22,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Center(
-        child: ShaderMask(
-          shaderCallback: (bounds) => _brandGradient.createShader(bounds),
-          child: const Icon(Icons.rocket_launch, size: 38, color: Colors.white),
-        ),
       ),
     );
   }

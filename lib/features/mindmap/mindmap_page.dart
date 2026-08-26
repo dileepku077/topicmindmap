@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/brand_badge.dart';
 import '../../models/course.dart';
 import '../../models/profile.dart';
 import '../../models/progress_status.dart';
@@ -528,7 +529,14 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                 borderRadius: BorderRadius.circular(6),
                 child: const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                  child: Text('Astro STEM Labs'),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      BrandBadge(size: 28),
+                      SizedBox(width: 8),
+                      Text('Astro STEM Labs'),
+                    ],
+                  ),
                 ),
               ),
             ),

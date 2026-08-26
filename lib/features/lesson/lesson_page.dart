@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/brand_badge.dart';
 import '../../state/lesson_providers.dart';
 import 'html/html_lesson_view.dart';
 
@@ -22,7 +23,19 @@ class LessonPage extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(lesson?.title ?? 'Lesson'),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const BrandBadge(size: 28),
+            const SizedBox(width: 10),
+            Flexible(
+              child: Text(
+                lesson?.title ?? 'Lesson',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
         actions: [
           if (lesson?.estimatedReadMinutes != null)
             Padding(

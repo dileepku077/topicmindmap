@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/brand_badge.dart';
 import '../../models/profile.dart';
 import '../../state/auth_providers.dart';
 import '../../state/profile_providers.dart';
@@ -22,7 +23,16 @@ class SettingsPage extends ConsumerWidget {
     final user = ref.watch(currentUserProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Profile & Preferences')),
+      appBar: AppBar(
+        title: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            BrandBadge(size: 28),
+            SizedBox(width: 10),
+            Text('Profile & Preferences'),
+          ],
+        ),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
