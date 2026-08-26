@@ -37,6 +37,7 @@ class ClassroomView extends ConsumerStatefulWidget {
     required this.subtopicStatus,
     required this.subtopicScorePercent,
     required this.subtopicMedal,
+    this.sidebarCollapsed = false,
   });
 
   final Course course;
@@ -45,6 +46,11 @@ class ClassroomView extends ConsumerStatefulWidget {
   final Map<String, ProgressStatus> subtopicStatus;
   final Map<String, double> subtopicScorePercent;
   final Map<String, String> subtopicMedal;
+  /// Mirrors the mindmap view's own sidebar toggle (see mindmap_page.dart)
+  /// so hiding the left-hand unit list is consistent across both views.
+  /// Only takes effect at >=720px; below that the sidebar is already a
+  /// drawer, opened by its own menu button regardless of this flag.
+  final bool sidebarCollapsed;
 
   @override
   ConsumerState<ClassroomView> createState() => _ClassroomViewState();
@@ -202,8 +208,10 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
     if (!isNarrow) {
       return Row(
         children: [
-          SizedBox(width: 260, child: _buildSidebar()),
-          VerticalDivider(width: 1, color: scheme.outlineVariant.withValues(alpha: 0.3)),
+          if (!widget.sidebarCollapsed) ...[
+            SizedBox(width: 260, child: _buildSidebar()),
+            VerticalDivider(width: 1, color: scheme.outlineVariant.withValues(alpha: 0.3)),
+          ],
           Expanded(child: _buildMain(selectedUnit)),
         ],
       );
