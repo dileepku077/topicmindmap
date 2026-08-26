@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/brand_badge.dart';
 import '../../models/profile.dart';
@@ -21,6 +22,7 @@ class SettingsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
+    final isAdmin = ref.watch(profileProvider).value?.isAdmin ?? false;
 
     return Scaffold(
       appBar: AppBar(
@@ -39,13 +41,14 @@ class SettingsPage extends ConsumerWidget {
           if (user != null) ...[
             Text(user.email ?? 'Signed in', style: Theme.of(context).textTheme.bodyMedium),
             const SizedBox(height: 12),
-            const _PlanBadge(),
-            const SizedBox(height: 24),
+            if (!isAdmin) ...[const _PlanBadge(), const SizedBox(height: 24)],
           ],
           const _AppearanceSection(),
           const SizedBox(height: 28),
           if (user == null)
             const _SignInPrompt()
+          else if (isAdmin)
+            const _ChangePasswordSection()
           else ...[
             _GradeSection(userId: user.id),
             const SizedBox(height: 28),
@@ -53,6 +56,119 @@ class SettingsPage extends ConsumerWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// Self-service password change — an admin account's own, via the normal
+/// Supabase auth.updateUser call (the current session already proves who
+/// they are; no admin RPC needed for changing your *own* password). The
+/// admin_reset_student_password() RPC in schema_admin.sql is for a
+/// *student's* password and deliberately refuses to touch an admin
+/// account — this is that other case.
+class _ChangePasswordSection extends ConsumerStatefulWidget {
+  const _ChangePasswordSection();
+
+  @override
+  ConsumerState<_ChangePasswordSection> createState() => _ChangePasswordSectionState();
+}
+
+class _ChangePasswordSectionState extends ConsumerState<_ChangePasswordSection> {
+  final _passwordController = TextEditingController();
+  final _confirmController = TextEditingController();
+  bool _saving = false;
+  String? _error;
+  bool _saved = false;
+
+  @override
+  void dispose() {
+    _passwordController.dispose();
+    _confirmController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final password = _passwordController.text;
+    if (password.length < 6) {
+      setState(() {
+        _error = 'Minimum 6 characters.';
+        _saved = false;
+      });
+      return;
+    }
+    if (password != _confirmController.text) {
+      setState(() {
+        _error = "Passwords don't match.";
+        _saved = false;
+      });
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+      _saved = false;
+    });
+    try {
+      await ref
+          .read(supabaseClientProvider)
+          .auth
+          .updateUser(UserAttributes(password: password));
+      if (!mounted) return;
+      _passwordController.clear();
+      _confirmController.clear();
+      setState(() {
+        _saving = false;
+        _saved = true;
+      });
+    } catch (error) {
+      setState(() {
+        _saving = false;
+        _error = "Couldn't update password: $error";
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Password', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 4),
+        Text(
+          'Change the password for this admin account.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _passwordController,
+          obscureText: true,
+          decoration: const InputDecoration(labelText: 'New password'),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _confirmController,
+          obscureText: true,
+          decoration: const InputDecoration(labelText: 'Confirm new password'),
+          onSubmitted: (_) => _save(),
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: 10),
+          Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+        ],
+        if (_saved) ...[
+          const SizedBox(height: 10),
+          Text(
+            'Password updated.',
+            style: TextStyle(color: Theme.of(context).colorScheme.primary),
+          ),
+        ],
+        const SizedBox(height: 14),
+        FilledButton(
+          onPressed: _saving ? null : _save,
+          child: Text(_saving ? 'Saving…' : 'Update password'),
+        ),
+      ],
     );
   }
 }
