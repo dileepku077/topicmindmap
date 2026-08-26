@@ -39,12 +39,14 @@ class RootNodeWidget extends StatelessWidget {
 }
 
 /// A unit ("branch") node — one of the high-level groups shown up front.
-/// Every color on this box — fill, border, connecting lines — comes from a
-/// single traffic-signal palette (grey/orange/yellow/light-green/green)
-/// driven by the aggregated practice-test status of every subtopic
-/// underneath it. Deliberately not tinted by the unit's own identity color
-/// anymore: one color channel, not two, keeps "how am I doing on this"
-/// unambiguous at a glance.
+/// The shell (fill, border, shadow) is the same neutral surface on every
+/// node regardless of status — status reads through exactly one accent,
+/// the leading icon, the same split the classroom sidebar's own
+/// `_UnitNavRow` already uses (a small colored icon on an otherwise
+/// neutral row). A fully-populated mindmap layers medal trophies and
+/// difficulty colors on the same canvas already; a solid traffic-signal
+/// fill on every node on top of that read as noise rather than signal, so
+/// this is the one deliberately loud color removed rather than added to.
 ///
 /// This used to also carry a sequence-number badge ("this is unit 3") and
 /// a subtopic-count badge — six visual elements crammed into ~11-14px
@@ -78,7 +80,7 @@ class UnitNodeWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final borderColor = Color.lerp(status.color, Colors.black, 0.25)!;
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       // Wide enough that even this course set's single longest unit-title
       // word ("Trigonometric", ~91px at this font) always fits within the
@@ -89,27 +91,27 @@ class UnitNodeWidget extends StatelessWidget {
       constraints: const BoxConstraints(maxWidth: 260),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: status.color,
+        color: scheme.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: borderColor, width: 2),
+        border: Border.all(color: scheme.outlineVariant, width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: status.color.withValues(alpha: 0.35),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(status.icon, color: Colors.white, size: 16),
+          Icon(status.icon, color: status.color, size: 16),
           const SizedBox(width: 8),
           Flexible(
             child: Text(
               unit.title,
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: scheme.onSurface,
                 fontWeight: FontWeight.w700,
                 fontSize: 14.5,
               ),
@@ -119,8 +121,8 @@ class UnitNodeWidget extends StatelessWidget {
             const SizedBox(width: 8),
             Text(
               '${scorePercent!.round()}%',
-              style: const TextStyle(
-                color: Colors.white,
+              style: TextStyle(
+                color: scheme.onSurfaceVariant,
                 fontWeight: FontWeight.w800,
                 fontSize: 12,
               ),
@@ -133,7 +135,7 @@ class UnitNodeWidget extends StatelessWidget {
           const SizedBox(width: 6),
           Icon(
             collapsed ? Icons.chevron_right : Icons.expand_more,
-            color: Colors.white,
+            color: scheme.onSurfaceVariant,
             size: 18,
           ),
         ],
@@ -142,10 +144,10 @@ class UnitNodeWidget extends StatelessWidget {
   }
 }
 
-/// A subtopic node, revealed once its parent unit is expanded. Border and
-/// status icon reflect this subtopic's own best practice-test score, on a
-/// plain (untinted) background — the traffic-signal color is the only
-/// color story here too.
+/// A subtopic node, revealed once its parent unit is expanded. Same neutral
+/// shell as [UnitNodeWidget] and the same one-accent rule: the leading icon
+/// is the only place status color shows up, border and score text are
+/// neutral like everything else.
 ///
 /// Used to lead with a plain sequence number ("this is the 2nd topic in
 /// its unit") — the same decluttering as [UnitNodeWidget]: that number
@@ -173,6 +175,7 @@ class SubtopicNodeWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       // Wide enough that even the single longest subtopic-title word
       // across every course ("Electromagnetism", ~97px at this font)
@@ -182,9 +185,9 @@ class SubtopicNodeWidget extends StatelessWidget {
       constraints: const BoxConstraints(maxWidth: 200),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: scheme.surface,
         borderRadius: BorderRadius.circular(11),
-        border: Border.all(color: status.color, width: 1.5),
+        border: Border.all(color: scheme.outlineVariant, width: 1.5),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.08),
@@ -201,7 +204,11 @@ class SubtopicNodeWidget extends StatelessWidget {
           Flexible(
             child: Text(
               subtopic.title,
-              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: scheme.onSurface,
+              ),
             ),
           ),
           if (scorePercent != null) ...[
@@ -211,7 +218,7 @@ class SubtopicNodeWidget extends StatelessWidget {
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w800,
-                color: status.color,
+                color: scheme.onSurfaceVariant,
               ),
             ),
           ],
