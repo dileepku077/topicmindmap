@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/brand_badge.dart';
 import '../../models/admin_student.dart';
 import '../../models/profile.dart';
 import '../../state/admin_providers.dart';
+import '../../state/auth_providers.dart';
 import '../../state/profile_providers.dart';
 
 /// Student account management for admins — grade, subscription tier,
@@ -30,6 +32,34 @@ class AdminPage extends ConsumerWidget {
             Text('Student Admin'),
           ],
         ),
+        // The admin's Home *is* this page (see mindmap_page.dart's own
+        // build, which redirects here for any is_admin account before it
+        // ever builds the course AppBar an admin would otherwise use for
+        // this) — so sign-out and preferences have to live here instead.
+        actions: [
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.account_circle),
+            onSelected: (value) {
+              if (value == 'settings') {
+                context.push('/settings');
+              } else if (value == 'sign_out') {
+                ref.read(supabaseClientProvider).auth.signOut();
+              }
+            },
+            itemBuilder: (context) {
+              final email = ref.read(currentUserProvider)?.email;
+              return [
+                PopupMenuItem(enabled: false, child: Text(email ?? 'Signed in')),
+                const PopupMenuItem(
+                  value: 'settings',
+                  child: Text('Profile & Preferences'),
+                ),
+                const PopupMenuItem(value: 'sign_out', child: Text('Sign out')),
+              ];
+            },
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: profileAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),

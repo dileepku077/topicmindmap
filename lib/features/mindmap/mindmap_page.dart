@@ -16,6 +16,7 @@ import '../../state/auth_providers.dart';
 import '../../state/curriculum_providers.dart';
 import '../../state/profile_providers.dart';
 import '../../state/progress_providers.dart';
+import '../admin/admin_page.dart';
 import '../classroom/classroom_view.dart';
 import '../classroom/curriculum_sidebar.dart';
 import '../lesson/lesson_page.dart';
@@ -530,6 +531,18 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
 
   @override
   Widget build(BuildContext context) {
+    // An admin's "Home" is the admin screen, not a course -- they aren't
+    // a student, so the mindmap/classroom picker and every course-related
+    // fetch below would just be noise for that account. Not gated behind
+    // the profile finishing its (async) load: for the rare admin account
+    // that means one extra frame of the ordinary course view before this
+    // swaps in, which is a better tradeoff than adding a loading gate
+    // every student would also pay for on every load.
+    final profile = ref.watch(profileProvider).value;
+    if (profile?.isAdmin == true) {
+      return const AdminPage();
+    }
+
     final coursesAsync = ref.watch(coursesProvider);
     final unitsAsync = ref.watch(unitsProvider);
     final subtopicsAsync = ref.watch(subtopicsProvider);
@@ -540,7 +553,6 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
 
     // The saved preference only takes effect until the student manually
     // toggles the view themselves this session (_viewModeOverride).
-    final profile = ref.watch(profileProvider).value;
     final savedDefaultView = profile?.defaultView;
     final viewMode =
         _viewModeOverride ??
@@ -633,8 +645,6 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
               onSelected: (value) {
                 if (value == 'settings') {
                   context.push('/settings');
-                } else if (value == 'admin') {
-                  context.push('/admin');
                 } else if (value == 'sign_out') {
                   ref.read(supabaseClientProvider).auth.signOut();
                 }
@@ -648,8 +658,6 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                   value: 'settings',
                   child: Text('Profile & Preferences'),
                 ),
-                if (profile?.isAdmin == true)
-                  const PopupMenuItem(value: 'admin', child: Text('Student Admin')),
                 const PopupMenuItem(value: 'sign_out', child: Text('Sign out')),
               ],
             ),

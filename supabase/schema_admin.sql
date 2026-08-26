@@ -32,7 +32,12 @@ alter table public.profiles
 -- Same reasoning as guard_subscription_tier() in schema_subscriptions.sql:
 -- "profiles are self updatable" would otherwise let a student grant
 -- themselves admin with one REST call. Direct SQL run by an admin in the
--- Supabase dashboard is unaffected (auth.uid() is null there).
+-- Supabase dashboard is unaffected (auth.uid() is null there); an admin
+-- acting through a future admin RPC (none exists yet, but this mirrors
+-- the equivalent fix to guard_subscription_tier() below in case one
+-- ever does) is also let through -- is_admin() is defined further down
+-- this file, but that's fine, function bodies only resolve names at
+-- call time, not at CREATE time.
 create or replace function public.guard_is_admin()
 returns trigger
 language plpgsql
@@ -41,7 +46,8 @@ set search_path = public
 as $$
 begin
   if new.is_admin is distinct from old.is_admin
-     and auth.uid() is not null then
+     and auth.uid() is not null
+     and not is_admin(auth.uid()) then
     raise exception 'is_admin can only be changed by an admin.';
   end if;
   return new;
@@ -70,6 +76,31 @@ $$;
 
 revoke all on function public.is_admin(uuid) from public, anon;
 grant execute on function public.is_admin(uuid) to authenticated;
+
+-- schema_subscriptions.sql's guard_subscription_tier() blocked a
+-- subscription_tier change whenever auth.uid() was not null -- back when
+-- the only legitimate way to flip it was a direct SQL-editor session
+-- (auth.uid() null there). admin_update_student() below is a real,
+-- vetted, authenticated path to change it now, and it was getting
+-- rejected by this exact trigger (the admin's own auth.uid() is very
+-- much not null). Redefined here to let an admin session through too --
+-- still blocks a student changing their own tier, since that's the
+-- actual thing this trigger exists to prevent.
+create or replace function public.guard_subscription_tier()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.subscription_tier is distinct from old.subscription_tier
+     and auth.uid() is not null
+     and not is_admin(auth.uid()) then
+    raise exception 'subscription_tier can only be changed by an admin.';
+  end if;
+  return new;
+end;
+$$;
 
 -- ---------------------------------------------------------------------------
 -- 3. admin_list_students() -- every student's profile plus their email
