@@ -31,6 +31,7 @@ class CurriculumSidebar extends StatelessWidget {
     required this.subtopicsByUnit,
     required this.subtopicStatus,
     required this.subtopicMedal,
+    required this.subtopicScorePercent,
     required this.isUnitExpanded,
     required this.onSelectUnit,
     required this.onSelectSubtopic,
@@ -44,6 +45,14 @@ class CurriculumSidebar extends StatelessWidget {
   final Map<String, List<Subtopic>> subtopicsByUnit;
   final Map<String, ProgressStatus> subtopicStatus;
   final Map<String, String> subtopicMedal;
+
+  /// Best-score percent per subtopic — same map every caller already
+  /// computes for its own main content. Aggregated per unit here (see
+  /// `aggregateUnitScorePercent`) to drive the thin progress bar under
+  /// each unit row, the same "visible progress" idea the classroom
+  /// dashboard's own resume card already uses, just extended to the nav
+  /// list.
+  final Map<String, double> subtopicScorePercent;
   final bool Function(String unitId) isUnitExpanded;
   final void Function(String unitId) onSelectUnit;
   final void Function(Subtopic subtopic) onSelectSubtopic;
@@ -123,6 +132,10 @@ class CurriculumSidebar extends StatelessWidget {
                 (subtopicsByUnit[unit.id] ?? const []).map((s) => s.id),
                 subtopicMedal,
               ),
+              scorePercent: aggregateUnitScorePercent(
+                (subtopicsByUnit[unit.id] ?? const []).map((s) => s.id),
+                subtopicScorePercent,
+              ),
               expanded: isUnitExpanded(unit.id),
               selectedSubtopicId: selectedSubtopicId,
               onTap: () => onSelectUnit(unit.id),
@@ -196,6 +209,7 @@ class _UnitNavRow extends StatelessWidget {
     required this.subtopicMedal,
     required this.status,
     required this.medal,
+    required this.scorePercent,
     required this.expanded,
     required this.selectedSubtopicId,
     required this.onTap,
@@ -211,6 +225,12 @@ class _UnitNavRow extends StatelessWidget {
   /// The worst medal among this unit's attempted subtopics — see
   /// `aggregateUnitMedal` — or null if none have been attempted yet.
   final String? medal;
+
+  /// This unit's overall completion percent (0-100) — see
+  /// `aggregateUnitScorePercent` — or null until at least one of its
+  /// subtopics has been attempted, in which case no progress bar shows at
+  /// all rather than a misleading empty one.
+  final double? scorePercent;
   final bool expanded;
   final String? selectedSubtopicId;
   final VoidCallback onTap;
@@ -265,6 +285,18 @@ class _UnitNavRow extends StatelessWidget {
                             '$subtopicCount ${subtopicCount == 1 ? 'topic' : 'topics'}',
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
+                          if (scorePercent != null) ...[
+                            const SizedBox(height: 5),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(999),
+                              child: LinearProgressIndicator(
+                                value: (scorePercent! / 100).clamp(0, 1),
+                                minHeight: 3,
+                                backgroundColor: scheme.surfaceContainerHighest,
+                                color: status.color,
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),

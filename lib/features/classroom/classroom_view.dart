@@ -160,6 +160,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       subtopicsByUnit: widget.subtopicsByUnit,
       subtopicStatus: widget.subtopicStatus,
       subtopicMedal: widget.subtopicMedal,
+      subtopicScorePercent: widget.subtopicScorePercent,
       isUnitExpanded: (unitId) => unitId == _selectedUnitId,
       selectedSubtopicId: _selectedSubtopic?.id,
       onSelectHome: () {
