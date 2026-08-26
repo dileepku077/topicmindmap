@@ -12,16 +12,19 @@ import '../../state/practice_test_providers.dart';
 import '../../state/progress_providers.dart';
 
 /// Opens [SubtopicOverview] as a modal sheet — the spatial mindmap's way of
-/// showing a subtopic. Its Lesson/Practice Test links push full-screen
-/// routes, which is fine here since the mindmap has no side panel to lose.
-/// The classroom view (classroom_view.dart) uses [SubtopicOverview]
-/// directly instead, wired to swap its own main pane rather than navigate
-/// away, so its left-hand unit list stays on screen.
+/// showing a subtopic. Its Lesson/Practice Test links hand off to whatever
+/// [onOpenLesson]/[onOpenPractice] the caller supplies, after dismissing
+/// the sheet itself — the mindmap page uses these to swap its own canvas
+/// for the embedded content (keeping its sidebar and AppBar on screen),
+/// the same way the classroom view's inline pane already does with
+/// [SubtopicOverview] directly.
 void showTopicDetailSheet(
   BuildContext context, {
   required Subtopic subtopic,
   required Color color,
   required String courseCode,
+  required void Function(String lessonId, String lessonTitle) onOpenLesson,
+  required void Function(String unitCode) onOpenPractice,
 }) {
   showModalBottomSheet(
     context: context,
@@ -53,17 +56,13 @@ void showTopicDetailSheet(
               SubtopicOverview(
                 subtopic: subtopic,
                 courseCode: courseCode,
-                onOpenLesson: (lessonId, _) {
+                onOpenLesson: (lessonId, lessonTitle) {
                   Navigator.of(sheetContext).pop();
-                  context.push('/lesson/$lessonId');
+                  onOpenLesson(lessonId, lessonTitle);
                 },
                 onOpenPractice: (unitCode) {
                   Navigator.of(sheetContext).pop();
-                  final uri = Uri(
-                    path: '/practice/$courseCode/$unitCode/${subtopic.code}',
-                    queryParameters: {'title': subtopic.title},
-                  );
-                  context.push(uri.toString());
+                  onOpenPractice(unitCode);
                 },
               ),
             ],

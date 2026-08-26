@@ -18,6 +18,8 @@ import '../../state/profile_providers.dart';
 import '../../state/progress_providers.dart';
 import '../classroom/classroom_view.dart';
 import '../classroom/curriculum_sidebar.dart';
+import '../lesson/lesson_page.dart';
+import '../practice_test/practice_test_page.dart';
 import '../topic_detail/topic_detail_sheet.dart';
 import 'widgets/hoverable_node.dart';
 import 'widgets/mindmap_node_widget.dart';
@@ -108,6 +110,41 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
   /// takes priority over their saved default_view preference so a
   /// deliberate switch never gets silently reverted mid-session.
   _TopicViewMode? _viewModeOverride;
+
+  /// A lesson or practice test opened from the mindmap canvas, shown in
+  /// place of the canvas rather than as its own route — same reasoning
+  /// the classroom view already follows, just applied here too now that
+  /// the mindmap has a sidebar of its own to lose. Null means "show the
+  /// canvas"; at most one of these two is ever set at a time.
+  String? _embeddedLessonId;
+  String? _embeddedLessonTitle;
+  _MindmapPracticeTarget? _embeddedPractice;
+
+  void _openEmbeddedLesson(String lessonId, String lessonTitle) {
+    setState(() {
+      _embeddedLessonId = lessonId;
+      _embeddedLessonTitle = lessonTitle;
+      _embeddedPractice = null;
+    });
+  }
+
+  void _openEmbeddedPractice(String unitCode, String subtopicCode, String title) {
+    setState(() {
+      _embeddedPractice = _MindmapPracticeTarget(
+        unitCode: unitCode,
+        subtopicCode: subtopicCode,
+        title: title,
+      );
+      _embeddedLessonId = null;
+    });
+  }
+
+  void _closeEmbedded() {
+    setState(() {
+      _embeddedLessonId = null;
+      _embeddedPractice = null;
+    });
+  }
 
   /// Whether Cmd/Ctrl is currently held — tracked from real keyboard events
   /// (not from the scroll event itself) so it's already up to date *before*
@@ -485,6 +522,9 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
       subtopic: subtopic,
       color: status.color,
       courseCode: course.code,
+      onOpenLesson: _openEmbeddedLesson,
+      onOpenPractice: (unitCode) =>
+          _openEmbeddedPractice(unitCode, subtopic.code, subtopic.title),
     );
   }
 
@@ -693,7 +733,32 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                       ).colorScheme.outlineVariant.withValues(alpha: 0.3),
                     ),
                     Expanded(
-                      child: LayoutBuilder(
+                      child: _embeddedPractice != null
+                          ? _MindmapEmbeddedPane(
+                              title: _embeddedPractice!.title,
+                              onBack: _closeEmbedded,
+                              child: PracticeTestPage(
+                                key: ValueKey(
+                                  'practice-${_embeddedPractice!.unitCode}-${_embeddedPractice!.subtopicCode}',
+                                ),
+                                courseCode: course.code,
+                                unitCode: _embeddedPractice!.unitCode,
+                                subtopicCode: _embeddedPractice!.subtopicCode,
+                                subtopicTitle: _embeddedPractice!.title,
+                                embedded: true,
+                                onFinished: _closeEmbedded,
+                              ),
+                            )
+                          : _embeddedLessonId != null
+                          ? _MindmapEmbeddedPane(
+                              title: _embeddedLessonTitle ?? 'Lesson',
+                              onBack: _closeEmbedded,
+                              child: LessonBody(
+                                key: ValueKey('lesson-$_embeddedLessonId'),
+                                lessonId: _embeddedLessonId!,
+                              ),
+                            )
+                          : LayoutBuilder(
                         builder: (context, constraints) {
                           final viewportSize = constraints.biggest;
                           if (viewportSize != _lastViewportSize) {
@@ -852,6 +917,9 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
               subtopic: subtopic,
               color: status.color,
               courseCode: course.code,
+              onOpenLesson: _openEmbeddedLesson,
+              onOpenPractice: (unitCode) =>
+                  _openEmbeddedPractice(unitCode, subtopic.code, subtopic.title),
             ),
             child: HoverableNode(
               message: '${status.hoverMessage(
@@ -872,6 +940,79 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
     }
 
     return nodes;
+  }
+}
+
+class _MindmapPracticeTarget {
+  const _MindmapPracticeTarget({
+    required this.unitCode,
+    required this.subtopicCode,
+    required this.title,
+  });
+
+  final String unitCode;
+  final String subtopicCode;
+  final String title;
+}
+
+/// Wraps an embedded lesson or practice test with a small "back to
+/// mindmap" header — the canvas's equivalent of the classroom view's
+/// breadcrumb trail, just one level deep since the canvas itself (not
+/// another pane) is always what's underneath.
+class _MindmapEmbeddedPane extends StatelessWidget {
+  const _MindmapEmbeddedPane({
+    required this.title,
+    required this.onBack,
+    required this.child,
+  });
+
+  final String title;
+  final VoidCallback onBack;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+          child: Row(
+            children: [
+              Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+                child: InkWell(
+                  onTap: onBack,
+                  borderRadius: BorderRadius.circular(8),
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.arrow_back, size: 18),
+                        SizedBox(width: 6),
+                        Text('Mindmap'),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(child: child),
+      ],
+    );
   }
 }
 
