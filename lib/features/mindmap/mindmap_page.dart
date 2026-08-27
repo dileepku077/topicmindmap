@@ -46,17 +46,17 @@ const _canvasCenter = Offset(2200, 2200);
 // way a horizontal mind map's primary branches do; only their subtopics
 // branch vertically off of that.
 //
-// Shortened from the previous values (300/110) to bring units in closer,
-// now that _fitToContent below actually computes a zoom level to fit
-// everything on screen — a smaller natural footprint means less zooming
-// out is needed to do that, keeping node text more readable. Checked
-// analytically (not live — expanding a unit in the spatial mindmap has
-// been an unreliable click target all session) against every real
-// subtopics-per-unit count across all six courses (4 through 9): each
-// unit's own fan reach already leaves several hundred px of clearance to
-// its row-neighbor at this gap, so there's real headroom here even though
-// it looks tight on paper.
-const _unitOffsetX = 260.0;
+// Shortened again from 260/85 (itself already shortened once from 300/110)
+// to pull units in tighter around the root, now that node text also runs a
+// size larger (see mindmap_node_widget.dart) and benefits even more from a
+// shorter zoomed-out distance to read comfortably. 200 still clears the
+// root pill's own half-width (course.gradeLabel text, comfortably under
+// 100px) against even a long single-line unit title's half-width (up to
+// 130px at the 260px node cap) — worst case they're close, but real unit
+// titles wrap well inside that cap rather than sitting at it. _unitRowGap
+// is unchanged; it's the gap between two units' own leaf fans stacked on
+// the same side, not the root-to-unit distance this request was about.
+const _unitOffsetX = 200.0;
 const _unitRowGap = 85.0;
 
 // Subtopics fan out around their unit like leaves around a branch tip
