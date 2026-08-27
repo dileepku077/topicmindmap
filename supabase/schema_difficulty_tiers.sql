@@ -26,7 +26,24 @@ alter table public.questions
 -- mixes the two label sets in one subtopic (Hard is MCR3U/MHF4U's own top
 -- tier, Challenge is the tier below MPM2D's new Advanced), so within any
 -- one subtopic this is still a strict, unambiguous order.
-create or replace function public.list_questions(
+--
+-- Postgres won't let CREATE OR REPLACE change a function's return-table
+-- shape, only its body (same issue schema_subscriptions.sql's own version
+-- of this function already documents) -- has to be dropped first. That
+-- matters here specifically because re-running every schema_*.sql file in
+-- order, twice, leaves list_questions in schema_subscriptions.sql's
+-- 5-column shape (it adds a `locked` column) by the time this file's own
+-- CREATE OR REPLACE runs again on the *second* pass, even though this file
+-- is meant to run *before* schema_subscriptions.sql the first time through.
+-- Dropping first makes this file idempotent regardless of which shape was
+-- left over from a previous full run. Dropping also clears the function's
+-- privileges, so the REVOKE/GRANT below re-applies the same "students yes,
+-- anonymous visitors no" grant schema_practice.sql originally set --
+-- schema_subscriptions.sql (if run afterward, as intended) redoes this
+-- again itself once it adds the `locked` column.
+drop function if exists public.list_questions(text, text, text);
+
+create function public.list_questions(
   p_course_code   text,
   p_unit_code     text,
   p_subtopic_code text
@@ -58,6 +75,9 @@ as $$
            end,
            q.sort_order;
 $$;
+
+revoke all on function public.list_questions(text, text, text) from public, anon;
+grant execute on function public.list_questions(text, text, text) to authenticated;
 
 -- award_medal()'s Gold gate previously required every 'Hard' question
 -- solved first-try -- 'Hard' was always the single hardest tier a subtopic
