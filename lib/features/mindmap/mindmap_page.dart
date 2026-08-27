@@ -902,7 +902,16 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
           onDragStart: () => setState(() => _canvasGesturesEnabled = false),
           onDragUpdate: (delta) => _moveNode(_rootId, delta),
           onDragEnd: () => setState(() => _canvasGesturesEnabled = true),
-          child: RootNodeWidget(label: course.gradeLabel),
+          // Same collapse-everything-back-to-units behavior as tapping
+          // "Home" in the sidebar or the app title — a quick way to back
+          // out of however many units a student has fanned open, without
+          // hunting for either of those.
+          onTap: _goHome,
+          child: HoverableNode(
+            message: 'Collapse every unit back to this view.',
+            highlightColor: Theme.of(context).colorScheme.primary,
+            child: RootNodeWidget(label: course.gradeLabel),
+          ),
         ),
       );
     }
