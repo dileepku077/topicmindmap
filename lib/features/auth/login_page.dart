@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/brand_badge.dart';
 import '../../state/auth_providers.dart';
+import '../../state/profile_providers.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
@@ -63,7 +64,20 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         await client.auth
             .signInWithPassword(email: email, password: password);
       }
-      if (mounted) context.go('/');
+      if (!mounted) return;
+      // A brand-new sign-up's profile row is always fresh (has_seen_intro
+      // defaults false), and an existing account that predates this
+      // feature reads false the same way — either way, first sign-in
+      // after this shipped goes to the tour once. Admins skip it: they're
+      // routed straight to the admin screen anyway (see mindmap_page.dart)
+      // and have no student-facing features to be walked through.
+      final userId = client.auth.currentUser?.id;
+      final profile = userId == null
+          ? null
+          : await ref.read(profileRepositoryProvider).fetchProfile(userId);
+      if (!mounted) return;
+      final showIntro = profile != null && !profile.isAdmin && !profile.hasSeenIntro;
+      context.go(showIntro ? '/welcome' : '/');
     } on AuthException catch (e) {
       setState(() => _errorMessage = e.message);
     } catch (e) {

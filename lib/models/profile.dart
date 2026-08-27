@@ -39,6 +39,7 @@ class Profile {
     required this.defaultView,
     required this.subscriptionTier,
     required this.isAdmin,
+    required this.hasSeenIntro,
   });
 
   final String id;
@@ -52,6 +53,12 @@ class Profile {
   /// the database; there's no self-serve way to become an admin.
   final bool isAdmin;
 
+  /// Whether the "How to use this app" welcome page (welcome_page.dart)
+  /// has been shown yet — see supabase/schema_onboarding.sql. Drives the
+  /// one-time redirect in login_page.dart; the sidebar's own link to the
+  /// same page ignores this and is always reachable regardless.
+  final bool hasSeenIntro;
+
   bool get isPro => subscriptionTier == SubscriptionTier.pro;
 
   factory Profile.fromMap(Map<String, dynamic> map) {
@@ -64,6 +71,7 @@ class Profile {
         map['subscription_tier'] as String?,
       ),
       isAdmin: map['is_admin'] as bool? ?? false,
+      hasSeenIntro: map['has_seen_intro'] as bool? ?? false,
     );
   }
 }

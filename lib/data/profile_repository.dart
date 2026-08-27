@@ -29,4 +29,11 @@ class ProfileRepository {
   Future<void> updateGrade(String userId, int grade) {
     return _client.from('profiles').update({'grade': grade}).eq('id', userId);
   }
+
+  Future<void> markIntroSeen(String userId) {
+    return _client
+        .from('profiles')
+        .update({'has_seen_intro': true})
+        .eq('id', userId);
+  }
 }

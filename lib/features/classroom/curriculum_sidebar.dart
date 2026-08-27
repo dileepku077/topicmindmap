@@ -149,6 +149,13 @@ class CurriculumSidebar extends StatelessWidget {
                   onTap: () => context.push('/settings'),
                   collapsed: collapsed,
                 ),
+                _NavRow(
+                  icon: Icons.help_outline,
+                  label: 'How to use this app',
+                  selected: false,
+                  onTap: () => context.push('/welcome'),
+                  collapsed: collapsed,
+                ),
                 if (!collapsed)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 20, 16, 6),

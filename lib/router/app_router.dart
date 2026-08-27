@@ -11,6 +11,7 @@ import '../features/mindmap/mindmap_page.dart';
 import '../features/practice_test/practice_test_page.dart';
 import '../features/settings/settings_page.dart';
 import '../features/unit_test/unit_test_page.dart';
+import '../features/welcome/welcome_page.dart';
 import '../state/auth_providers.dart';
 
 /// Course content (the mindmap/classroom home, lessons, practice tests,
@@ -48,6 +49,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/settings',
         builder: (context, state) => const SettingsPage(),
+      ),
+      GoRoute(
+        path: '/welcome',
+        builder: (context, state) => const WelcomePage(),
       ),
       GoRoute(
         path: '/admin',
