@@ -46,37 +46,27 @@ const _canvasCenter = Offset(2200, 2200);
 // way a horizontal mind map's primary branches do; only their subtopics
 // branch vertically off of that.
 //
-// Shortened again from 260/85 (itself already shortened once from 300/110)
-// to pull units in tighter around the root, now that node text also runs a
-// size larger (see mindmap_node_widget.dart) and benefits even more from a
-// shorter zoomed-out distance to read comfortably. 200 still clears the
-// root pill's own half-width (course.gradeLabel text, comfortably under
-// 100px) against even a long single-line unit title's half-width (up to
-// 130px at the 260px node cap) — worst case they're close, but real unit
-// titles wrap well inside that cap rather than sitting at it. _unitRowGap
-// is unchanged; it's the gap between two units' own leaf fans stacked on
-// the same side, not the root-to-unit distance this request was about.
-const _unitOffsetX = 200.0;
+// 200 (the previous value) brought some units' near edge uncomfortably
+// close to the root pill for a long single-line title — nudged back out a
+// bit while staying well short of the original 260. _unitRowGap is
+// unchanged; it's the gap between two units' own leaf fans stacked on the
+// same side, not the root-to-unit distance this controls.
+const _unitOffsetX = 230.0;
 const _unitRowGap = 85.0;
 
-// Subtopics fan out around their unit like leaves around a branch tip
-// instead of stacking in a column to one side. They're spread across an
-// arc centered on the "outward" direction (away from the root) — up to
-// this many degrees wide, growing with how many there are to fit — with
-// only a blind cone directly back toward the root left clear so nothing
-// crosses over the connecting line back to the parent.
-const _leafMaxSpanDeg = 230.0;
-const _leafSpanPerGap = 34.0;
+// Subtopics ring their unit like the hour marks on a wall clock — evenly
+// spaced all the way around at one constant radius, rather than bunched
+// into a partial arc on the outward side the way this used to work. See
+// _unitFanReach below: whatever a full ring's reach back toward the root
+// works out to, placeSide already spaces units in the row far enough
+// apart to clear it, so this doesn't need its own "leave a blind cone
+// toward the root" carve-out the old arc version needed.
 const _leafMinRadius = 110.0;
-// NOT safe to shorten below this: the "alternating leaves sit closer in"
-// styling below means the tightest pair isn't always the two immediate
-// neighbors at the target chord — computing every real leaf pair's
-// on-screen (dx, dy) against the subtopic box (210x~40) analytically
-// turned up an actual overlap at 215 (the previous value, in production
-// this whole session) for any unit with exactly 6 subtopics — which is a
-// real case (MPM2D's Analytic Geometry, MCR3U's two middle units). 225 is
-// the smallest value with zero overlap across every real subtopic count
-// (4 through 9) found in seed.sql.
+// NOT safe to shorten below this: computing every real leaf pair's
+// on-screen (dx, dy) against the subtopic box (215x~40) analytically
+// turned up an actual overlap below this for some real subtopic counts
+// found in seed.sql (4 through 9 per unit). 225 is the smallest value
+// with zero overlap across all of them.
 const _leafTargetChord = 225.0;
 
 // Zoom bounds for the mindmap canvas — shared by InteractiveViewer's own
@@ -245,31 +235,24 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
   }
 
   /// Relative polar placement (angle in degrees measured off the "outward"
-  /// direction, radius in px) for each of [count] subtopics. The arc widens
-  /// as [count] grows — a couple of leaves stay close together rather than
-  /// being flung to the far top/bottom of the available space, the way an
-  /// actual small cluster of leaves would — capped at [_leafMaxSpanDeg] so
-  /// it never wraps back around toward the root. Radius is whatever keeps
-  /// adjacent leaves comfortably apart at that angular spacing; alternating
-  /// leaves sit slightly closer in so the ring reads as organic rather than
-  /// a perfectly uniform circle.
+  /// direction, radius in px) for each of [count] subtopics, evenly spaced
+  /// all the way around a full circle at one constant radius — like the
+  /// hour marks on a wall clock. Radius is whatever keeps adjacent leaves
+  /// at least [_leafTargetChord] apart on that circle, which shrinks as
+  /// [count] grows (more marks fit around the same clock face) down to
+  /// [_leafMinRadius].
   List<({double angleDeg, double radius})> _leafLayout(int count) {
     if (count <= 0) return const [];
     if (count == 1) return const [(angleDeg: 0, radius: _leafMinRadius)];
 
-    final span = math.min(_leafMaxSpanDeg, _leafSpanPerGap * (count - 1));
-    final angleStep = span / (count - 1);
+    final angleStep = 360.0 / count;
     final spacingRad = angleStep * math.pi / 180;
     final radius = math.max(
       _leafMinRadius,
       _leafTargetChord / (2 * math.sin(spacingRad / 2)),
     );
     return [
-      for (var i = 0; i < count; i++)
-        (
-          angleDeg: -span / 2 + i * angleStep,
-          radius: radius * (i.isEven ? 1.0 : 0.88),
-        ),
+      for (var i = 0; i < count; i++) (angleDeg: i * angleStep, radius: radius),
     ];
   }
 
@@ -298,17 +281,25 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
   /// left/right margins, not up and down — each one just far enough past
   /// the last that its leaf fan (see [_unitFanReach]) can't reach into the
   /// previous unit's fan. Subtopics do all of the vertical branching.
+  ///
+  /// The first unit in the row gets this same treatment against the root
+  /// itself, not just against a neighbor — now that subtopics ring their
+  /// unit all the way around (see [_leafLayout]), a unit's own fan reaches
+  /// back toward the root too, and without this a unit with several
+  /// subtopics could put one right on top of (or past) the root pill.
+  /// [_unitOffsetX] ends up as the closest a subtopic ever gets to the
+  /// root, not the unit node itself — a unit with a wide fan simply sits
+  /// further out to keep that same clearance, rather than every unit
+  /// sitting at a fixed distance regardless of how many subtopics ring it.
   void placeSide(List<Unit> side, double sign) {
     if (side.isEmpty) return;
-    var cursorX = _canvasCenter.dx + sign * _unitOffsetX;
+    var cursorX = _canvasCenter.dx;
     var previousOutwardReach = 0.0;
     for (var i = 0; i < side.length; i++) {
       final unit = side[i];
       final reach = _unitFanReach(unit);
-      if (i > 0) {
-        cursorX +=
-            sign * (previousOutwardReach + _unitRowGap + reach.towardRoot);
-      }
+      final gap = i == 0 ? _unitOffsetX : (previousOutwardReach + _unitRowGap);
+      cursorX += sign * (gap + reach.towardRoot);
       _positions[unit.id] = Offset(cursorX, _canvasCenter.dy);
       previousOutwardReach = reach.outward;
     }
