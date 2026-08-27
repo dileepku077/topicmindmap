@@ -17,15 +17,23 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _nameController = TextEditingController();
 
   bool _isSignUp = false;
   bool _isSubmitting = false;
   String? _errorMessage;
+  /// Sign-up only — which grade's courses this student should see. Sent as
+  /// signUp() user metadata so handle_new_user() (schema_practice.sql) can
+  /// set profiles.grade in the same insert that creates the profile row;
+  /// see curriculum_providers.dart for where that grade then filters which
+  /// courses show up.
+  int? _selectedGrade;
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _nameController.dispose();
     super.dispose();
   }
 
@@ -43,7 +51,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
     try {
       if (_isSignUp) {
-        await client.auth.signUp(email: email, password: password);
+        await client.auth.signUp(
+          email: email,
+          password: password,
+          data: {
+            'display_name': _nameController.text.trim(),
+            'grade': _selectedGrade,
+          },
+        );
       } else {
         await client.auth
             .signInWithPassword(email: email, password: password);
@@ -112,6 +127,31 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 24),
+                    if (_isSignUp) ...[
+                      TextFormField(
+                        controller: _nameController,
+                        textCapitalization: TextCapitalization.words,
+                        autofillHints: const [AutofillHints.name],
+                        decoration: _fieldDecoration(context, 'Full name'),
+                        validator: (value) => (value == null || value.trim().isEmpty)
+                            ? 'Enter your name'
+                            : null,
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<int>(
+                        initialValue: _selectedGrade,
+                        decoration: _fieldDecoration(context, 'Grade'),
+                        items: const [9, 10, 11, 12]
+                            .map((g) => DropdownMenuItem(value: g, child: Text('Grade $g')))
+                            .toList(),
+                        // Only your grade's courses show up afterward (see
+                        // Profile & Preferences, which is also where this
+                        // can be changed later).
+                        onChanged: (value) => setState(() => _selectedGrade = value),
+                        validator: (value) => value == null ? 'Select your grade' : null,
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     TextFormField(
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,

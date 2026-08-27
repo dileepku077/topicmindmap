@@ -50,6 +50,33 @@
 alter table public.profiles
   add column if not exists grade int check (grade between 9 and 12);
 
+-- Registration now collects a student's name and grade up front (see
+-- login_page.dart), passed through Supabase auth signUp()'s `data` option
+-- as user metadata. Re-point handle_new_user() (defined in schema.sql,
+-- before this column existed) at the same raw_user_meta_data the trigger
+-- already reads display_name from, so both land on the profile row in the
+-- same insert instead of a second round-trip update right after signup.
+-- Out-of-range/missing grade metadata is silently dropped rather than
+-- raised — sign-up shouldn't fail because of it, and it just leaves grade
+-- null the way it already is for a pre-existing account that skipped this.
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer set search_path = public
+as $$
+declare
+  v_grade int := nullif(new.raw_user_meta_data ->> 'grade', '')::int;
+begin
+  insert into public.profiles (id, display_name, grade)
+  values (
+    new.id,
+    new.raw_user_meta_data ->> 'display_name',
+    case when v_grade between 9 and 12 then v_grade else null end
+  );
+  return new;
+end;
+$$;
+
 -- ---------------------------------------------------------------------------
 -- 1. questions — the bank
 -- ---------------------------------------------------------------------------
