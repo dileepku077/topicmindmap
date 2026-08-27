@@ -60,6 +60,19 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             'grade': _selectedGrade,
           },
         );
+        // Belt-and-suspenders: handle_new_user() (schema_practice.sql) also
+        // reads grade out of the metadata above, but that only takes effect
+        // once that SQL has been (re-)run against the database. Setting it
+        // directly here too — the same profiles table update Settings' own
+        // grade dropdown already uses — means a new student's grade (and
+        // therefore which courses visibleCoursesProvider shows them, see
+        // curriculum_providers.dart) is correct from their very first
+        // sign-in regardless of whether that SQL step happened.
+        final newUserId = client.auth.currentUser?.id;
+        final grade = _selectedGrade;
+        if (newUserId != null && grade != null) {
+          await ref.read(profileRepositoryProvider).updateGrade(newUserId, grade);
+        }
       } else {
         await client.auth
             .signInWithPassword(email: email, password: password);
