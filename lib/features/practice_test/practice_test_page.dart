@@ -6,6 +6,7 @@ import '../../core/brand_badge.dart';
 import '../../models/practice_question.dart';
 import '../../state/auth_providers.dart';
 import '../../state/practice_test_providers.dart';
+import '../../state/progress_providers.dart';
 
 /// A subtopic opens on a tier picker (Easy/Medium/Challenge/Advanced, or
 /// Easy/Medium/Hard — whatever this subtopic actually has), with a lock
@@ -160,6 +161,14 @@ class _PracticeTestPageState extends ConsumerState<PracticeTestPage> {
         _completed = true;
         _awardingMedal = false;
       });
+      // practiceMasteryProvider is a live Supabase Realtime stream (see
+      // progress_repository.dart), which only pushes an update if
+      // subtopic_mastery is in the supabase_realtime publication (see
+      // schema_realtime.sql — easy to miss, and was missing until now).
+      // Invalidating here forces a fresh read regardless, so the mindmap/
+      // classroom view reflects this result the moment the student goes
+      // back, instead of depending on that realtime push arriving.
+      ref.invalidate(practiceMasteryProvider);
     } catch (error) {
       if (!mounted) return;
       setState(() => _awardingMedal = false);
