@@ -53,6 +53,8 @@ class SettingsPage extends ConsumerWidget {
             _GradeSection(userId: user.id),
             const SizedBox(height: 28),
             _DefaultViewSection(userId: user.id),
+            const SizedBox(height: 28),
+            const _ChangePasswordSection(verifyCurrentPassword: true),
           ],
         ],
       ),
@@ -60,20 +62,27 @@ class SettingsPage extends ConsumerWidget {
   }
 }
 
-/// Self-service password change — an admin account's own, via the normal
-/// Supabase auth.updateUser call (the current session already proves who
-/// they are; no admin RPC needed for changing your *own* password). The
+/// Self-service password change, via the normal Supabase auth.updateUser
+/// call (the current session already proves who they are; no admin RPC
+/// needed for changing your *own* password). The
 /// admin_reset_student_password() RPC in schema_admin.sql is for a
 /// *student's* password and deliberately refuses to touch an admin
 /// account — this is that other case.
 class _ChangePasswordSection extends ConsumerStatefulWidget {
-  const _ChangePasswordSection();
+  const _ChangePasswordSection({this.verifyCurrentPassword = false});
+
+  /// When true, a "current password" field is required and checked (via
+  /// a signInWithPassword re-auth) before the new password is accepted.
+  /// The admin account skips this — it's a single, throwaway-by-design
+  /// dev credential (see schema_admin.sql), not worth the extra field.
+  final bool verifyCurrentPassword;
 
   @override
   ConsumerState<_ChangePasswordSection> createState() => _ChangePasswordSectionState();
 }
 
 class _ChangePasswordSectionState extends ConsumerState<_ChangePasswordSection> {
+  final _currentPasswordController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
   bool _saving = false;
@@ -82,12 +91,21 @@ class _ChangePasswordSectionState extends ConsumerState<_ChangePasswordSection> 
 
   @override
   void dispose() {
+    _currentPasswordController.dispose();
     _passwordController.dispose();
     _confirmController.dispose();
     super.dispose();
   }
 
   Future<void> _save() async {
+    final currentPassword = _currentPasswordController.text;
+    if (widget.verifyCurrentPassword && currentPassword.isEmpty) {
+      setState(() {
+        _error = 'Enter your current password.';
+        _saved = false;
+      });
+      return;
+    }
     final password = _passwordController.text;
     if (password.length < 6) {
       setState(() {
@@ -108,17 +126,30 @@ class _ChangePasswordSectionState extends ConsumerState<_ChangePasswordSection> 
       _error = null;
       _saved = false;
     });
+    final client = ref.read(supabaseClientProvider);
     try {
-      await ref
-          .read(supabaseClientProvider)
-          .auth
-          .updateUser(UserAttributes(password: password));
+      if (widget.verifyCurrentPassword) {
+        final email = client.auth.currentUser?.email;
+        if (email == null) throw Exception('No signed-in account.');
+        // signInWithPassword() itself is the check — it throws
+        // AuthException on a wrong password without touching anything.
+        await client.auth.signInWithPassword(email: email, password: currentPassword);
+      }
+      await client.auth.updateUser(UserAttributes(password: password));
       if (!mounted) return;
+      _currentPasswordController.clear();
       _passwordController.clear();
       _confirmController.clear();
       setState(() {
         _saving = false;
         _saved = true;
+      });
+    } on AuthException catch (error) {
+      setState(() {
+        _saving = false;
+        _error = widget.verifyCurrentPassword
+            ? 'Current password is incorrect.'
+            : "Couldn't update password: ${error.message}";
       });
     } catch (error) {
       setState(() {
@@ -136,19 +167,32 @@ class _ChangePasswordSectionState extends ConsumerState<_ChangePasswordSection> 
         Text('Password', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 4),
         Text(
-          'Change the password for this admin account.',
+          widget.verifyCurrentPassword
+              ? 'Change your password. You\'ll need to enter your current one first.'
+              : 'Change the password for this admin account.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 12),
+        if (widget.verifyCurrentPassword) ...[
+          TextField(
+            controller: _currentPasswordController,
+            obscureText: true,
+            autofillHints: const [AutofillHints.password],
+            decoration: const InputDecoration(labelText: 'Current password'),
+          ),
+          const SizedBox(height: 12),
+        ],
         TextField(
           controller: _passwordController,
           obscureText: true,
+          autofillHints: const [AutofillHints.newPassword],
           decoration: const InputDecoration(labelText: 'New password'),
         ),
         const SizedBox(height: 12),
         TextField(
           controller: _confirmController,
           obscureText: true,
+          autofillHints: const [AutofillHints.newPassword],
           decoration: const InputDecoration(labelText: 'Confirm new password'),
           onSubmitted: (_) => _save(),
         ),
