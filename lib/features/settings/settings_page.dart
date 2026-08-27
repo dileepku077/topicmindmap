@@ -17,12 +17,46 @@ import '../../state/theme_providers.dart';
 /// show the same curriculum and progress; that preference only decides
 /// what loads first.
 class SettingsPage extends ConsumerWidget {
-  const SettingsPage({super.key});
+  const SettingsPage({super.key, this.embedded = false});
+
+  /// True when embedded in the mindmap/classroom main pane instead of
+  /// shown as a full-screen route — same convention as PracticeTestPage/
+  /// UnitTestPage. Embedded mode skips this widget's own Scaffold/AppBar;
+  /// the caller supplies a breadcrumb or back header instead (see
+  /// mindmap_page.dart / classroom_view.dart), keeping the sidebar on
+  /// screen the whole time.
+  final bool embedded;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
     final isAdmin = ref.watch(profileProvider).value?.isAdmin ?? false;
+
+    final body = ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        if (user != null) ...[
+          Text(user.email ?? 'Signed in', style: Theme.of(context).textTheme.bodyMedium),
+          const SizedBox(height: 12),
+          if (!isAdmin) ...[const _PlanBadge(), const SizedBox(height: 24)],
+        ],
+        const _AppearanceSection(),
+        const SizedBox(height: 28),
+        if (user == null)
+          const _SignInPrompt()
+        else if (isAdmin)
+          const _ChangePasswordSection()
+        else ...[
+          _GradeSection(userId: user.id),
+          const SizedBox(height: 28),
+          _DefaultViewSection(userId: user.id),
+          const SizedBox(height: 28),
+          const _ChangePasswordSection(verifyCurrentPassword: true),
+        ],
+      ],
+    );
+
+    if (embedded) return body;
 
     return Scaffold(
       appBar: AppBar(
@@ -35,29 +69,7 @@ class SettingsPage extends ConsumerWidget {
           ],
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          if (user != null) ...[
-            Text(user.email ?? 'Signed in', style: Theme.of(context).textTheme.bodyMedium),
-            const SizedBox(height: 12),
-            if (!isAdmin) ...[const _PlanBadge(), const SizedBox(height: 24)],
-          ],
-          const _AppearanceSection(),
-          const SizedBox(height: 28),
-          if (user == null)
-            const _SignInPrompt()
-          else if (isAdmin)
-            const _ChangePasswordSection()
-          else ...[
-            _GradeSection(userId: user.id),
-            const SizedBox(height: 28),
-            _DefaultViewSection(userId: user.id),
-            const SizedBox(height: 28),
-            const _ChangePasswordSection(verifyCurrentPassword: true),
-          ],
-        ],
-      ),
+      body: body,
     );
   }
 }

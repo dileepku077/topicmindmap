@@ -21,6 +21,7 @@ import '../classroom/classroom_view.dart';
 import '../classroom/curriculum_sidebar.dart';
 import '../lesson/lesson_page.dart';
 import '../practice_test/practice_test_page.dart';
+import '../settings/settings_page.dart';
 import '../topic_detail/topic_detail_sheet.dart';
 import 'widgets/hoverable_node.dart';
 import 'widgets/mindmap_node_widget.dart';
@@ -128,12 +129,22 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
   String? _embeddedLessonId;
   String? _embeddedLessonTitle;
   _MindmapPracticeTarget? _embeddedPractice;
+  bool _embeddedSettings = false;
+
+  void _openEmbeddedSettings() {
+    setState(() {
+      _embeddedSettings = true;
+      _embeddedLessonId = null;
+      _embeddedPractice = null;
+    });
+  }
 
   void _openEmbeddedLesson(String lessonId, String lessonTitle) {
     setState(() {
       _embeddedLessonId = lessonId;
       _embeddedLessonTitle = lessonTitle;
       _embeddedPractice = null;
+      _embeddedSettings = false;
     });
   }
 
@@ -145,6 +156,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
         title: title,
       );
       _embeddedLessonId = null;
+      _embeddedSettings = false;
     });
   }
 
@@ -152,6 +164,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
     setState(() {
       _embeddedLessonId = null;
       _embeddedPractice = null;
+      _embeddedSettings = false;
     });
   }
 
@@ -473,6 +486,9 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
     setState(() {
       _expandedUnitIds.clear();
       _classroomResetNonce++;
+      _embeddedLessonId = null;
+      _embeddedPractice = null;
+      _embeddedSettings = false;
     });
     _fitToContent();
   }
@@ -648,12 +664,16 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
               child: const Text('Sign in'),
             )
           else
+            // "Profile & Preferences" isn't offered here — the sidebar's
+            // own link to it (CurriculumSidebar, always reachable: pinned
+            // in wide layouts, via the drawer in the narrow classroom
+            // layout) opens it embedded, keeping this AppBar and the
+            // sidebar itself on screen. A second entry point here would
+            // just be the old full-screen route that loses both.
             PopupMenuButton<String>(
               icon: const Icon(Icons.account_circle),
               onSelected: (value) {
-                if (value == 'settings') {
-                  context.push('/settings');
-                } else if (value == 'sign_out') {
+                if (value == 'sign_out') {
                   ref.read(supabaseClientProvider).auth.signOut();
                 }
               },
@@ -661,10 +681,6 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                 PopupMenuItem(
                   enabled: false,
                   child: Text(user.email ?? 'Signed in'),
-                ),
-                const PopupMenuItem(
-                  value: 'settings',
-                  child: Text('Profile & Preferences'),
                 ),
                 const PopupMenuItem(value: 'sign_out', child: Text('Sign out')),
               ],
@@ -751,6 +767,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                         collapsed: _sidebarCollapsed,
                         onToggleCollapsed: () =>
                             setState(() => _sidebarCollapsed = !_sidebarCollapsed),
+                        onOpenSettings: _openEmbeddedSettings,
                       ),
                     ),
                     VerticalDivider(
@@ -760,7 +777,13 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                       ).colorScheme.outlineVariant.withValues(alpha: 0.3),
                     ),
                     Expanded(
-                      child: _embeddedPractice != null
+                      child: _embeddedSettings
+                          ? _MindmapEmbeddedPane(
+                              title: 'Profile & Preferences',
+                              onBack: _closeEmbedded,
+                              child: const SettingsPage(embedded: true),
+                            )
+                          : _embeddedPractice != null
                           ? _MindmapEmbeddedPane(
                               title: _embeddedPractice!.title,
                               onBack: _closeEmbedded,

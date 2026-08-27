@@ -13,6 +13,7 @@ import '../../state/profile_providers.dart';
 import '../../state/progress_providers.dart';
 import '../lesson/lesson_page.dart';
 import '../practice_test/practice_test_page.dart';
+import '../settings/settings_page.dart';
 import '../topic_detail/topic_detail_sheet.dart';
 import '../unit_test/unit_test_page.dart';
 import 'curriculum_sidebar.dart';
@@ -67,6 +68,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
   String? _lessonTitle;
   _PracticeTarget? _practice;
   _UnitTestTarget? _unitTest;
+  bool _showSettings = false;
 
   @override
   void didUpdateWidget(covariant ClassroomView oldWidget) {
@@ -85,6 +87,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _lessonId = null;
       _practice = null;
       _unitTest = null;
+      _showSettings = false;
     });
   }
 
@@ -95,6 +98,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _lessonId = null;
       _practice = null;
       _unitTest = null;
+      _showSettings = false;
     });
   }
 
@@ -105,6 +109,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _lessonId = null;
       _practice = null;
       _unitTest = null;
+      _showSettings = false;
     });
   }
 
@@ -114,6 +119,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _lessonTitle = lessonTitle;
       _practice = null;
       _unitTest = null;
+      _showSettings = false;
     });
   }
 
@@ -122,6 +128,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _practice = _PracticeTarget(unitCode: unitCode, subtopicCode: subtopicCode, title: title);
       _lessonId = null;
       _unitTest = null;
+      _showSettings = false;
     });
   }
 
@@ -130,30 +137,51 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _unitTest = _UnitTestTarget(unitCode: unitCode, title: unitTitle);
       _lessonId = null;
       _practice = null;
+      _showSettings = false;
     });
   }
 
-  /// From a lesson, practice test, or unit test, back goes to the subtopic
-  /// overview (or the unit list / home, if this was opened straight from
-  /// there — e.g. the dashboard's resume card, which doesn't select a
-  /// subtopic). Every answer is already saved server-side as it's picked,
-  /// so leaving a unit test mid-way loses nothing — no confirmation needed.
+  void _openSettings({VoidCallback? afterSelect}) {
+    setState(() {
+      _showSettings = true;
+      // Reachable from the sidebar at any depth, unlike the other leaf
+      // panes (always opened from within a specific unit/subtopic) —
+      // clear the selection so the breadcrumb reads "Home > Profile &
+      // Preferences" instead of dragging along wherever the student
+      // happened to be browsing.
+      _selectedUnitId = null;
+      _selectedSubtopic = null;
+      _lessonId = null;
+      _practice = null;
+      _unitTest = null;
+    });
+    afterSelect?.call();
+  }
+
+  /// From a lesson, practice test, unit test, or Profile & Preferences,
+  /// back goes to the subtopic overview (or the unit list / home, if this
+  /// was opened straight from there — e.g. the dashboard's resume card,
+  /// which doesn't select a subtopic). Every answer is already saved
+  /// server-side as it's picked, so leaving a unit test mid-way loses
+  /// nothing — no confirmation needed.
   void _backFromLeaf() {
     setState(() {
       _lessonId = null;
       _practice = null;
       _unitTest = null;
+      _showSettings = false;
     });
   }
 
-  /// From a lesson/practice/test/subtopic, back to the unit's own subtopic
-  /// list — what tapping the unit's own breadcrumb crumb does.
+  /// From a lesson/practice/test/settings/subtopic, back to the unit's own
+  /// subtopic list — what tapping the unit's own breadcrumb crumb does.
   void _backToUnit() {
     setState(() {
       _selectedSubtopic = null;
       _lessonId = null;
       _practice = null;
       _unitTest = null;
+      _showSettings = false;
     });
   }
 
@@ -177,6 +205,8 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       crumbs.add(_Crumb(_lessonTitle ?? 'Lesson', _backFromLeaf));
     } else if (_unitTest != null) {
       crumbs.add(_Crumb('Test', _backFromLeaf));
+    } else if (_showSettings) {
+      crumbs.add(_Crumb('Profile & Preferences', _backFromLeaf));
     }
     final current = crumbs.removeLast();
     crumbs.add(_Crumb(current.label, null));
@@ -210,6 +240,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
         _selectSubtopic(subtopic);
         afterSelect?.call();
       },
+      onOpenSettings: () => _openSettings(afterSelect: afterSelect),
       collapsed: collapsed,
       onToggleCollapsed: onToggleCollapsed,
     );
@@ -317,6 +348,12 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       return _LeafPane(
         breadcrumb: breadcrumb,
         child: LessonBody(key: ValueKey('lesson-$lessonId'), lessonId: lessonId),
+      );
+    }
+    if (_showSettings) {
+      return _LeafPane(
+        breadcrumb: breadcrumb,
+        child: const SettingsPage(embedded: true),
       );
     }
     final unitTest = _unitTest;
