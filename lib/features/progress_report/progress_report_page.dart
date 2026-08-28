@@ -86,21 +86,33 @@ class ProgressReportPage extends ConsumerWidget {
         error: (error, _) =>
             Center(child: Text('Could not load your progress report: $error')),
         data: (rows) {
+          // Whether this course has any topic at all with a given
+          // difficulty — decides whether that tier gets its own chart or
+          // the "doesn't have this tier" note (MCR3U/MHF4U have no
+          // Challenge or Advanced split, for instance). Checked once
+          // across the whole course, not per unit: a unit whose own
+          // topics happen to lack a tier the course otherwise has still
+          // gets a real (0%) bar in that tier's chart, same "missing slot
+          // stays empty" rule the overall score already applies.
+          final courseHasBucket = {
+            for (final bucket in _TierBucket.values)
+              bucket: rows.any((r) => _bucketFor(r.difficulty) == bucket),
+          };
+
           final overallBars = <_Bar>[];
           final tierCharts = <_TierBucket, List<_Bar>>{};
           for (final unit in units) {
             final unitRows = rows.where((r) => r.unitCode == unit.code).toList();
-
-            // Overall: each topic (subtopic) is worth 25% per difficulty
-            // level it has fully cleared — Easy/Medium/Challenge-or-Hard/
-            // Advanced — out of a fixed 4 slots, not however many tiers
-            // that topic actually has. A course/topic missing a level
-            // (e.g. MCR3U/MHF4U have no Challenge or Advanced split) just
-            // leaves that slot at 0%, capping what it can reach — same
-            // rule uniformly, no special-casing per course. The unit's
-            // own bar is the plain average of its topics' percents.
             final subtopicCodes = unitRows.map((r) => r.subtopicCode).toSet();
+
+            // Every topic (subtopic) is worth 25% per difficulty level it
+            // has fully cleared — Easy/Medium/Challenge-or-Hard/Advanced —
+            // out of a fixed 4 slots, not however many tiers that topic
+            // actually has. A topic/course missing a level just leaves
+            // that slot at 0%, capping what it can reach — same rule
+            // uniformly, no special-casing per course.
             final subtopicPercents = <double>[];
+            final completedByBucket = {for (final b in _TierBucket.values) b: 0};
             for (final subtopicCode in subtopicCodes) {
               final subtopicRows = unitRows
                   .where((r) => r.subtopicCode == subtopicCode)
@@ -110,6 +122,7 @@ class ProgressReportPage extends ConsumerWidget {
                 final matching = subtopicRows.where((r) => _bucketFor(r.difficulty) == bucket);
                 if (matching.isNotEmpty && matching.every((r) => r.isComplete)) {
                   completedSlots++;
+                  completedByBucket[bucket] = completedByBucket[bucket]! + 1;
                 }
               }
               subtopicPercents.add(completedSlots * 25.0);
@@ -131,21 +144,29 @@ class ProgressReportPage extends ConsumerWidget {
               ),
             );
 
-            // Per-difficulty: what fraction of this unit's topics have
-            // fully cleared this one specific tier — unrelated to the 25%
-            // weighting above, which is only about the combined score.
+            // Per-difficulty: this tier's own 25% slot, broken out on its
+            // own chart — same denominator as the overall score (every
+            // topic in the unit, not just the ones that happen to have
+            // this tier), so a unit's four tier-chart bars always average
+            // back to its overall bar above.
             for (final bucket in _TierBucket.values) {
-              final bucketRows = unitRows
-                  .where((r) => _bucketFor(r.difficulty) == bucket)
-                  .toList();
-              if (bucketRows.isEmpty) continue;
-              final completed = bucketRows.where((r) => r.isComplete).length;
+              if (!courseHasBucket[bucket]!) continue;
+              final topicsWithTier = subtopicCodes.where((code) {
+                return unitRows.any(
+                  (r) => r.subtopicCode == code && _bucketFor(r.difficulty) == bucket,
+                );
+              }).length;
+              final completed = completedByBucket[bucket]!;
+              final totalTopics = subtopicCodes.length;
               (tierCharts[bucket] ??= []).add(
                 _Bar(
                   unitTitle: unit.title,
-                  percent: 100.0 * completed / bucketRows.length,
-                  hasData: true,
-                  detail: '$completed of ${bucketRows.length} topics complete',
+                  percent: totalTopics == 0 ? 0 : 100.0 * completed / totalTopics,
+                  hasData: totalTopics > 0,
+                  detail: topicsWithTier == 0
+                      ? "This unit's topics don't include a ${bucket.label} tier."
+                      : '$completed of $totalTopics topics complete '
+                            '($topicsWithTier have this tier)',
                 ),
               );
             }

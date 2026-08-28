@@ -326,3 +326,100 @@ $$;
 
 revoke all on function public.admin_backfill_progress_report() from public, anon;
 grant execute on function public.admin_backfill_progress_report() to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- unit_mastery_report(): the same "25% per difficulty level" scoring the
+-- Progress Report page uses (progress_report_page.dart) -- each topic
+-- (subtopic) is worth 25% per difficulty level (Easy/Medium/Challenge-or-
+-- Hard/Advanced) it has fully cleared, out of a fixed 4 slots regardless
+-- of how many tiers that topic actually has, and a unit's own score is
+-- the plain average of its topics' percents -- computed here directly
+-- from topic_progress_report so an admin can query a student's mastery %
+-- per unit with plain SQL instead of re-deriving the app's own
+-- client-side aggregation by hand.
+--
+-- 'Hard' and 'Challenge' collapse to one slot (never both in the same
+-- course; see award_medal()'s own comment on this). Every topic that
+-- exists in the question bank is counted, not just ones the student has
+-- touched -- an untouched topic contributes a plain 0%, same as
+-- tier_catalog() does for the live per-tier chart (schema_progress_
+-- report.sql), so a student who hasn't started a unit yet correctly
+-- reports 0% rather than being left out of the average entirely.
+--
+-- Run after this file's own topic_progress_report/is_admin() dependencies
+-- exist. Safe to re-run.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.unit_mastery_report(
+  p_student_id  uuid,
+  p_course_code text
+)
+returns table (
+  unit_code       text,
+  mastery_percent numeric,
+  topics_counted  int
+)
+language plpgsql
+security definer
+stable
+set search_path = public
+as $$
+begin
+  -- Same "no auth context at all (SQL editor/service role) is at least as
+  -- trusted as an admin session" rule as admin_backfill_progress_report()
+  -- above -- only a signed-in student asking about someone else's data is
+  -- actually blocked here.
+  if auth.uid() is not null
+     and auth.uid() <> p_student_id
+     and not is_admin(auth.uid())
+  then
+    raise exception 'You can only view your own progress.';
+  end if;
+
+  return query
+  with catalog as (
+    select distinct
+      unit_code,
+      subtopic_code,
+      case when difficulty in ('Hard', 'Challenge') then 'ChallengeOrHard'
+           else difficulty end as bucket
+    from questions
+    where course_code = p_course_code
+  ),
+  progress as (
+    select
+      unit_code,
+      subtopic_code,
+      case when difficulty in ('Hard', 'Challenge') then 'ChallengeOrHard'
+           else difficulty end as bucket,
+      bool_or(solved_questions >= total_questions) as bucket_complete
+    from topic_progress_report
+    where student_id = p_student_id
+      and course_code = p_course_code
+    group by unit_code, subtopic_code,
+      case when difficulty in ('Hard', 'Challenge') then 'ChallengeOrHard'
+           else difficulty end
+  ),
+  per_topic as (
+    select
+      c.unit_code,
+      c.subtopic_code,
+      25 * count(*) filter (where coalesce(p.bucket_complete, false)) as topic_percent
+    from catalog c
+    left join progress p
+      on p.unit_code = c.unit_code
+      and p.subtopic_code = c.subtopic_code
+      and p.bucket = c.bucket
+    group by c.unit_code, c.subtopic_code
+  )
+  select
+    unit_code,
+    round(avg(topic_percent), 1) as mastery_percent,
+    count(*)::int as topics_counted
+  from per_topic
+  group by unit_code;
+end;
+$$;
+
+revoke all on function public.unit_mastery_report(uuid, text) from public, anon;
+grant execute on function public.unit_mastery_report(uuid, text) to authenticated;
