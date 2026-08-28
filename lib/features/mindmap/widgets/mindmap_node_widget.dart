@@ -31,7 +31,7 @@ class RootNodeWidget extends StatelessWidget {
         style: Theme.of(context).textTheme.titleMedium?.copyWith(
           color: scheme.onPrimary,
           fontWeight: FontWeight.bold,
-          fontSize: 21,
+          fontSize: 24,
           letterSpacing: 0.2,
         ),
       ),
@@ -90,7 +90,7 @@ class UnitNodeWidget extends StatelessWidget {
       // measurements while fixing the "Systems" word-split bug this
       // replaced. Bumped again alongside another font-size increase, since
       // the same word needs more room to render at a bigger size.
-      constraints: const BoxConstraints(maxWidth: 300),
+      constraints: const BoxConstraints(maxWidth: 320),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         color: scheme.surface,
@@ -107,7 +107,7 @@ class UnitNodeWidget extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(status.icon, color: status.color, size: 19),
+          Icon(status.icon, color: status.color, size: 21),
           const SizedBox(width: 8),
           Flexible(
             child: Text(
@@ -115,7 +115,7 @@ class UnitNodeWidget extends StatelessWidget {
               style: TextStyle(
                 color: scheme.onSurface,
                 fontWeight: FontWeight.w700,
-                fontSize: 19,
+                fontSize: 22,
               ),
             ),
           ),
@@ -126,19 +126,19 @@ class UnitNodeWidget extends StatelessWidget {
               style: TextStyle(
                 color: scheme.onSurfaceVariant,
                 fontWeight: FontWeight.w800,
-                fontSize: 14.5,
+                fontSize: 16,
               ),
             ),
           ],
           if (medal != null && medal != 'None') ...[
             const SizedBox(width: 6),
-            MedalBadge(medal: medal, size: 19),
+            MedalBadge(medal: medal, size: 21),
           ],
           const SizedBox(width: 6),
           Icon(
             collapsed ? Icons.chevron_right : Icons.expand_more,
             color: scheme.onSurfaceVariant,
-            size: 21,
+            size: 23,
           ),
         ],
       ),
@@ -184,7 +184,7 @@ class SubtopicNodeWidget extends StatelessWidget {
       // title's share of the row without a mid-word break — see
       // UnitNodeWidget above for the same reasoning. Bumped again
       // alongside another font-size increase, for the same reason.
-      constraints: const BoxConstraints(maxWidth: 230),
+      constraints: const BoxConstraints(maxWidth: 248),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: scheme.surface,
@@ -201,13 +201,13 @@ class SubtopicNodeWidget extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(status.icon, color: status.color, size: 17),
+          Icon(status.icon, color: status.color, size: 19),
           const SizedBox(width: 7),
           Flexible(
             child: Text(
               subtopic.title,
               style: TextStyle(
-                fontSize: 16,
+                fontSize: 19,
                 fontWeight: FontWeight.w600,
                 color: scheme.onSurface,
               ),
@@ -218,7 +218,7 @@ class SubtopicNodeWidget extends StatelessWidget {
             Text(
               '${scorePercent!.round()}%',
               style: TextStyle(
-                fontSize: 13,
+                fontSize: 15,
                 fontWeight: FontWeight.w800,
                 color: scheme.onSurfaceVariant,
               ),
@@ -226,7 +226,7 @@ class SubtopicNodeWidget extends StatelessWidget {
           ],
           if (medal != null && medal != 'None') ...[
             const SizedBox(width: 5),
-            MedalBadge(medal: medal, size: 16),
+            MedalBadge(medal: medal, size: 18),
           ],
         ],
       ),

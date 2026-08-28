@@ -111,7 +111,7 @@ class CurriculumSidebar extends StatelessWidget {
                       visualDensity: VisualDensity.compact,
                       icon: Icon(
                         collapsed ? Icons.chevron_right : Icons.chevron_left,
-                        size: 20,
+                        size: 22,
                       ),
                       onPressed: onToggleCollapsed,
                     ),
@@ -128,15 +128,19 @@ class CurriculumSidebar extends StatelessWidget {
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
                     child: Text(
                       course.title,
-                      style: Theme.of(context).textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.bold),
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 20,
+                      ),
                     ),
                   ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                     child: Text(
                       course.gradeLabel,
-                      style: Theme.of(context).textTheme.bodySmall,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(fontSize: 14),
                     ),
                   ),
                 ],
@@ -170,6 +174,7 @@ class CurriculumSidebar extends StatelessWidget {
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
                         color: scheme.onSurfaceVariant,
                         letterSpacing: 0.8,
+                        fontSize: 13,
                       ),
                     ),
                   )
@@ -231,17 +236,18 @@ class _NavRow extends StatelessWidget {
     final row = collapsed
         ? Padding(
             padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Center(child: Icon(icon, size: 19, color: iconColor)),
+            child: Center(child: Icon(icon, size: 22, color: iconColor)),
           )
         : Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
             child: Row(
               children: [
-                Icon(icon, size: 19, color: iconColor),
+                Icon(icon, size: 22, color: iconColor),
                 const SizedBox(width: 12),
                 Text(
                   label,
                   style: TextStyle(
+                    fontSize: 17,
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                     color: selected ? scheme.primary : scheme.onSurface,
                   ),
@@ -331,7 +337,7 @@ class _UnitNavRow extends StatelessWidget {
               message: unit.title,
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 10),
-                child: Center(child: Icon(status.icon, size: 16, color: status.color)),
+                child: Center(child: Icon(status.icon, size: 18, color: status.color)),
               ),
             ),
           ),
@@ -362,7 +368,7 @@ class _UnitNavRow extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    Icon(status.icon, size: 15, color: status.color),
+                    Icon(status.icon, size: 17, color: status.color),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
@@ -373,13 +379,16 @@ class _UnitNavRow extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
+                              fontSize: 17,
                               fontWeight: expanded ? FontWeight.w700 : FontWeight.w500,
                               color: expanded ? scheme.primary : scheme.onSurface,
                             ),
                           ),
                           Text(
                             '$subtopicCount ${subtopicCount == 1 ? 'topic' : 'topics'}',
-                            style: Theme.of(context).textTheme.bodySmall,
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodySmall?.copyWith(fontSize: 14),
                           ),
                           if (scorePercent != null) ...[
                             const SizedBox(height: 5),
@@ -397,12 +406,12 @@ class _UnitNavRow extends StatelessWidget {
                       ),
                     ),
                     if (medal != null && medal != 'None') ...[
-                      MedalBadge(medal: medal, size: 15),
+                      MedalBadge(medal: medal, size: 17),
                       const SizedBox(width: 6),
                     ],
                     Icon(
                       expanded ? Icons.expand_more : Icons.chevron_right,
-                      size: 18,
+                      size: 20,
                       color: expanded ? scheme.primary : scheme.onSurfaceVariant,
                     ),
                   ],
@@ -471,7 +480,7 @@ class _SubtopicNavRow extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
           child: Row(
             children: [
-              Icon(status.icon, size: 13, color: status.color),
+              Icon(status.icon, size: 15, color: status.color),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -479,7 +488,7 @@ class _SubtopicNavRow extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: 15,
                     fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                     color: selected ? scheme.primary : scheme.onSurfaceVariant,
                   ),
@@ -487,7 +496,7 @@ class _SubtopicNavRow extends StatelessWidget {
               ),
               if (medal != null && medal != 'None') ...[
                 const SizedBox(width: 6),
-                MedalBadge(medal: medal, size: 12),
+                MedalBadge(medal: medal, size: 14),
               ],
             ],
           ),

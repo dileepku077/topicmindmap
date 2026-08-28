@@ -61,14 +61,14 @@ const _unitRowGap = 85.0;
 // works out to, placeSide already spaces units in the row far enough
 // apart to clear it, so this doesn't need its own "leave a blind cone
 // toward the root" carve-out the old arc version needed.
-const _leafMinRadius = 118.0;
+const _leafMinRadius = 128.0;
 // NOT safe to shorten below this: computing every real leaf pair's
-// on-screen (dx, dy) against the subtopic box (now 230x~44, after the
-// latest font-size increase) analytically turned up an actual overlap
-// below this for some real subtopic counts found in seed.sql (4 through
-// 9 per unit). 240 is the smallest value with zero overlap across all of
-// them at the current box size.
-const _leafTargetChord = 240.0;
+// on-screen (dx, dy) against the subtopic box (now 248x~48, after another
+// font-size increase) analytically turned up an actual overlap below this
+// for some real subtopic counts found in seed.sql (4 through 9 per unit).
+// 258 is the smallest value with zero overlap across all of them at the
+// current box size.
+const _leafTargetChord = 258.0;
 
 // Zoom bounds for the mindmap canvas — shared by InteractiveViewer's own
 // pinch/drag-scale gestures, the explicit Cmd/Ctrl+scroll zoom below, and
