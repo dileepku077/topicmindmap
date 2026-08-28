@@ -45,10 +45,18 @@
 -- one pre-aggregated row per subtopic across every tier combined — too
 -- coarse once the per-difficulty charts needed the tier breakdown too.
 --
--- Run after schema_practice.sql (needs public.questions/attempts/
--- progress_resets) and schema_tier_medals.sql (this mirrors its per-tier
--- completion logic; not a hard dependency, just keep them consistent if
--- either changes). Safe to re-run.
+-- UPDATE: the app itself (progress_repository.dart) no longer calls this
+-- function — the student's own solved/total numbers now come straight
+-- from topic_progress_report (schema_progress_report_table.sql), a real
+-- table kept in sync by award_medal() as students practice, rather than
+-- rejoining attempts/questions/progress_resets on every page load. This
+-- function is left defined (still correct, unchanged) as a live cross-
+-- check if the persisted table's numbers are ever in doubt, and because
+-- tier_catalog() below reuses its "tiers" CTE logic. Run after
+-- schema_practice.sql (needs public.questions/attempts/progress_resets)
+-- and schema_tier_medals.sql (this mirrors its per-tier completion logic;
+-- not a hard dependency, just keep them consistent if either changes).
+-- Safe to re-run.
 
 drop function if exists public.subtopic_progress_report(text);
 
@@ -112,3 +120,40 @@ $$;
 
 revoke all on function public.topic_tier_progress(text) from public, anon;
 grant execute on function public.topic_tier_progress(text) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- tier_catalog(): just "which (unit, subtopic, difficulty) tiers exist for
+-- this course, and how many questions are in each" — no student data at
+-- all, purely curriculum structure. A student can't read questions
+-- directly (see schema_practice.sql's own reasoning: prompt/options would
+-- leak answers), so this is what progress_repository.dart now pairs with
+-- topic_progress_report to get a *complete* set of bars, including tiers
+-- the student hasn't touched yet (topic_progress_report only ever has a
+-- row for a tier once there's been at least one attempt at it) — without
+-- it, an untouched unit's bar would be missing entirely instead of
+-- reading as 0%. Safe to expose broadly (no prompts/answers/feedback,
+-- just counts), but still gated as security definer/authenticated-only
+-- rather than a bare public view, same caution as every other student-
+-- facing function here.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.tier_catalog(p_course_code text)
+returns table (
+  unit_code text,
+  subtopic_code text,
+  difficulty text,
+  total_questions int
+)
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select unit_code, subtopic_code, difficulty, count(*)::int as total_questions
+  from questions
+  where course_code = p_course_code
+  group by unit_code, subtopic_code, difficulty;
+$$;
+
+revoke all on function public.tier_catalog(text) from public, anon;
+grant execute on function public.tier_catalog(text) to authenticated;

@@ -25,15 +25,55 @@ class ProgressRepository {
   }
 
   /// One row per (unit, subtopic, difficulty) tier with questions in the
-  /// bank, for the Progress Report's charts — see topic_tier_progress() in
-  /// supabase/schema_progress_report.sql for how completion is derived.
+  /// bank, for the Progress Report's charts. The solved/total numbers
+  /// themselves come straight from topic_progress_report — a real table
+  /// award_medal() keeps up to date as students practice (see
+  /// supabase/schema_progress_report_table.sql) — rather than rejoining
+  /// attempts/questions/progress_resets live on every page load the way
+  /// this used to (topic_tier_progress() in schema_progress_report.sql,
+  /// still defined but no longer called from here).
+  ///
+  /// topic_progress_report only ever has a row for a tier once a student
+  /// has made at least one attempt at it, so it's paired with
+  /// tier_catalog() — pure curriculum structure (which tiers exist and how
+  /// many questions each has, no student data at all) — to fill in an
+  /// explicit 0-progress row for anything untouched. Without that, an
+  /// untouched unit's bar would be missing from the chart entirely instead
+  /// of reading as 0%.
   Future<List<TierProgress>> fetchTierProgress(String courseCode) async {
-    final rows = await _client.rpc(
-      'topic_tier_progress',
+    final catalogRows = await _client.rpc(
+      'tier_catalog',
       params: {'p_course_code': courseCode},
     );
-    return (rows as List)
-        .map((row) => TierProgress.fromMap(row as Map<String, dynamic>))
-        .toList();
+    final progressRows = await _client
+        .from('topic_progress_report')
+        .select()
+        .eq('course_code', courseCode);
+
+    final solvedByTier = <String, int>{
+      for (final row in progressRows)
+        _tierKey(
+          row['unit_code'] as String,
+          row['subtopic_code'] as String,
+          row['difficulty'] as String,
+        ): row['solved_questions'] as int,
+    };
+
+    return (catalogRows as List).map((row) {
+      final map = row as Map<String, dynamic>;
+      final unitCode = map['unit_code'] as String;
+      final subtopicCode = map['subtopic_code'] as String;
+      final difficulty = map['difficulty'] as String;
+      return TierProgress(
+        unitCode: unitCode,
+        subtopicCode: subtopicCode,
+        difficulty: difficulty,
+        totalQuestions: map['total_questions'] as int,
+        solvedQuestions: solvedByTier[_tierKey(unitCode, subtopicCode, difficulty)] ?? 0,
+      );
+    }).toList();
   }
+
+  String _tierKey(String unitCode, String subtopicCode, String difficulty) =>
+      '$unitCode/$subtopicCode/$difficulty';
 }
