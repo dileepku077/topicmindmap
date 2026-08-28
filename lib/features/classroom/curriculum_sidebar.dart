@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import '../../models/course.dart';
 import '../../models/progress_status.dart';
 import '../../models/subtopic.dart';
-import '../../models/subtopic_mastery.dart';
 import '../../models/unit.dart';
 import '../../state/progress_providers.dart';
 
@@ -30,7 +29,6 @@ class CurriculumSidebar extends StatelessWidget {
     required this.units,
     required this.subtopicsByUnit,
     required this.subtopicStatus,
-    required this.subtopicMedal,
     required this.subtopicScorePercent,
     required this.isUnitExpanded,
     required this.onSelectUnit,
@@ -48,7 +46,6 @@ class CurriculumSidebar extends StatelessWidget {
   final List<Unit> units;
   final Map<String, List<Subtopic>> subtopicsByUnit;
   final Map<String, ProgressStatus> subtopicStatus;
-  final Map<String, String> subtopicMedal;
 
   /// Best-score percent per subtopic — same map every caller already
   /// computes for its own main content. Aggregated per unit here (see
@@ -197,14 +194,9 @@ class CurriculumSidebar extends StatelessWidget {
                     unit: unit,
                     subtopics: subtopicsByUnit[unit.id] ?? const [],
                     subtopicStatus: subtopicStatus,
-                    subtopicMedal: subtopicMedal,
                     status: aggregateUnitStatus(
                       (subtopicsByUnit[unit.id] ?? const []).map((s) => s.id),
                       subtopicStatus,
-                    ),
-                    medal: aggregateUnitMedal(
-                      (subtopicsByUnit[unit.id] ?? const []).map((s) => s.id),
-                      subtopicMedal,
                     ),
                     scorePercent: aggregateUnitScorePercent(
                       (subtopicsByUnit[unit.id] ?? const []).map((s) => s.id),
@@ -292,9 +284,7 @@ class _UnitNavRow extends StatelessWidget {
     required this.unit,
     required this.subtopics,
     required this.subtopicStatus,
-    required this.subtopicMedal,
     required this.status,
-    required this.medal,
     required this.scorePercent,
     required this.expanded,
     required this.selectedSubtopicId,
@@ -306,12 +296,7 @@ class _UnitNavRow extends StatelessWidget {
   final Unit unit;
   final List<Subtopic> subtopics;
   final Map<String, ProgressStatus> subtopicStatus;
-  final Map<String, String> subtopicMedal;
   final ProgressStatus status;
-
-  /// The worst medal among this unit's attempted subtopics — see
-  /// `aggregateUnitMedal` — or null if none have been attempted yet.
-  final String? medal;
 
   /// This unit's overall completion percent (0-100) — see
   /// `aggregateUnitScorePercent` — or null until at least one of its
@@ -417,10 +402,6 @@ class _UnitNavRow extends StatelessWidget {
                         ],
                       ),
                     ),
-                    if (medal != null && medal != 'None') ...[
-                      MedalBadge(medal: medal, size: 17),
-                      const SizedBox(width: 6),
-                    ],
                     Icon(
                       expanded ? Icons.expand_more : Icons.chevron_right,
                       size: 20,
@@ -446,7 +427,6 @@ class _UnitNavRow extends StatelessWidget {
                           _SubtopicNavRow(
                             subtopic: subtopic,
                             status: subtopicStatus[subtopic.id] ?? ProgressStatus.notStarted,
-                            medal: subtopicMedal[subtopic.id],
                             selected: subtopic.id == selectedSubtopicId,
                             onTap: () => onTapSubtopic(subtopic),
                           ),
@@ -468,14 +448,12 @@ class _SubtopicNavRow extends StatelessWidget {
   const _SubtopicNavRow({
     required this.subtopic,
     required this.status,
-    required this.medal,
     required this.selected,
     required this.onTap,
   });
 
   final Subtopic subtopic;
   final ProgressStatus status;
-  final String? medal;
   final bool selected;
   final VoidCallback onTap;
 
@@ -506,10 +484,6 @@ class _SubtopicNavRow extends StatelessWidget {
                   ),
                 ),
               ),
-              if (medal != null && medal != 'None') ...[
-                const SizedBox(width: 6),
-                MedalBadge(medal: medal, size: 14),
-              ],
             ],
           ),
         ),

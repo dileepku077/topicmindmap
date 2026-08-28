@@ -758,7 +758,6 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                         units: units,
                         subtopicsByUnit: _subtopicsByUnit,
                         subtopicStatus: subtopicStatus,
-                        subtopicMedal: subtopicMedal,
                         subtopicScorePercent: subtopicScorePercent,
                         isUnitExpanded: (unitId) =>
                             _expandedUnitIds.contains(unitId),
