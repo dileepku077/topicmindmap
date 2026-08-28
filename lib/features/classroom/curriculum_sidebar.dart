@@ -36,6 +36,7 @@ class CurriculumSidebar extends StatelessWidget {
     required this.onSelectUnit,
     required this.onSelectSubtopic,
     required this.onOpenSettings,
+    required this.onOpenProgressReport,
     this.selectedSubtopicId,
     this.onSelectHome,
     this.homeSelected = false,
@@ -64,6 +65,10 @@ class CurriculumSidebar extends StatelessWidget {
   /// place, keeping this sidebar on screen, in both callers today; see
   /// mindmap_page.dart / classroom_view.dart), not this widget.
   final VoidCallback onOpenSettings;
+
+  /// Opens the Progress Report bar chart — same "caller decides how"
+  /// treatment as [onOpenSettings].
+  final VoidCallback onOpenProgressReport;
   final String? selectedSubtopicId;
 
   /// Null hides the "Home" row entirely — the mindmap view has no
@@ -157,6 +162,13 @@ class CurriculumSidebar extends StatelessWidget {
                   label: 'Profile & Preferences',
                   selected: false,
                   onTap: onOpenSettings,
+                  collapsed: collapsed,
+                ),
+                _NavRow(
+                  icon: Icons.bar_chart_outlined,
+                  label: 'Progress Report',
+                  selected: false,
+                  onTap: onOpenProgressReport,
                   collapsed: collapsed,
                 ),
                 _NavRow(

@@ -169,6 +169,10 @@ class _PracticeTestPageState extends ConsumerState<PracticeTestPage> {
       // classroom view reflects this result the moment the student goes
       // back, instead of depending on that realtime push arriving.
       ref.invalidate(practiceMasteryProvider);
+      // Same reasoning — the Progress Report's bar for this topic should
+      // reflect a just-cleared tier immediately if the student checks it
+      // right after, not a stale fetch from before this attempt.
+      ref.invalidate(progressReportProvider(widget.courseCode));
     } catch (error) {
       if (!mounted) return;
       setState(() => _awardingMedal = false);

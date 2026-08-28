@@ -13,6 +13,7 @@ import '../../state/profile_providers.dart';
 import '../../state/progress_providers.dart';
 import '../lesson/lesson_page.dart';
 import '../practice_test/practice_test_page.dart';
+import '../progress_report/progress_report_page.dart';
 import '../settings/settings_page.dart';
 import '../topic_detail/topic_detail_sheet.dart';
 import '../unit_test/unit_test_page.dart';
@@ -69,6 +70,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
   _PracticeTarget? _practice;
   _UnitTestTarget? _unitTest;
   bool _showSettings = false;
+  bool _showProgressReport = false;
 
   @override
   void didUpdateWidget(covariant ClassroomView oldWidget) {
@@ -88,6 +90,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _practice = null;
       _unitTest = null;
       _showSettings = false;
+      _showProgressReport = false;
     });
   }
 
@@ -99,6 +102,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _practice = null;
       _unitTest = null;
       _showSettings = false;
+      _showProgressReport = false;
     });
   }
 
@@ -110,6 +114,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _practice = null;
       _unitTest = null;
       _showSettings = false;
+      _showProgressReport = false;
     });
   }
 
@@ -120,6 +125,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _practice = null;
       _unitTest = null;
       _showSettings = false;
+      _showProgressReport = false;
     });
   }
 
@@ -129,6 +135,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _lessonId = null;
       _unitTest = null;
       _showSettings = false;
+      _showProgressReport = false;
     });
   }
 
@@ -138,6 +145,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _lessonId = null;
       _practice = null;
       _showSettings = false;
+      _showProgressReport = false;
     });
   }
 
@@ -154,6 +162,23 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _lessonId = null;
       _practice = null;
       _unitTest = null;
+      _showProgressReport = false;
+    });
+    afterSelect?.call();
+  }
+
+  void _openProgressReport({VoidCallback? afterSelect}) {
+    setState(() {
+      _showProgressReport = true;
+      // Same reasoning as _openSettings above — reachable from the
+      // sidebar at any depth, so the breadcrumb shouldn't drag along
+      // wherever the student happened to be browsing.
+      _selectedUnitId = null;
+      _selectedSubtopic = null;
+      _lessonId = null;
+      _practice = null;
+      _unitTest = null;
+      _showSettings = false;
     });
     afterSelect?.call();
   }
@@ -170,6 +195,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _practice = null;
       _unitTest = null;
       _showSettings = false;
+      _showProgressReport = false;
     });
   }
 
@@ -182,6 +208,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _practice = null;
       _unitTest = null;
       _showSettings = false;
+      _showProgressReport = false;
     });
   }
 
@@ -207,6 +234,8 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       crumbs.add(_Crumb('Test', _backFromLeaf));
     } else if (_showSettings) {
       crumbs.add(_Crumb('Profile & Preferences', _backFromLeaf));
+    } else if (_showProgressReport) {
+      crumbs.add(_Crumb('Progress Report', _backFromLeaf));
     }
     final current = crumbs.removeLast();
     crumbs.add(_Crumb(current.label, null));
@@ -241,6 +270,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
         afterSelect?.call();
       },
       onOpenSettings: () => _openSettings(afterSelect: afterSelect),
+      onOpenProgressReport: () => _openProgressReport(afterSelect: afterSelect),
       collapsed: collapsed,
       onToggleCollapsed: onToggleCollapsed,
     );
@@ -354,6 +384,12 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       return _LeafPane(
         breadcrumb: breadcrumb,
         child: const SettingsPage(embedded: true),
+      );
+    }
+    if (_showProgressReport) {
+      return _LeafPane(
+        breadcrumb: breadcrumb,
+        child: const ProgressReportPage(embedded: true),
       );
     }
     final unitTest = _unitTest;

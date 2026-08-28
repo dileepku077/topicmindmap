@@ -21,6 +21,7 @@ import '../classroom/classroom_view.dart';
 import '../classroom/curriculum_sidebar.dart';
 import '../lesson/lesson_page.dart';
 import '../practice_test/practice_test_page.dart';
+import '../progress_report/progress_report_page.dart';
 import '../settings/settings_page.dart';
 import '../topic_detail/topic_detail_sheet.dart';
 import 'widgets/hoverable_node.dart';
@@ -121,12 +122,23 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
   String? _embeddedLessonTitle;
   _MindmapPracticeTarget? _embeddedPractice;
   bool _embeddedSettings = false;
+  bool _embeddedProgressReport = false;
 
   void _openEmbeddedSettings() {
     setState(() {
       _embeddedSettings = true;
       _embeddedLessonId = null;
       _embeddedPractice = null;
+      _embeddedProgressReport = false;
+    });
+  }
+
+  void _openEmbeddedProgressReport() {
+    setState(() {
+      _embeddedProgressReport = true;
+      _embeddedLessonId = null;
+      _embeddedPractice = null;
+      _embeddedSettings = false;
     });
   }
 
@@ -136,6 +148,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
       _embeddedLessonTitle = lessonTitle;
       _embeddedPractice = null;
       _embeddedSettings = false;
+      _embeddedProgressReport = false;
     });
   }
 
@@ -148,6 +161,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
       );
       _embeddedLessonId = null;
       _embeddedSettings = false;
+      _embeddedProgressReport = false;
     });
   }
 
@@ -156,6 +170,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
       _embeddedLessonId = null;
       _embeddedPractice = null;
       _embeddedSettings = false;
+      _embeddedProgressReport = false;
     });
   }
 
@@ -481,6 +496,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
       _embeddedLessonId = null;
       _embeddedPractice = null;
       _embeddedSettings = false;
+      _embeddedProgressReport = false;
     });
     _fitToContent();
   }
@@ -760,6 +776,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                         onToggleCollapsed: () =>
                             setState(() => _sidebarCollapsed = !_sidebarCollapsed),
                         onOpenSettings: _openEmbeddedSettings,
+                        onOpenProgressReport: _openEmbeddedProgressReport,
                       ),
                     ),
                     VerticalDivider(
@@ -774,6 +791,12 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                               title: 'Profile & Preferences',
                               onBack: _closeEmbedded,
                               child: const SettingsPage(embedded: true),
+                            )
+                          : _embeddedProgressReport
+                          ? _MindmapEmbeddedPane(
+                              title: 'Progress Report',
+                              onBack: _closeEmbedded,
+                              child: const ProgressReportPage(embedded: true),
                             )
                           : _embeddedPractice != null
                           ? _MindmapEmbeddedPane(

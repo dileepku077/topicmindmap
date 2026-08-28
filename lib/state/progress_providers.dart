@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/progress_repository.dart';
 import '../models/progress_status.dart';
 import '../models/subtopic_mastery.dart';
+import '../models/subtopic_progress.dart';
 import 'auth_providers.dart';
 import 'curriculum_providers.dart';
 
@@ -56,6 +57,19 @@ final practiceMasteryProvider =
       return bySubtopic;
     },
   );
+});
+
+/// The Progress Report's data for one course — a one-shot fetch (not a
+/// live stream, unlike [practiceMasteryProvider]) since it's only ever
+/// looked at on that page, not driving something already on screen the
+/// rest of the time. Callers that just changed the underlying data
+/// (finishing a practice tier) invalidate this explicitly, same pattern as
+/// every other write in this app.
+final progressReportProvider =
+    FutureProvider.family<List<SubtopicProgress>, String>((ref, courseCode) {
+  final user = ref.watch(currentUserProvider);
+  if (user == null) return Future.value(const <SubtopicProgress>[]);
+  return ref.watch(progressRepositoryProvider).fetchProgressReport(courseCode);
 });
 
 /// This subtopic's mastery record for the signed-in student, or null if

@@ -9,6 +9,7 @@ import '../features/auth/login_page.dart';
 import '../features/lesson/lesson_page.dart';
 import '../features/mindmap/mindmap_page.dart';
 import '../features/practice_test/practice_test_page.dart';
+import '../features/progress_report/progress_report_page.dart';
 import '../features/settings/settings_page.dart';
 import '../features/unit_test/unit_test_page.dart';
 import '../features/welcome/welcome_page.dart';
@@ -53,6 +54,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/welcome',
         builder: (context, state) => const WelcomePage(),
+      ),
+      GoRoute(
+        path: '/progress',
+        builder: (context, state) => const ProgressReportPage(),
       ),
       GoRoute(
         path: '/admin',
