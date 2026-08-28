@@ -156,24 +156,10 @@ class UnitNodeWidget extends StatelessWidget {
 /// wasn't worth the space it took from the title, so it moved to the
 /// hover tooltip built in mindmap_page.dart's `_buildNodes` instead.
 class SubtopicNodeWidget extends StatelessWidget {
-  const SubtopicNodeWidget({
-    super.key,
-    required this.subtopic,
-    required this.status,
-    this.scorePercent,
-    this.medal,
-  });
+  const SubtopicNodeWidget({super.key, required this.subtopic, required this.status});
 
   final Subtopic subtopic;
   final ProgressStatus status;
-
-  /// This subtopic's best practice-test score percent, or null if it
-  /// hasn't been attempted yet (nothing worth showing).
-  final double? scorePercent;
-
-  /// This subtopic's best-earned medal ('None' · 'Bronze' · 'Silver' ·
-  /// 'Gold' · 'Diamond'), or null if it hasn't been attempted yet.
-  final String? medal;
 
   @override
   Widget build(BuildContext context) {
@@ -213,21 +199,6 @@ class SubtopicNodeWidget extends StatelessWidget {
               ),
             ),
           ),
-          if (scorePercent != null) ...[
-            const SizedBox(width: 6),
-            Text(
-              '${scorePercent!.round()}%',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w800,
-                color: scheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-          if (medal != null && medal != 'None') ...[
-            const SizedBox(width: 5),
-            MedalBadge(medal: medal, size: 18),
-          ],
         ],
       ),
     );

@@ -38,7 +38,6 @@ class ClassroomView extends ConsumerStatefulWidget {
     required this.subtopicsByUnit,
     required this.subtopicStatus,
     required this.subtopicScorePercent,
-    required this.subtopicMedal,
     this.sidebarCollapsed = false,
     this.onToggleSidebarCollapsed,
   });
@@ -48,7 +47,6 @@ class ClassroomView extends ConsumerStatefulWidget {
   final Map<String, List<Subtopic>> subtopicsByUnit;
   final Map<String, ProgressStatus> subtopicStatus;
   final Map<String, double> subtopicScorePercent;
-  final Map<String, String> subtopicMedal;
   /// Mirrors the mindmap view's own sidebar state (see mindmap_page.dart)
   /// so minimizing the left-hand unit list to an icon rail is consistent
   /// across both views. Only takes effect at >=720px; below that the
@@ -429,8 +427,6 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       unit: selectedUnit,
       subtopics: widget.subtopicsByUnit[selectedUnit.id] ?? const [],
       subtopicStatus: widget.subtopicStatus,
-      subtopicScorePercent: widget.subtopicScorePercent,
-      subtopicMedal: widget.subtopicMedal,
       onTapSubtopic: _selectSubtopic,
       onStartUnitTest: () => _openUnitTest(selectedUnit.code, selectedUnit.title),
     );
@@ -879,8 +875,6 @@ class _UnitPanel extends StatelessWidget {
     required this.unit,
     required this.subtopics,
     required this.subtopicStatus,
-    required this.subtopicScorePercent,
-    required this.subtopicMedal,
     required this.onTapSubtopic,
     required this.onStartUnitTest,
   });
@@ -889,8 +883,6 @@ class _UnitPanel extends StatelessWidget {
   final Unit unit;
   final List<Subtopic> subtopics;
   final Map<String, ProgressStatus> subtopicStatus;
-  final Map<String, double> subtopicScorePercent;
-  final Map<String, String> subtopicMedal;
   final void Function(Subtopic subtopic) onTapSubtopic;
 
   /// Opens a graded mock test across every subtopic in this unit — see
@@ -962,8 +954,6 @@ class _UnitPanel extends StatelessWidget {
             child: _SubtopicCard(
               subtopic: subtopic,
               status: subtopicStatus[subtopic.id] ?? ProgressStatus.notStarted,
-              scorePercent: subtopicScorePercent[subtopic.id],
-              medal: subtopicMedal[subtopic.id],
               onTap: () => onTapSubtopic(subtopic),
             ),
           ),
@@ -976,15 +966,11 @@ class _SubtopicCard extends StatelessWidget {
   const _SubtopicCard({
     required this.subtopic,
     required this.status,
-    required this.scorePercent,
-    required this.medal,
     required this.onTap,
   });
 
   final Subtopic subtopic;
   final ProgressStatus status;
-  final double? scorePercent;
-  final String? medal;
   final VoidCallback onTap;
 
   @override
@@ -1008,17 +994,6 @@ class _SubtopicCard extends StatelessWidget {
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
-              if (scorePercent != null) ...[
-                Text(
-                  '${scorePercent!.round()}%',
-                  style: TextStyle(color: status.color, fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(width: 10),
-              ],
-              if (medal != null && medal != 'None') ...[
-                MedalBadge(medal: medal, size: 18),
-                const SizedBox(width: 10),
-              ],
               Icon(Icons.chevron_right, color: scheme.outline, size: 20),
             ],
           ),

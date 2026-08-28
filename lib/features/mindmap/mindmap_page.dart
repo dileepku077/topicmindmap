@@ -738,7 +738,6 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                     subtopicsByUnit: _subtopicsByUnit,
                     subtopicStatus: subtopicStatus,
                     subtopicScorePercent: subtopicScorePercent,
-                    subtopicMedal: subtopicMedal,
                     sidebarCollapsed: _sidebarCollapsed,
                     onToggleSidebarCollapsed: () =>
                         setState(() => _sidebarCollapsed = !_sidebarCollapsed),
@@ -1000,12 +999,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
               )} Topic ${subtopic.orderIndex + 1} of '
                   '${subtopicsInUnit.length} in this unit.',
               highlightColor: status.color,
-              child: SubtopicNodeWidget(
-                subtopic: subtopic,
-                status: status,
-                scorePercent: subtopicScorePercent[subtopic.id],
-                medal: subtopicMedal[subtopic.id],
-              ),
+              child: SubtopicNodeWidget(subtopic: subtopic, status: status),
             ),
           ),
         );
