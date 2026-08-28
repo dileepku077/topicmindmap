@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/progress_repository.dart';
 import '../models/progress_status.dart';
 import '../models/subtopic_mastery.dart';
-import '../models/subtopic_progress.dart';
+import '../models/tier_progress.dart';
 import 'auth_providers.dart';
 import 'curriculum_providers.dart';
 
@@ -66,10 +66,10 @@ final practiceMasteryProvider =
 /// (finishing a practice tier) invalidate this explicitly, same pattern as
 /// every other write in this app.
 final progressReportProvider =
-    FutureProvider.family<List<SubtopicProgress>, String>((ref, courseCode) {
+    FutureProvider.family<List<TierProgress>, String>((ref, courseCode) {
   final user = ref.watch(currentUserProvider);
-  if (user == null) return Future.value(const <SubtopicProgress>[]);
-  return ref.watch(progressRepositoryProvider).fetchProgressReport(courseCode);
+  if (user == null) return Future.value(const <TierProgress>[]);
+  return ref.watch(progressRepositoryProvider).fetchTierProgress(courseCode);
 });
 
 /// This subtopic's mastery record for the signed-in student, or null if

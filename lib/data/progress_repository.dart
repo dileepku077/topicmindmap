@@ -1,7 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/subtopic_mastery.dart';
-import '../models/subtopic_progress.dart';
+import '../models/tier_progress.dart';
 
 /// Reads a student's practice-test mastery record — one row per subtopic
 /// they've completed at least once, updated in place by the database's
@@ -24,16 +24,16 @@ class ProgressRepository {
         .map((rows) => rows.map(SubtopicMastery.fromMap).toList());
   }
 
-  /// One row per topic with questions in the bank, for the Progress
-  /// Report's bar chart — see subtopic_progress_report() in
-  /// supabase/schema_progress_report.sql for how mastery % is derived.
-  Future<List<SubtopicProgress>> fetchProgressReport(String courseCode) async {
+  /// One row per (unit, subtopic, difficulty) tier with questions in the
+  /// bank, for the Progress Report's charts — see topic_tier_progress() in
+  /// supabase/schema_progress_report.sql for how completion is derived.
+  Future<List<TierProgress>> fetchTierProgress(String courseCode) async {
     final rows = await _client.rpc(
-      'subtopic_progress_report',
+      'topic_tier_progress',
       params: {'p_course_code': courseCode},
     );
     return (rows as List)
-        .map((row) => SubtopicProgress.fromMap(row as Map<String, dynamic>))
+        .map((row) => TierProgress.fromMap(row as Map<String, dynamic>))
         .toList();
   }
 }

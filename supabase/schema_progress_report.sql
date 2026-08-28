@@ -1,24 +1,25 @@
--- Astro STEM Labs: a per-subtopic "mastery %" for the new Progress Report
--- page (lib/features/progress_report/progress_report_page.dart) — a bar
--- chart with one bar per topic, colored using the same
--- ProgressStatus.fromScorePercent bands already used everywhere else in
--- the app (mindmap nodes, sidebar rows).
+-- Astro STEM Labs: per-topic, per-difficulty-tier practice completion for
+-- the Progress Report page (lib/features/progress_report/
+-- progress_report_page.dart) — an overall mastery % bar chart plus four
+-- separate charts, one per difficulty (Easy / Medium / Challenge-or-Hard /
+-- Advanced), each with one bar per unit.
 --
--- Mastery % here means something specific and different from
--- subtopic_mastery.medal: "what fraction of this topic's difficulty tiers
--- (Easy/Medium/Hard, or Easy/Medium/Challenge/Advanced — however many
--- actually exist for it) has the student fully solved at least once."
--- subtopic_mastery can't answer that on its own — it keeps exactly one row
--- per subtopic, holding only the single best tier pass so far (see
--- schema_tier_medals.sql's own comment on this), not which of several
--- tiers have been cleared. So this reads attempts directly (a student can
--- already read their own rows there — see the "attempts are owner
--- readable" policy in schema_practice.sql) and re-derives per-tier
--- completion the same way award_medal() does: every question in that
--- (course, unit, subtopic, difficulty) answered correctly at least once
--- since the last progress reset, counting only Practice Test attempts
--- (source is null) — a mock Test attempt (source = 'test') must not move
--- this any more than it moves medals or mindmap colors.
+-- This returns one row per (unit, subtopic, difficulty) tier that actually
+-- has questions — total/solved question counts, not a pre-aggregated
+-- percentage — so the app can roll it up to whatever a given chart needs
+-- (overall per unit, or per unit within one difficulty) without another
+-- round trip. subtopic_mastery can't answer either of these on its own —
+-- it keeps exactly one row per subtopic, holding only the single best
+-- tier pass so far (see schema_tier_medals.sql's own comment on this), not
+-- which of several tiers have been cleared. So this reads attempts
+-- directly (a student can already read their own rows there — see the
+-- "attempts are owner readable" policy in schema_practice.sql) and
+-- re-derives per-tier completion the same way award_medal() does: every
+-- question in that (course, unit, subtopic, difficulty) answered
+-- correctly at least once since the last progress reset, counting only
+-- Practice Test attempts (source is null) — a mock Test attempt
+-- (source = 'test') must not move this any more than it moves medals or
+-- mindmap colors.
 --
 -- IMPORTANT: which tier an attempt counts toward is resolved by joining
 -- back to questions on (course_code, unit_code, subtopic_code, sort_order)
@@ -36,22 +37,28 @@
 -- every time is self-healing against that, including for whatever gets
 -- relabeled next.
 --
--- A topic with no questions in the bank yet has no rows here at all;
--- the app treats that the same as "not started" (0%), same simplification
--- subtopic_mastery already makes.
+-- A topic with no questions in a given tier yet just has no row for it;
+-- the app treats that as "not part of this course" for that chart, not as
+-- 0%.
+--
+-- Supersedes subtopic_progress_report() (dropped below), which returned
+-- one pre-aggregated row per subtopic across every tier combined — too
+-- coarse once the per-difficulty charts needed the tier breakdown too.
 --
 -- Run after schema_practice.sql (needs public.questions/attempts/
 -- progress_resets) and schema_tier_medals.sql (this mirrors its per-tier
 -- completion logic; not a hard dependency, just keep them consistent if
 -- either changes). Safe to re-run.
 
-create or replace function public.subtopic_progress_report(p_course_code text)
+drop function if exists public.subtopic_progress_report(text);
+
+create function public.topic_tier_progress(p_course_code text)
 returns table (
   unit_code text,
   subtopic_code text,
-  tiers_total int,
-  tiers_completed int,
-  mastery_percent numeric
+  difficulty text,
+  total_questions int,
+  solved_questions int
 )
 language sql
 security definer
@@ -93,22 +100,15 @@ as $$
   select
     t.unit_code,
     t.subtopic_code,
-    count(*)::int as tiers_total,
-    count(*) filter (
-      where coalesce(s.solved_q, 0) >= t.total_q
-    )::int as tiers_completed,
-    round(
-      100.0 * count(*) filter (where coalesce(s.solved_q, 0) >= t.total_q)
-      / count(*),
-      1
-    ) as mastery_percent
+    t.difficulty,
+    t.total_q as total_questions,
+    coalesce(s.solved_q, 0) as solved_questions
   from tiers t
   left join solved s
     on s.unit_code = t.unit_code
     and s.subtopic_code = t.subtopic_code
-    and s.difficulty = t.difficulty
-  group by t.unit_code, t.subtopic_code;
+    and s.difficulty = t.difficulty;
 $$;
 
-revoke all on function public.subtopic_progress_report(text) from public, anon;
-grant execute on function public.subtopic_progress_report(text) to authenticated;
+revoke all on function public.topic_tier_progress(text) from public, anon;
+grant execute on function public.topic_tier_progress(text) to authenticated;

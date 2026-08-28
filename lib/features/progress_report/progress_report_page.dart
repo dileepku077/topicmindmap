@@ -3,44 +3,58 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/brand_badge.dart';
 import '../../models/progress_status.dart';
-import '../../models/subtopic_progress.dart';
 import '../../state/curriculum_providers.dart';
 import '../../state/progress_providers.dart';
 
-/// One unit's bar — mastery % rolled up across every subtopic and
-/// difficulty tier in it, once its course's units/subtopics and progress
-/// rows have both been resolved and matched up by (unitCode,
-/// subtopicCode). Rolling up to the unit ("topic") level rather than
-/// showing one bar per subtopic keeps the chart to a handful of bars per
-/// course instead of dozens.
-class _Bar {
-  const _Bar({
-    required this.unitTitle,
-    required this.subtopicCount,
-    required this.tiersTotal,
-    required this.tiersCompleted,
-    required this.masteryPercent,
-  });
+/// One difficulty's own chart gets its own bucket — 'Hard' and 'Challenge'
+/// share one (same rank, never both in the same course; see
+/// award_medal()'s own comment on this in schema_practice.sql), so a
+/// course using either label still gets exactly four charts, not five.
+enum _TierBucket { easy, medium, challengeOrHard, advanced }
 
-  final String unitTitle;
-  final int subtopicCount;
-  final int tiersTotal;
-  final int tiersCompleted;
-  final double masteryPercent;
+extension on _TierBucket {
+  String get label => switch (this) {
+    _TierBucket.easy => 'Easy',
+    _TierBucket.medium => 'Medium',
+    _TierBucket.challengeOrHard => 'Challenge / Hard',
+    _TierBucket.advanced => 'Advanced',
+  };
 }
 
-const _chartHeight = 220.0;
-const _barWidth = 56.0;
-const _columnWidth = 110.0;
+_TierBucket? _bucketFor(String difficulty) => switch (difficulty) {
+  'Easy' => _TierBucket.easy,
+  'Medium' => _TierBucket.medium,
+  'Hard' || 'Challenge' => _TierBucket.challengeOrHard,
+  'Advanced' => _TierBucket.advanced,
+  _ => null,
+};
 
-/// A bar chart of mastery % in the current course — one bar per unit
-/// ("topic"), colored with the same traffic-signal palette
-/// (ProgressStatus.fromScorePercent) already used on the mindmap and
-/// sidebar, so "what does orange mean here" never needs re-explaining.
-/// Deliberately one bar per unit rather than per subtopic — a handful of
-/// bars reads at a glance, where dozens of subtopic bars wouldn't.
-/// Reachable from the sidebar's "Progress Report" link, embedded in the
-/// main pane the same way Profile & Preferences is (see
+/// One bar's worth of "how much of this has the student finished" — a
+/// fraction of *tiers* fully solved (overall chart) or a fraction of
+/// *subtopics* that have fully solved one specific tier (per-difficulty
+/// charts), depending which chart it's feeding. Either way the shape is
+/// the same: some count done out of some count possible.
+class _Bar {
+  const _Bar({required this.unitTitle, required this.total, required this.completed});
+
+  final String unitTitle;
+  final int total;
+  final int completed;
+
+  double get percent => total == 0 ? 0 : 100.0 * completed / total;
+}
+
+const _chartHeight = 150.0;
+const _barWidth = 44.0;
+const _columnWidth = 96.0;
+
+/// Bar charts of practice-test progress in the current course: an overall
+/// mastery % per unit, plus one chart per difficulty tier (Easy, Medium,
+/// Challenge/Hard, Advanced) showing what fraction of that unit's topics
+/// have fully cleared that tier. Colored with the same traffic-signal
+/// palette (ProgressStatus.fromScorePercent) already used on the mindmap
+/// and sidebar. Reachable from the sidebar's "Progress Report" link,
+/// embedded in the main pane the same way Profile & Preferences is (see
 /// mindmap_page.dart / classroom_view.dart) so the sidebar stays on
 /// screen.
 class ProgressReportPage extends ConsumerWidget {
@@ -58,7 +72,6 @@ class ProgressReportPage extends ConsumerWidget {
     } else {
       final units = [...ref.watch(courseUnitsProvider)]
         ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
-      final subtopics = ref.watch(courseSubtopicsProvider);
       final reportAsync = ref.watch(progressReportProvider(course.code));
 
       body = reportAsync.when(
@@ -66,36 +79,36 @@ class ProgressReportPage extends ConsumerWidget {
         error: (error, _) =>
             Center(child: Text('Could not load your progress report: $error')),
         data: (rows) {
-          final byKey = <String, SubtopicProgress>{
-            for (final row in rows) '${row.unitCode}/${row.subtopicCode}': row,
-          };
-          final bars = <_Bar>[];
+          final overallBars = <_Bar>[];
+          final tierCharts = <_TierBucket, List<_Bar>>{};
           for (final unit in units) {
-            final unitSubtopics = subtopics.where((s) => s.unitId == unit.id);
-            var tiersTotal = 0;
-            var tiersCompleted = 0;
-            for (final subtopic in unitSubtopics) {
-              final row = byKey['${unit.code}/${subtopic.code}'];
-              tiersTotal += row?.tiersTotal ?? 0;
-              tiersCompleted += row?.tiersCompleted ?? 0;
-            }
-            bars.add(
+            final unitRows = rows.where((r) => r.unitCode == unit.code).toList();
+            overallBars.add(
               _Bar(
                 unitTitle: unit.title,
-                subtopicCount: unitSubtopics.length,
-                tiersTotal: tiersTotal,
-                tiersCompleted: tiersCompleted,
-                // Weighted by tier count across the whole unit, not a
-                // plain average of each subtopic's own %, so a subtopic
-                // with more tiers pulls the unit's bar proportionally
-                // more than one with fewer.
-                masteryPercent: tiersTotal == 0
-                    ? 0
-                    : 100.0 * tiersCompleted / tiersTotal,
+                total: unitRows.length,
+                completed: unitRows.where((r) => r.isComplete).length,
               ),
             );
+            for (final bucket in _TierBucket.values) {
+              final bucketRows = unitRows
+                  .where((r) => _bucketFor(r.difficulty) == bucket)
+                  .toList();
+              if (bucketRows.isEmpty) continue;
+              (tierCharts[bucket] ??= []).add(
+                _Bar(
+                  unitTitle: unit.title,
+                  total: bucketRows.length,
+                  completed: bucketRows.where((r) => r.isComplete).length,
+                ),
+              );
+            }
           }
-          return _ProgressReportBody(courseTitle: course.title, bars: bars);
+          return _ProgressReportBody(
+            courseTitle: course.title,
+            overallBars: overallBars,
+            tierCharts: tierCharts,
+          );
         },
       );
     }
@@ -119,26 +132,30 @@ class ProgressReportPage extends ConsumerWidget {
 }
 
 class _ProgressReportBody extends StatelessWidget {
-  const _ProgressReportBody({required this.courseTitle, required this.bars});
+  const _ProgressReportBody({
+    required this.courseTitle,
+    required this.overallBars,
+    required this.tierCharts,
+  });
 
   final String courseTitle;
-  final List<_Bar> bars;
+  final List<_Bar> overallBars;
+  final Map<_TierBucket, List<_Bar>> tierCharts;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
 
-    if (bars.isEmpty) {
+    if (overallBars.isEmpty) {
       return const Center(child: Text('No topics to report on yet.'));
     }
 
-    final assessable = bars.where((b) => b.tiersTotal > 0).toList();
+    final assessable = overallBars.where((b) => b.total > 0).toList();
     final overall = assessable.isEmpty
         ? 0.0
-        : assessable.map((b) => b.masteryPercent).reduce((a, b) => a + b) /
-            assessable.length;
+        : assessable.map((b) => b.percent).reduce((a, b) => a + b) / assessable.length;
 
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -151,12 +168,11 @@ class _ProgressReportBody extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Mastery % is how many difficulty tiers (Easy, Medium, Hard/Challenge, '
-            'Advanced) you\'ve fully completed in Practice Test, across every topic '
-            'in each unit of $courseTitle.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: scheme.onSurfaceVariant,
-            ),
+            'Mastery % is how many difficulty tiers you\'ve fully completed in '
+            'Practice Test, across every topic in each unit of $courseTitle.',
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
           ),
           const SizedBox(height: 14),
           Row(
@@ -164,14 +180,14 @@ class _ProgressReportBody extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
-                  color: ProgressStatus.fromScorePercent(overall).color.withValues(
-                    alpha: 0.12,
-                  ),
+                  color: ProgressStatus.fromScorePercent(
+                    overall,
+                  ).color.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(999),
                   border: Border.all(
-                    color: ProgressStatus.fromScorePercent(overall).color.withValues(
-                      alpha: 0.4,
-                    ),
+                    color: ProgressStatus.fromScorePercent(
+                      overall,
+                    ).color.withValues(alpha: 0.4),
                   ),
                 ),
                 child: Text(
@@ -186,27 +202,82 @@ class _ProgressReportBody extends StatelessWidget {
               Expanded(child: _Legend()),
             ],
           ),
-          const SizedBox(height: 20),
-          Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _YAxis(),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [for (final bar in bars) _BarColumn(bar: bar)],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          const SizedBox(height: 24),
+          _ChartSection(title: 'Overall, by unit', bars: overallBars),
+          for (final bucket in _TierBucket.values)
+            if (tierCharts[bucket] case final bars? when bars.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 28),
+                child: _ChartSection(title: bucket.label, bars: bars),
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.only(top: 28),
+                child: _MissingTierNote(label: bucket.label),
+              ),
         ],
       ),
+    );
+  }
+}
+
+class _MissingTierNote extends StatelessWidget {
+  const _MissingTierNote({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 4),
+        Text(
+          'This course doesn\'t have a $label tier.',
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+        ),
+      ],
+    );
+  }
+}
+
+class _ChartSection extends StatelessWidget {
+  const _ChartSection({required this.title, required this.bars});
+
+  final String title;
+  final List<_Bar> bars;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: _chartHeight + 66,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const _YAxis(),
+              const SizedBox(width: 8),
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [for (final bar in bars) _BarColumn(bar: bar)],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -237,6 +308,8 @@ class _Legend extends StatelessWidget {
 }
 
 class _YAxis extends StatelessWidget {
+  const _YAxis();
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -266,21 +339,18 @@ class _BarColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final status = bar.tiersTotal == 0
+    final status = bar.total == 0
         ? ProgressStatus.notStarted
-        : ProgressStatus.fromScorePercent(bar.masteryPercent);
-    final barHeight = (_chartHeight * (bar.masteryPercent / 100)).clamp(0.0, _chartHeight);
+        : ProgressStatus.fromScorePercent(bar.percent);
+    final barHeight = (_chartHeight * (bar.percent / 100)).clamp(0.0, _chartHeight);
 
     return SizedBox(
       width: _columnWidth,
       child: Tooltip(
-        message: bar.tiersTotal == 0
+        message: bar.total == 0
             ? '${bar.unitTitle}\nNo practice questions yet.'
-            : '${bar.unitTitle}\n'
-                  '${bar.masteryPercent.round()}% mastered '
-                  '(${bar.tiersCompleted} of ${bar.tiersTotal} difficulty tiers '
-                  'complete across ${bar.subtopicCount} '
-                  '${bar.subtopicCount == 1 ? 'topic' : 'topics'})',
+            : '${bar.unitTitle}\n${bar.percent.round()}% '
+                  '(${bar.completed} of ${bar.total})',
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -291,9 +361,9 @@ class _BarColumn extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (bar.masteryPercent > 0)
+                    if (bar.percent > 0)
                       Text(
-                        '${bar.masteryPercent.round()}%',
+                        '${bar.percent.round()}%',
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
@@ -317,7 +387,7 @@ class _BarColumn extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             SizedBox(
-              height: 48,
+              height: 44,
               child: Text(
                 bar.unitTitle,
                 textAlign: TextAlign.center,
