@@ -60,7 +60,7 @@
 
 drop function if exists public.subtopic_progress_report(text);
 
-create function public.topic_tier_progress(p_course_code text)
+create or replace function public.topic_tier_progress(p_course_code text)
 returns table (
   unit_code text,
   subtopic_code text,
