@@ -29,19 +29,26 @@ _TierBucket? _bucketFor(String difficulty) => switch (difficulty) {
   _ => null,
 };
 
-/// One bar's worth of "how much of this has the student finished" — a
-/// fraction of *tiers* fully solved (overall chart) or a fraction of
-/// *subtopics* that have fully solved one specific tier (per-difficulty
-/// charts), depending which chart it's feeding. Either way the shape is
-/// the same: some count done out of some count possible.
+/// One bar. [percent] is already resolved to 0-100 by whichever chart
+/// built it — the overall chart's "25% per difficulty level" scheme and a
+/// per-difficulty chart's "fraction of topics that cleared this one tier"
+/// are different shapes of number, so there's no single total/completed
+/// pair that fits both; each chart just hands over the finished percent
+/// plus a human-readable [detail] for the tooltip. [hasData] is false
+/// when there was nothing at all to assess (no topic in this unit has
+/// this tier, or the unit has no topics yet) — distinct from a real 0%.
 class _Bar {
-  const _Bar({required this.unitTitle, required this.total, required this.completed});
+  const _Bar({
+    required this.unitTitle,
+    required this.percent,
+    required this.detail,
+    required this.hasData,
+  });
 
   final String unitTitle;
-  final int total;
-  final int completed;
-
-  double get percent => total == 0 ? 0 : 100.0 * completed / total;
+  final double percent;
+  final String detail;
+  final bool hasData;
 }
 
 const _chartHeight = 150.0;
@@ -83,23 +90,62 @@ class ProgressReportPage extends ConsumerWidget {
           final tierCharts = <_TierBucket, List<_Bar>>{};
           for (final unit in units) {
             final unitRows = rows.where((r) => r.unitCode == unit.code).toList();
+
+            // Overall: each topic (subtopic) is worth 25% per difficulty
+            // level it has fully cleared — Easy/Medium/Challenge-or-Hard/
+            // Advanced — out of a fixed 4 slots, not however many tiers
+            // that topic actually has. A course/topic missing a level
+            // (e.g. MCR3U/MHF4U have no Challenge or Advanced split) just
+            // leaves that slot at 0%, capping what it can reach — same
+            // rule uniformly, no special-casing per course. The unit's
+            // own bar is the plain average of its topics' percents.
+            final subtopicCodes = unitRows.map((r) => r.subtopicCode).toSet();
+            final subtopicPercents = <double>[];
+            for (final subtopicCode in subtopicCodes) {
+              final subtopicRows = unitRows
+                  .where((r) => r.subtopicCode == subtopicCode)
+                  .toList();
+              var completedSlots = 0;
+              for (final bucket in _TierBucket.values) {
+                final matching = subtopicRows.where((r) => _bucketFor(r.difficulty) == bucket);
+                if (matching.isNotEmpty && matching.every((r) => r.isComplete)) {
+                  completedSlots++;
+                }
+              }
+              subtopicPercents.add(completedSlots * 25.0);
+            }
+            final unitPercent = subtopicPercents.isEmpty
+                ? 0.0
+                : subtopicPercents.reduce((a, b) => a + b) / subtopicPercents.length;
             overallBars.add(
               _Bar(
                 unitTitle: unit.title,
-                total: unitRows.length,
-                completed: unitRows.where((r) => r.isComplete).length,
+                percent: unitPercent,
+                hasData: subtopicPercents.isNotEmpty,
+                detail: subtopicPercents.isEmpty
+                    ? 'No practice questions yet.'
+                    : '${unitPercent.round()}% — averaged across '
+                          '${subtopicPercents.length} '
+                          '${subtopicPercents.length == 1 ? 'topic' : 'topics'} '
+                          '(25% per difficulty level fully completed)',
               ),
             );
+
+            // Per-difficulty: what fraction of this unit's topics have
+            // fully cleared this one specific tier — unrelated to the 25%
+            // weighting above, which is only about the combined score.
             for (final bucket in _TierBucket.values) {
               final bucketRows = unitRows
                   .where((r) => _bucketFor(r.difficulty) == bucket)
                   .toList();
               if (bucketRows.isEmpty) continue;
+              final completed = bucketRows.where((r) => r.isComplete).length;
               (tierCharts[bucket] ??= []).add(
                 _Bar(
                   unitTitle: unit.title,
-                  total: bucketRows.length,
-                  completed: bucketRows.where((r) => r.isComplete).length,
+                  percent: 100.0 * completed / bucketRows.length,
+                  hasData: true,
+                  detail: '$completed of ${bucketRows.length} topics complete',
                 ),
               );
             }
@@ -150,7 +196,7 @@ class _ProgressReportBody extends StatelessWidget {
       return const Center(child: Text('No topics to report on yet.'));
     }
 
-    final assessable = overallBars.where((b) => b.total > 0).toList();
+    final assessable = overallBars.where((b) => b.hasData).toList();
     final overall = assessable.isEmpty
         ? 0.0
         : assessable.map((b) => b.percent).reduce((a, b) => a + b) / assessable.length;
@@ -168,8 +214,10 @@ class _ProgressReportBody extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            'Mastery % is how many difficulty tiers you\'ve fully completed in '
-            'Practice Test, across every topic in each unit of $courseTitle.',
+            'Each topic in $courseTitle is worth 25% per difficulty level '
+            '(Easy, Medium, Challenge/Hard, Advanced) fully completed in Practice '
+            'Test — a topic missing a level (or a course without one) simply '
+            'can\'t fill that 25%. A unit\'s bar is the average across its topics.',
             style: Theme.of(
               context,
             ).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
@@ -339,7 +387,7 @@ class _BarColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final status = bar.total == 0
+    final status = !bar.hasData
         ? ProgressStatus.notStarted
         : ProgressStatus.fromScorePercent(bar.percent);
     final barHeight = (_chartHeight * (bar.percent / 100)).clamp(0.0, _chartHeight);
@@ -347,10 +395,7 @@ class _BarColumn extends StatelessWidget {
     return SizedBox(
       width: _columnWidth,
       child: Tooltip(
-        message: bar.total == 0
-            ? '${bar.unitTitle}\nNo practice questions yet.'
-            : '${bar.unitTitle}\n${bar.percent.round()}% '
-                  '(${bar.completed} of ${bar.total})',
+        message: '${bar.unitTitle}\n${bar.detail}',
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
