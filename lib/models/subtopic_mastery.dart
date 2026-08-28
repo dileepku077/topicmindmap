@@ -22,7 +22,7 @@ class SubtopicMastery {
   final int bestFirstTry;
   final int totalQuestions;
 
-  /// 'None' · 'Bronze' · 'Silver' · 'Gold'.
+  /// 'None' · 'Bronze' · 'Silver' · 'Gold' · 'Diamond'.
   final String medal;
   final int timesCompleted;
   final DateTime updatedAt;
@@ -50,22 +50,26 @@ class SubtopicMastery {
 /// it; the fallback only matters if an unrecognized string ever reaches
 /// here.
 Color medalColor(String medal) => switch (medal) {
+  'Diamond' => const Color(0xFF4FC3F7),
   'Gold' => const Color(0xFFD4A017),
   'Silver' => const Color(0xFF9AA0A6),
   'Bronze' => const Color(0xFFCD7F32),
   _ => const Color(0xFF9AA0A6),
 };
 
-/// A small trophy badge in the earned tier's color, for a subtopic or
-/// unit's best medal so far — used on mindmap nodes, classroom cards, and
-/// the classroom sidebar alike, so a medal reads the same everywhere it
-/// shows up. Renders nothing for 'None' or no record at all: nothing
-/// earned yet isn't worth a badge next to every single topic.
+/// A small badge in the earned tier's color, for a subtopic or unit's best
+/// medal so far — used on mindmap nodes, classroom cards, and the
+/// classroom sidebar alike, so a medal reads the same everywhere it shows
+/// up. Diamond, the top tier, gets its own diamond icon rather than the
+/// trophy every other tier shares, so it reads as a step above Gold at a
+/// glance rather than just another color. Renders nothing for 'None' or
+/// no record at all: nothing earned yet isn't worth a badge next to every
+/// single topic.
 class MedalBadge extends StatelessWidget {
   const MedalBadge({super.key, required this.medal, this.size = 13});
 
-  /// 'None' · 'Bronze' · 'Silver' · 'Gold', or null if this subtopic/unit
-  /// has no mastery record yet.
+  /// 'None' · 'Bronze' · 'Silver' · 'Gold' · 'Diamond', or null if this
+  /// subtopic/unit has no mastery record yet.
   final String? medal;
   final double size;
 
@@ -73,6 +77,10 @@ class MedalBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final medal = this.medal;
     if (medal == null || medal == 'None') return const SizedBox.shrink();
-    return Icon(Icons.emoji_events, size: size, color: medalColor(medal));
+    return Icon(
+      medal == 'Diamond' ? Icons.diamond : Icons.emoji_events,
+      size: size,
+      color: medalColor(medal),
+    );
   }
 }

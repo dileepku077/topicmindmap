@@ -99,9 +99,9 @@ final subtopicScorePercentProvider = Provider<Map<String, double>>((ref) {
 });
 
 /// Live subtopicId -> best medal earned so far ('None' · 'Bronze' ·
-/// 'Silver' · 'Gold'). A subtopic with no completed pass has no entry, same
-/// as [subtopicScorePercentProvider] — distinct from having completed a
-/// pass but earned nothing.
+/// 'Silver' · 'Gold' · 'Diamond'). A subtopic with no completed pass has no
+/// entry, same as [subtopicScorePercentProvider] — distinct from having
+/// completed a pass but earned nothing.
 final subtopicMedalProvider = Provider<Map<String, String>>((ref) {
   final bySubtopic = ref.watch(practiceMasteryProvider).value ?? const {};
   return {
@@ -127,17 +127,17 @@ ProgressStatus aggregateUnitStatus(
 
 /// A unit's own medal — the worst medal among its *attempted* subtopics
 /// (never-attempted ones are ignored entirely, same as
-/// [aggregateUnitStatus]), so a unit only reads as Gold once every
-/// subtopic a student has actually tried has earned Gold, and one
+/// [aggregateUnitStatus]), so a unit only reads as Diamond once every
+/// subtopic a student has actually tried has earned Diamond, and one
 /// straggling Bronze subtopic keeps the whole unit at Bronze. Null (no
 /// badge worth showing) until at least one subtopic has been attempted.
 String? aggregateUnitMedal(
   Iterable<String> subtopicIds,
   Map<String, String> subtopicMedal,
 ) {
-  const rank = {'None': 0, 'Bronze': 1, 'Silver': 2, 'Gold': 3};
+  const rank = {'None': 0, 'Bronze': 1, 'Silver': 2, 'Gold': 3, 'Diamond': 4};
   String? worst;
-  var worstRank = 4;
+  var worstRank = 5;
   for (final id in subtopicIds) {
     final medal = subtopicMedal[id];
     if (medal == null) continue;

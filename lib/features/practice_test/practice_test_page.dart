@@ -526,6 +526,7 @@ class _CompletionView extends StatelessWidget {
   final VoidCallback onFinished;
 
   Color _medalColor(BuildContext context) => switch (medal) {
+    'Diamond' => const Color(0xFF4FC3F7),
     'Gold' => const Color(0xFFD4A017),
     'Silver' => const Color(0xFF9AA0A6),
     'Bronze' => const Color(0xFFCD7F32),
@@ -541,7 +542,11 @@ class _CompletionView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.emoji_events, size: 64, color: color),
+            Icon(
+              medal == 'Diamond' ? Icons.diamond : Icons.emoji_events,
+              size: 64,
+              color: color,
+            ),
             const SizedBox(height: 16),
             Text(
               medal == 'None' ? 'Nice work!' : '$medal medal!',

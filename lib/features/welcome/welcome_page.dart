@@ -126,8 +126,9 @@ class _WelcomePageState extends ConsumerState<WelcomePage> {
                   body:
                       'A topic\'s icon and colour on the mindmap and sidebar show '
                       'where you stand: not started, in progress, or mastered. '
-                      'Medals (bronze/silver/gold) reward getting a topic right '
-                      'the first time, without needing a retry.',
+                      'Medals (bronze/silver/gold/diamond) reward how many you get '
+                      'right on the first try — the higher your first-try accuracy, '
+                      'the better the medal.',
                 ),
                 const _FeatureCard(
                   icon: Icons.menu_outlined,

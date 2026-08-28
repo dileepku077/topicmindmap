@@ -172,7 +172,7 @@ class SubtopicNodeWidget extends StatelessWidget {
   final double? scorePercent;
 
   /// This subtopic's best-earned medal ('None' · 'Bronze' · 'Silver' ·
-  /// 'Gold'), or null if it hasn't been attempted yet.
+  /// 'Gold' · 'Diamond'), or null if it hasn't been attempted yet.
   final String? medal;
 
   @override
