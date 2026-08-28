@@ -7,32 +7,38 @@ import '../../models/subtopic_progress.dart';
 import '../../state/curriculum_providers.dart';
 import '../../state/progress_providers.dart';
 
-/// One topic's bar, once its course's units/subtopics and progress rows
-/// have both been resolved and matched up by (unitCode, subtopicCode).
+/// One unit's bar — mastery % rolled up across every subtopic and
+/// difficulty tier in it, once its course's units/subtopics and progress
+/// rows have both been resolved and matched up by (unitCode,
+/// subtopicCode). Rolling up to the unit ("topic") level rather than
+/// showing one bar per subtopic keeps the chart to a handful of bars per
+/// course instead of dozens.
 class _Bar {
   const _Bar({
     required this.unitTitle,
-    required this.subtopicTitle,
+    required this.subtopicCount,
     required this.tiersTotal,
     required this.tiersCompleted,
     required this.masteryPercent,
   });
 
   final String unitTitle;
-  final String subtopicTitle;
+  final int subtopicCount;
   final int tiersTotal;
   final int tiersCompleted;
   final double masteryPercent;
 }
 
 const _chartHeight = 220.0;
-const _barWidth = 34.0;
-const _columnWidth = 68.0;
+const _barWidth = 56.0;
+const _columnWidth = 110.0;
 
-/// A bar chart of every topic's mastery % in the current course — one bar
-/// per subtopic, colored with the same traffic-signal palette
+/// A bar chart of mastery % in the current course — one bar per unit
+/// ("topic"), colored with the same traffic-signal palette
 /// (ProgressStatus.fromScorePercent) already used on the mindmap and
 /// sidebar, so "what does orange mean here" never needs re-explaining.
+/// Deliberately one bar per unit rather than per subtopic — a handful of
+/// bars reads at a glance, where dozens of subtopic bars wouldn't.
 /// Reachable from the sidebar's "Progress Report" link, embedded in the
 /// main pane the same way Profile & Preferences is (see
 /// mindmap_page.dart / classroom_view.dart) so the sidebar stays on
@@ -65,20 +71,29 @@ class ProgressReportPage extends ConsumerWidget {
           };
           final bars = <_Bar>[];
           for (final unit in units) {
-            final unitSubtopics = subtopics.where((s) => s.unitId == unit.id).toList()
-              ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+            final unitSubtopics = subtopics.where((s) => s.unitId == unit.id);
+            var tiersTotal = 0;
+            var tiersCompleted = 0;
             for (final subtopic in unitSubtopics) {
               final row = byKey['${unit.code}/${subtopic.code}'];
-              bars.add(
-                _Bar(
-                  unitTitle: unit.title,
-                  subtopicTitle: subtopic.title,
-                  tiersTotal: row?.tiersTotal ?? 0,
-                  tiersCompleted: row?.tiersCompleted ?? 0,
-                  masteryPercent: row?.masteryPercent ?? 0,
-                ),
-              );
+              tiersTotal += row?.tiersTotal ?? 0;
+              tiersCompleted += row?.tiersCompleted ?? 0;
             }
+            bars.add(
+              _Bar(
+                unitTitle: unit.title,
+                subtopicCount: unitSubtopics.length,
+                tiersTotal: tiersTotal,
+                tiersCompleted: tiersCompleted,
+                // Weighted by tier count across the whole unit, not a
+                // plain average of each subtopic's own %, so a subtopic
+                // with more tiers pulls the unit's bar proportionally
+                // more than one with fewer.
+                masteryPercent: tiersTotal == 0
+                    ? 0
+                    : 100.0 * tiersCompleted / tiersTotal,
+              ),
+            );
           }
           return _ProgressReportBody(courseTitle: course.title, bars: bars);
         },
@@ -137,8 +152,8 @@ class _ProgressReportBody extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             'Mastery % is how many difficulty tiers (Easy, Medium, Hard/Challenge, '
-            'Advanced) you\'ve fully completed in Practice Test for each topic in '
-            '$courseTitle.',
+            'Advanced) you\'ve fully completed in Practice Test, across every topic '
+            'in each unit of $courseTitle.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: scheme.onSurfaceVariant,
             ),
@@ -260,10 +275,12 @@ class _BarColumn extends StatelessWidget {
       width: _columnWidth,
       child: Tooltip(
         message: bar.tiersTotal == 0
-            ? '${bar.unitTitle} — ${bar.subtopicTitle}\nNo practice questions yet.'
-            : '${bar.unitTitle} — ${bar.subtopicTitle}\n'
+            ? '${bar.unitTitle}\nNo practice questions yet.'
+            : '${bar.unitTitle}\n'
                   '${bar.masteryPercent.round()}% mastered '
-                  '(${bar.tiersCompleted} of ${bar.tiersTotal} difficulty tiers complete)',
+                  '(${bar.tiersCompleted} of ${bar.tiersTotal} difficulty tiers '
+                  'complete across ${bar.subtopicCount} '
+                  '${bar.subtopicCount == 1 ? 'topic' : 'topics'})',
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -300,13 +317,17 @@ class _BarColumn extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             SizedBox(
-              height: 44,
+              height: 48,
               child: Text(
-                bar.subtopicTitle,
+                bar.unitTitle,
                 textAlign: TextAlign.center,
                 maxLines: 3,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 10.5, color: scheme.onSurfaceVariant),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: scheme.onSurfaceVariant,
+                ),
               ),
             ),
           ],
