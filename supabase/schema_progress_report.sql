@@ -20,6 +20,22 @@
 -- (source is null) — a mock Test attempt (source = 'test') must not move
 -- this any more than it moves medals or mindmap colors.
 --
+-- IMPORTANT: which tier an attempt counts toward is resolved by joining
+-- back to questions on (course_code, unit_code, subtopic_code, sort_order)
+-- and reading questions.difficulty fresh, NOT by trusting attempts.
+-- difficulty (a label snapshotted once, by submit_answer(), at the moment
+-- that attempt was made). schema_difficulty_tiers.sql's own history is
+-- exactly why this matters: MPM2D's top tier was retagged from 'Hard' to
+-- 'Challenge'/'Advanced' partway through this app's life, via
+-- questions_seed.sql deleting and re-inserting MPM2D's rows. A student who
+-- practiced that content before the retag has attempts rows permanently
+-- stamped 'Hard', even though questions.difficulty for that exact content
+-- has said 'Challenge'/'Advanced' ever since — trusting the stamped label
+-- would silently zero out real, completed progress on any tier that's
+-- ever been relabeled after data collection. Resolving from questions
+-- every time is self-healing against that, including for whatever gets
+-- relabeled next.
+--
 -- A topic with no questions in the bank yet has no rows here at all;
 -- the app treats that the same as "not started" (0%), same simplification
 -- subtopic_mastery already makes.
@@ -56,18 +72,23 @@ as $$
   ),
   solved as (
     select
-      a.unit_code,
-      a.subtopic_code,
-      a.difficulty,
+      q.unit_code,
+      q.subtopic_code,
+      q.difficulty,
       count(distinct a.sort_order) as solved_q
     from attempts a
+    join questions q
+      on q.course_code = a.course_code
+      and q.unit_code = a.unit_code
+      and q.subtopic_code = a.subtopic_code
+      and q.sort_order = a.sort_order
     left join v_reset r on true
     where a.student_id = auth.uid()
       and a.course_code = p_course_code
       and a.was_correct
       and a.source is null
       and (r.reset_at is null or a.answered_at > r.reset_at)
-    group by a.unit_code, a.subtopic_code, a.difficulty
+    group by q.unit_code, q.subtopic_code, q.difficulty
   )
   select
     t.unit_code,
