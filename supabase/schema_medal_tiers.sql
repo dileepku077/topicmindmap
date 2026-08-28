@@ -24,14 +24,40 @@
 -- 92% first-try, for instance, becomes Diamond retroactively rather than
 -- staying frozen as a Gold earned under the old 90% bar.
 --
--- Run after schema_progress_report_table.sql (redefines its
--- award_medal()). Safe to re-run.
+-- Also adds the medal *per difficulty tier*, not just subtopic_mastery's
+-- single "best pass across every tier attempted" medal — a student can
+-- now hold a genuinely different medal on Easy than on Medium than on
+-- Advanced for the same topic (Gold on Easy, Silver on Medium, Bronze on
+-- Advanced, say), all visible at once. subtopic_mastery can't represent
+-- that; topic_progress_report already has one row per (student, course,
+-- unit, subtopic, difficulty) (schema_progress_report_table.sql), so this
+-- just adds a first_try_correct count and a medal column to that existing
+-- row instead of introducing a new table. award_medal() (redefined below)
+-- writes both in the same upsert it already does; admin_backfill_
+-- progress_report() (also redefined below, extending the version in
+-- schema_progress_report_table.sql) backfills them for history.
+--
+-- Run after schema_progress_report_table.sql (redefines its award_medal()
+-- and admin_backfill_progress_report()). Safe to re-run.
 
 alter table public.subtopic_mastery
   drop constraint if exists subtopic_mastery_medal_check;
 
 alter table public.subtopic_mastery
   add constraint subtopic_mastery_medal_check
+  check (medal in ('None', 'Bronze', 'Silver', 'Gold', 'Diamond'));
+
+alter table public.topic_progress_report
+  add column if not exists first_try_correct int not null default 0;
+
+alter table public.topic_progress_report
+  add column if not exists medal text not null default 'None';
+
+alter table public.topic_progress_report
+  drop constraint if exists topic_progress_report_medal_check;
+
+alter table public.topic_progress_report
+  add constraint topic_progress_report_medal_check
   check (medal in ('None', 'Bronze', 'Silver', 'Gold', 'Diamond'));
 
 create or replace function public.award_medal(
@@ -125,36 +151,19 @@ begin
     and q.difficulty = p_difficulty
     and (v_since is null or a.answered_at > v_since);
 
-  -- Keep the persisted progress-report row current every time this runs,
-  -- complete or not -- an admin/parent looking at this table should see
-  -- real partial progress, not just a jump straight from nothing to done.
-  insert into topic_progress_report (
-    student_id, course_code, unit_code, subtopic_code, difficulty,
-    total_questions, solved_questions, updated_at
-  ) values (
-    auth.uid(), p_course_code, p_unit_code, p_subtopic_code, p_difficulty,
-    v_total, v_solved, now()
-  )
-  on conflict (student_id, course_code, unit_code, subtopic_code, difficulty)
-  do update set
-    total_questions  = excluded.total_questions,
-    solved_questions = excluded.solved_questions,
-    updated_at       = excluded.updated_at;
-
-  -- Not finished this tier yet — nothing to award. Shouldn't happen if
-  -- this is only called after every question in the tier has been
-  -- answered correctly, same caveat as before.
+  -- This tier's own medal, computed once and used both for the per-tier
+  -- row below and (if this pass also happens to be the best one across
+  -- every tier this subtopic has) subtopic_mastery further down. Four
+  -- bands by first-try accuracy, with an explicit floor -- finishing the
+  -- tier is no longer enough on its own for Bronze the way it used to be,
+  -- below 30% first-try this pass earns no medal at all -- and "not
+  -- finished yet" folds into the same ladder rather than a separate
+  -- early return, so an incomplete attempt still writes a real ('None')
+  -- medal to topic_progress_report instead of leaving a stale one from a
+  -- previous, better attempt sitting there unchanged.
   if v_solved < v_total then
-    return 'None';
-  end if;
-
-  -- Four bands by first-try accuracy, with an explicit floor: finishing
-  -- the tier is no longer enough on its own for Bronze the way it used
-  -- to be -- below 30% first-try, this pass earns no medal at all, same
-  -- as an incomplete one. subtopic_mastery.medal only ever moves upward
-  -- (see the on-conflict block below), so this never costs a medal
-  -- already banked from a better earlier pass.
-  if v_first_try::numeric / v_total >= 0.9 then
+    v_earned := 'None';
+  elsif v_first_try::numeric / v_total >= 0.9 then
     v_earned := 'Diamond';
   elsif v_first_try::numeric / v_total >= 0.8 then
     v_earned := 'Gold';
@@ -164,6 +173,36 @@ begin
     v_earned := 'Bronze';
   else
     v_earned := 'None';
+  end if;
+
+  -- Keep the persisted per-tier row current every time this runs,
+  -- complete or not -- an admin/parent looking at this table should see
+  -- real partial progress, not just a jump straight from nothing to done.
+  -- This is also now the record of which medal was earned on *this
+  -- specific difficulty* -- a student can hold Gold on Easy and Bronze
+  -- on Advanced for the same topic at once, unlike subtopic_mastery's
+  -- single best-across-every-tier medal below.
+  insert into topic_progress_report (
+    student_id, course_code, unit_code, subtopic_code, difficulty,
+    total_questions, solved_questions, first_try_correct, medal, updated_at
+  ) values (
+    auth.uid(), p_course_code, p_unit_code, p_subtopic_code, p_difficulty,
+    v_total, v_solved, v_first_try, v_earned, now()
+  )
+  on conflict (student_id, course_code, unit_code, subtopic_code, difficulty)
+  do update set
+    total_questions   = excluded.total_questions,
+    solved_questions  = excluded.solved_questions,
+    first_try_correct = excluded.first_try_correct,
+    medal             = excluded.medal,
+    updated_at        = excluded.updated_at;
+
+  -- Not finished this tier yet — nothing to award, and nothing below to
+  -- touch in subtopic_mastery either. Shouldn't happen if this is only
+  -- called after every question in the tier has been answered correctly,
+  -- same caveat as before.
+  if v_solved < v_total then
+    return 'None';
   end if;
 
   select m.medal into v_existing
@@ -243,3 +282,97 @@ set medal = case
               else 'None'
             end
 where total_questions > 0;
+
+-- ---------------------------------------------------------------------------
+-- admin_backfill_progress_report(): extends the version in
+-- schema_progress_report_table.sql to also compute first_try_correct and
+-- medal per tier (same 4-band ladder award_medal() now uses above),
+-- so every existing topic_progress_report row -- not just ones a student
+-- touches again after this file is applied -- gets a real per-difficulty
+-- medal instead of sitting at the column default ('None') until then.
+-- Same admin-or-no-auth-context gate as before. Safe to re-run.
+-- ---------------------------------------------------------------------------
+
+create or replace function public.admin_backfill_progress_report()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is not null and not is_admin(auth.uid()) then
+    raise exception 'Admins only.';
+  end if;
+
+  insert into topic_progress_report (
+    student_id, course_code, unit_code, subtopic_code, difficulty,
+    total_questions, solved_questions, first_try_correct, medal, updated_at
+  )
+  with engaged as (
+    select distinct student_id, course_code from attempts
+  ),
+  tiers as (
+    select course_code, unit_code, subtopic_code, difficulty, count(*) as total_q
+    from questions
+    group by course_code, unit_code, subtopic_code, difficulty
+  ),
+  solved as (
+    select
+      a.student_id,
+      q.course_code,
+      q.unit_code,
+      q.subtopic_code,
+      q.difficulty,
+      count(distinct a.sort_order) as solved_q,
+      count(distinct a.sort_order) filter (where a.was_first_attempt) as first_try_q
+    from attempts a
+    join questions q
+      on q.course_code = a.course_code
+      and q.unit_code = a.unit_code
+      and q.subtopic_code = a.subtopic_code
+      and q.sort_order = a.sort_order
+    left join progress_resets r
+      on r.student_id = a.student_id and r.course_code = a.course_code
+    where a.was_correct
+      and a.source is null
+      and (r.reset_at is null or a.answered_at > r.reset_at)
+    group by a.student_id, q.course_code, q.unit_code, q.subtopic_code, q.difficulty
+  )
+  select
+    e.student_id,
+    t.course_code,
+    t.unit_code,
+    t.subtopic_code,
+    t.difficulty,
+    t.total_q,
+    coalesce(s.solved_q, 0),
+    coalesce(s.first_try_q, 0),
+    case
+      when coalesce(s.solved_q, 0) < t.total_q then 'None'
+      when s.first_try_q::numeric / t.total_q >= 0.9 then 'Diamond'
+      when s.first_try_q::numeric / t.total_q >= 0.8 then 'Gold'
+      when s.first_try_q::numeric / t.total_q >= 0.6 then 'Silver'
+      when s.first_try_q::numeric / t.total_q >= 0.3 then 'Bronze'
+      else 'None'
+    end,
+    now()
+  from engaged e
+  join tiers t on t.course_code = e.course_code
+  left join solved s
+    on s.student_id = e.student_id
+    and s.course_code = t.course_code
+    and s.unit_code = t.unit_code
+    and s.subtopic_code = t.subtopic_code
+    and s.difficulty = t.difficulty
+  on conflict (student_id, course_code, unit_code, subtopic_code, difficulty)
+  do update set
+    total_questions   = excluded.total_questions,
+    solved_questions  = excluded.solved_questions,
+    first_try_correct = excluded.first_try_correct,
+    medal             = excluded.medal,
+    updated_at        = excluded.updated_at;
+end;
+$$;
+
+revoke all on function public.admin_backfill_progress_report() from public, anon;
+grant execute on function public.admin_backfill_progress_report() to authenticated;

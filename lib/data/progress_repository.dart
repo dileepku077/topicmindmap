@@ -76,4 +76,25 @@ class ProgressRepository {
 
   String _tierKey(String unitCode, String subtopicCode, String difficulty) =>
       '$unitCode/$subtopicCode/$difficulty';
+
+  /// difficulty -> best medal earned on that specific tier for one
+  /// subtopic ('None' · 'Bronze' · 'Silver' · 'Gold' · 'Diamond'), read
+  /// straight from topic_progress_report. Unlike subtopic_mastery's single
+  /// best-across-every-tier medal, this is how the tier picker shows a
+  /// genuinely different medal per difficulty (Gold on Easy, Bronze on
+  /// Advanced, say) for the same topic. A tier never attempted just has no
+  /// entry.
+  Future<Map<String, String>> fetchTierMedals({
+    required String courseCode,
+    required String unitCode,
+    required String subtopicCode,
+  }) async {
+    final rows = await _client
+        .from('topic_progress_report')
+        .select('difficulty, medal')
+        .eq('course_code', courseCode)
+        .eq('unit_code', unitCode)
+        .eq('subtopic_code', subtopicCode);
+    return {for (final row in rows) row['difficulty'] as String: row['medal'] as String};
+  }
 }

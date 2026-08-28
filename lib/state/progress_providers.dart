@@ -6,6 +6,7 @@ import '../models/subtopic_mastery.dart';
 import '../models/tier_progress.dart';
 import 'auth_providers.dart';
 import 'curriculum_providers.dart';
+import 'practice_test_providers.dart' show PracticeSubtopicRef;
 
 final progressRepositoryProvider = Provider<ProgressRepository>((ref) {
   return ProgressRepository(ref.watch(supabaseClientProvider));
@@ -70,6 +71,24 @@ final progressReportProvider =
   final user = ref.watch(currentUserProvider);
   if (user == null) return Future.value(const <TierProgress>[]);
   return ref.watch(progressRepositoryProvider).fetchTierProgress(courseCode);
+});
+
+/// difficulty -> medal for one subtopic, e.g. so the practice test's tier
+/// picker can show a genuinely different medal per difficulty (Gold on
+/// Easy, Bronze on Advanced) instead of subtopic_mastery's single
+/// best-across-every-tier medal. Same one-shot-fetch, explicit-invalidate
+/// treatment as [progressReportProvider].
+final subtopicTierMedalsProvider =
+    FutureProvider.family<Map<String, String>, PracticeSubtopicRef>((ref, subtopicRef) {
+  final user = ref.watch(currentUserProvider);
+  if (user == null) return Future.value(const <String, String>{});
+  return ref
+      .watch(progressRepositoryProvider)
+      .fetchTierMedals(
+        courseCode: subtopicRef.courseCode,
+        unitCode: subtopicRef.unitCode,
+        subtopicCode: subtopicRef.subtopicCode,
+      );
 });
 
 /// This subtopic's mastery record for the signed-in student, or null if

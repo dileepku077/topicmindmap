@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/brand_badge.dart';
 import '../../models/practice_question.dart';
+import '../../models/subtopic_mastery.dart';
 import '../../state/auth_providers.dart';
 import '../../state/practice_test_providers.dart';
 import '../../state/progress_providers.dart';
@@ -173,6 +174,9 @@ class _PracticeTestPageState extends ConsumerState<PracticeTestPage> {
       // reflect a just-cleared tier immediately if the student checks it
       // right after, not a stale fetch from before this attempt.
       ref.invalidate(progressReportProvider(widget.courseCode));
+      // And the tier picker's own per-difficulty medal badge, if the
+      // student backs out to try another tier right after this one.
+      ref.invalidate(subtopicTierMedalsProvider(_ref));
     } catch (error) {
       if (!mounted) return;
       setState(() => _awardingMedal = false);
@@ -201,6 +205,9 @@ class _PracticeTestPageState extends ConsumerState<PracticeTestPage> {
               final questionsAsync = ref.watch(
                 practiceQuestionsProvider(_ref),
               );
+              final tierMedals =
+                  ref.watch(subtopicTierMedalsProvider(_ref)).value ??
+                  const <String, String>{};
               return questionsAsync.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (error, _) =>
@@ -210,6 +217,7 @@ class _PracticeTestPageState extends ConsumerState<PracticeTestPage> {
                     return _TierPickerView(
                       questions: questions,
                       subtopicTitle: widget.subtopicTitle,
+                      tierMedals: tierMedals,
                       onSelectTier: _selectTier,
                     );
                   }
@@ -590,11 +598,18 @@ class _TierPickerView extends StatelessWidget {
   const _TierPickerView({
     required this.questions,
     required this.subtopicTitle,
+    required this.tierMedals,
     required this.onSelectTier,
   });
 
   final List<PracticeQuestion> questions;
   final String subtopicTitle;
+
+  /// difficulty -> best medal earned on that specific tier so far — a
+  /// student can hold a different medal per difficulty for the same
+  /// topic (see subtopicTierMedalsProvider). A tier never attempted just
+  /// has no entry.
+  final Map<String, String> tierMedals;
   final void Function(String tier) onSelectTier;
 
   static const _tierOrder = ['Easy', 'Medium', 'Challenge', 'Hard', 'Advanced'];
@@ -633,6 +648,7 @@ class _TierPickerView extends StatelessWidget {
           _TierTile(
             tier: tier,
             count: byTier[tier]!.length,
+            medal: tierMedals[tier],
             // Locking is per-tier, not per-question — a free student's
             // whole gated tier comes back with `locked: true` on every row
             // (see list_questions() in schema_subscriptions.sql), so the
@@ -679,12 +695,17 @@ class _TierTile extends StatelessWidget {
     required this.count,
     required this.locked,
     required this.onTap,
+    this.medal,
   });
 
   final String tier;
   final int count;
   final bool locked;
   final VoidCallback onTap;
+
+  /// Best medal already earned on this specific tier ('None' · 'Bronze' ·
+  /// 'Silver' · 'Gold' · 'Diamond'), or null if never attempted.
+  final String? medal;
 
   @override
   Widget build(BuildContext context) {
@@ -714,11 +735,19 @@ class _TierTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      tier,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                    Row(
+                      children: [
+                        Text(
+                          tier,
+                          style: Theme.of(
+                            context,
+                          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        if (medal != null && medal != 'None') ...[
+                          const SizedBox(width: 6),
+                          MedalBadge(medal: medal, size: 16),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 2),
                     Text(
