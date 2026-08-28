@@ -137,15 +137,36 @@ begin
 
   v_since := greatest(v_reset_at, v_last_pass);
 
+  -- Matched to questions on (course, unit, subtopic, sort_order) and
+  -- filtered on q.difficulty (current, authoritative), NOT a.difficulty
+  -- (a label snapshotted once by submit_answer(), never updated after the
+  -- fact) -- same fix, same reason, as topic_tier_progress() and
+  -- admin_backfill_progress_report() (schema_progress_report.sql /
+  -- this file's own backfill function above). MPM2D's Trigonometry and
+  -- Quadratics both had their top tier retagged 'Hard' -> 'Challenge'/
+  -- 'Advanced' partway through this app's life; a student who practiced
+  -- either before that retag has attempts stamped 'Hard' forever, even
+  -- though questions.difficulty for that exact content has said
+  -- 'Challenge'/'Advanced' ever since. Matching on the stale stamp meant
+  -- this function could still undercount (or entirely miss) real,
+  -- completed progress on a retagged tier even after the other two
+  -- functions were fixed -- this was the one place the same bug was
+  -- still live, since it's the function that writes topic_progress_report
+  -- in the first place.
   select count(distinct a.sort_order) filter (where a.was_correct),
          count(distinct a.sort_order) filter (where a.was_correct and a.was_first_attempt)
     into v_solved, v_first_try
   from attempts a
+  join questions q
+    on q.course_code = a.course_code
+    and q.unit_code = a.unit_code
+    and q.subtopic_code = a.subtopic_code
+    and q.sort_order = a.sort_order
   where a.student_id = auth.uid()
     and a.course_code = p_course_code
     and a.unit_code = p_unit_code
     and a.subtopic_code = p_subtopic_code
-    and a.difficulty = p_difficulty
+    and q.difficulty = p_difficulty
     and (v_since is null or a.answered_at > v_since);
 
   -- Keep the persisted progress-report row current every time this runs,
