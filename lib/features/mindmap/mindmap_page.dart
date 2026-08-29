@@ -17,6 +17,7 @@ import '../../state/curriculum_providers.dart';
 import '../../state/profile_providers.dart';
 import '../../state/progress_providers.dart';
 import '../admin/admin_page.dart';
+import '../auth/choose_grade_page.dart';
 import '../classroom/classroom_view.dart';
 import '../classroom/curriculum_sidebar.dart';
 import '../lesson/lesson_page.dart';
@@ -24,6 +25,7 @@ import '../practice_test/practice_test_page.dart';
 import '../progress_report/progress_report_page.dart';
 import '../settings/settings_page.dart';
 import '../topic_detail/topic_detail_sheet.dart';
+import '../welcome/welcome_page.dart';
 import 'widgets/hoverable_node.dart';
 import 'widgets/mindmap_node_widget.dart';
 
@@ -100,6 +102,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
   bool _canvasGesturesEnabled = true;
   Size _lastViewportSize = Size.zero;
   String? _layoutCourseId;
+
   /// The user's manual pick for this session, if they've toggled it —
   /// takes priority over their saved default_view preference so a
   /// deliberate switch never gets silently reverted mid-session.
@@ -152,7 +155,11 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
     });
   }
 
-  void _openEmbeddedPractice(String unitCode, String subtopicCode, String title) {
+  void _openEmbeddedPractice(
+    String unitCode,
+    String subtopicCode,
+    String title,
+  ) {
     setState(() {
       _embeddedPractice = _MindmapPracticeTarget(
         unitCode: unitCode,
@@ -574,6 +581,23 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
     if (profile?.isAdmin == true) {
       return const AdminPage();
     }
+    // Google sign-ins never pass through the email/password form's grade
+    // dropdown (login_page.dart), so a first-time Google student can reach
+    // here with no grade set. Ask once, in place of the usual content, the
+    // same way an admin sees AdminPage instead -- ChooseGradePage
+    // invalidates profileProvider itself once picked, so this just
+    // naturally falls through afterward.
+    if (profile != null && !profile.isAdmin && profile.grade == null) {
+      return const ChooseGradePage();
+    }
+    // Same gap for the welcome tour: the email/password flow's one-time
+    // redirect to it lives in login_page.dart's post-signup navigation,
+    // which a Google sign-in also never runs. Showing it inline here
+    // covers both that case and anyone who somehow lands on '/' before
+    // that redirect completes; WelcomePage marks itself seen on its own.
+    if (profile != null && !profile.isAdmin && !profile.hasSeenIntro) {
+      return const WelcomePage();
+    }
 
     final coursesAsync = ref.watch(coursesProvider);
     final unitsAsync = ref.watch(unitsProvider);
@@ -764,24 +788,25 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                         homeSelected: _expandedUnitIds.isEmpty,
                         onSelectUnit: (unitId) =>
                             _toggleUnitById(unitId, units),
-                        onSelectSubtopic: (subtopic) => _openSubtopicFromSidebar(
-                          subtopic,
-                          units,
-                          course,
-                          subtopicStatus,
-                        ),
+                        onSelectSubtopic: (subtopic) =>
+                            _openSubtopicFromSidebar(
+                              subtopic,
+                              units,
+                              course,
+                              subtopicStatus,
+                            ),
                         collapsed: _sidebarCollapsed,
-                        onToggleCollapsed: () =>
-                            setState(() => _sidebarCollapsed = !_sidebarCollapsed),
+                        onToggleCollapsed: () => setState(
+                          () => _sidebarCollapsed = !_sidebarCollapsed,
+                        ),
                         onOpenSettings: _openEmbeddedSettings,
                         onOpenProgressReport: _openEmbeddedProgressReport,
                       ),
                     ),
                     VerticalDivider(
                       width: 1,
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.outlineVariant.withValues(alpha: 0.3),
+                      color: Theme.of(context).colorScheme.outlineVariant
+                          .withValues(alpha: 0.3),
                     ),
                     Expanded(
                       child: _embeddedSettings
@@ -822,71 +847,78 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                               ),
                             )
                           : LayoutBuilder(
-                        builder: (context, constraints) {
-                          final viewportSize = constraints.biggest;
-                          if (viewportSize != _lastViewportSize) {
-                            final wasZero = _lastViewportSize == Size.zero;
-                            _lastViewportSize = viewportSize;
-                            if (wasZero) {
-                              WidgetsBinding.instance.addPostFrameCallback(
-                                (_) => _fitToContent(),
-                              );
-                            }
-                          }
-                          return Listener(
-                            behavior: HitTestBehavior.opaque,
-                            onPointerSignal: _handleMindmapScroll,
-                            child: InteractiveViewer(
-                              transformationController: _transformController,
-                              constrained: false,
-                              // Disabled for the duration of any node-level
-                              // pointer interaction (see _DraggableNode) so
-                              // InteractiveViewer's own pan/scale recognizer
-                              // never competes with — or nudges the canvas
-                              // during — a tap or drag on a node. Also
-                              // disabled while Cmd/Ctrl is held so its own
-                              // built-in wheel-to-zoom doesn't
-                              // double-process the same scroll tick our
-                              // custom zoom handler is already applying
-                              // (see _handleMindmapScroll).
-                              panEnabled:
-                                  _canvasGesturesEnabled && !_zoomModifierHeld,
-                              scaleEnabled:
-                                  _canvasGesturesEnabled && !_zoomModifierHeld,
-                              minScale: _minZoom,
-                              maxScale: _maxZoom,
-                              boundaryMargin: const EdgeInsets.all(1200),
-                              child: SizedBox(
-                                width: _canvasSize.width,
-                                height: _canvasSize.height,
-                                child: Stack(
-                                  clipBehavior: Clip.none,
-                                  children: [
-                                    Positioned.fill(
-                                      child: CustomPaint(
-                                        painter: _MindmapEdgePainter(
-                                          positions: _positions,
-                                          units: units,
-                                          subtopicsByUnit: _subtopicsByUnit,
-                                          expandedUnitIds: _expandedUnitIds,
-                                          subtopicStatus: subtopicStatus,
-                                        ),
+                              builder: (context, constraints) {
+                                final viewportSize = constraints.biggest;
+                                if (viewportSize != _lastViewportSize) {
+                                  final wasZero =
+                                      _lastViewportSize == Size.zero;
+                                  _lastViewportSize = viewportSize;
+                                  if (wasZero) {
+                                    WidgetsBinding.instance
+                                        .addPostFrameCallback(
+                                          (_) => _fitToContent(),
+                                        );
+                                  }
+                                }
+                                return Listener(
+                                  behavior: HitTestBehavior.opaque,
+                                  onPointerSignal: _handleMindmapScroll,
+                                  child: InteractiveViewer(
+                                    transformationController:
+                                        _transformController,
+                                    constrained: false,
+                                    // Disabled for the duration of any node-level
+                                    // pointer interaction (see _DraggableNode) so
+                                    // InteractiveViewer's own pan/scale recognizer
+                                    // never competes with — or nudges the canvas
+                                    // during — a tap or drag on a node. Also
+                                    // disabled while Cmd/Ctrl is held so its own
+                                    // built-in wheel-to-zoom doesn't
+                                    // double-process the same scroll tick our
+                                    // custom zoom handler is already applying
+                                    // (see _handleMindmapScroll).
+                                    panEnabled:
+                                        _canvasGesturesEnabled &&
+                                        !_zoomModifierHeld,
+                                    scaleEnabled:
+                                        _canvasGesturesEnabled &&
+                                        !_zoomModifierHeld,
+                                    minScale: _minZoom,
+                                    maxScale: _maxZoom,
+                                    boundaryMargin: const EdgeInsets.all(1200),
+                                    child: SizedBox(
+                                      width: _canvasSize.width,
+                                      height: _canvasSize.height,
+                                      child: Stack(
+                                        clipBehavior: Clip.none,
+                                        children: [
+                                          Positioned.fill(
+                                            child: CustomPaint(
+                                              painter: _MindmapEdgePainter(
+                                                positions: _positions,
+                                                units: units,
+                                                subtopicsByUnit:
+                                                    _subtopicsByUnit,
+                                                expandedUnitIds:
+                                                    _expandedUnitIds,
+                                                subtopicStatus: subtopicStatus,
+                                              ),
+                                            ),
+                                          ),
+                                          ..._buildNodes(
+                                            course,
+                                            units,
+                                            subtopicStatus,
+                                            subtopicScorePercent,
+                                            subtopicMedal,
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                    ..._buildNodes(
-                                      course,
-                                      units,
-                                      subtopicStatus,
-                                      subtopicScorePercent,
-                                      subtopicMedal,
-                                    ),
-                                  ],
-                                ),
-                              ),
+                                  ),
+                                );
+                              },
                             ),
-                          );
-                        },
-                      ),
                     ),
                   ],
                 );
@@ -955,10 +987,8 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
             // see UnitNodeWidget's own doc comment — so that context moves
             // into the one place a student already looks to learn more
             // about a node: the hover tooltip.
-            message: '${unitStatus.hoverMessage(
-              noun: 'unit',
-              scorePercent: unitScorePercent,
-            )} Unit ${unit.orderIndex + 1} of ${units.length}, '
+            message:
+                '${unitStatus.hoverMessage(noun: 'unit', scorePercent: unitScorePercent)} Unit ${unit.orderIndex + 1} of ${units.length}, '
                 '${subtopicsInUnit.length} '
                 '${subtopicsInUnit.length == 1 ? 'topic' : 'topics'}.',
             highlightColor: unitStatus.color,
@@ -990,13 +1020,15 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
               color: status.color,
               courseCode: course.code,
               onOpenLesson: _openEmbeddedLesson,
-              onOpenPractice: (unitCode) =>
-                  _openEmbeddedPractice(unitCode, subtopic.code, subtopic.title),
+              onOpenPractice: (unitCode) => _openEmbeddedPractice(
+                unitCode,
+                subtopic.code,
+                subtopic.title,
+              ),
             ),
             child: HoverableNode(
-              message: '${status.hoverMessage(
-                scorePercent: subtopicScorePercent[subtopic.id],
-              )} Topic ${subtopic.orderIndex + 1} of '
+              message:
+                  '${status.hoverMessage(scorePercent: subtopicScorePercent[subtopic.id])} Topic ${subtopic.orderIndex + 1} of '
                   '${subtopicsInUnit.length} in this unit.',
               highlightColor: status.color,
               child: SubtopicNodeWidget(subtopic: subtopic, status: status),

@@ -147,6 +147,33 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     }
   }
 
+  /// Lets a student use their existing Google account instead of choosing
+  /// yet another password. Supabase treats first-time and returning
+  /// Google sign-ins identically -- there's no separate "sign up" step to
+  /// wire up here, this same button handles both.
+  Future<void> _continueWithGoogle() async {
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+    });
+    try {
+      await ref
+          .read(supabaseClientProvider)
+          .auth
+          .signInWithOAuth(OAuthProvider.google, redirectTo: _redirectOrigin);
+      // On web this navigates the whole page to Google's consent screen --
+      // nothing meaningful happens after this line runs. The eventual
+      // redirect back is handled by Supabase's own session-from-URL
+      // recovery on startup, the same mechanism that already handles the
+      // email confirmation link.
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      setState(() => _errorMessage = e.message);
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
   bool _looksLikeUnconfirmedEmail(AuthException e) {
     final message = e.message.toLowerCase();
     return message.contains('not confirmed') ||
@@ -246,6 +273,33 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             textAlign: TextAlign.center,
                           ),
                           const SizedBox(height: 24),
+                          OutlinedButton(
+                            onPressed: _isSubmitting
+                                ? null
+                                : _continueWithGoogle,
+                            child: const Text('Continue with Google'),
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Divider(color: scheme.outlineVariant),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                ),
+                                child: Text(
+                                  'or',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ),
+                              Expanded(
+                                child: Divider(color: scheme.outlineVariant),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
                           if (_isSignUp) ...[
                             TextFormField(
                               controller: _nameController,
