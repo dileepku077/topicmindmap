@@ -176,14 +176,25 @@ class LessonMindmapSummary extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
+          // Scales down to fit instead of scrolling -- this sits directly
+          // above the lesson's own HTML iframe (html_lesson_view.dart), and
+          // a horizontally-scrollable widget there is a known Flutter-web
+          // trap: a drag that starts here and ends over the iframe loses
+          // its pointer-up to the iframe's own document, leaving Flutter
+          // thinking a pointer is still down and blocking every click
+          // afterward. This diagram is decorative only, so it never needed
+          // to be draggable in the first place.
           LayoutBuilder(
             builder: (context, constraints) {
-              if (diagramWidth <= constraints.maxWidth) {
-                return Center(child: diagram);
-              }
-              return SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: diagram,
+              final scale = diagramWidth <= constraints.maxWidth
+                  ? 1.0
+                  : constraints.maxWidth / diagramWidth;
+              return Center(
+                child: SizedBox(
+                  width: diagramWidth * scale,
+                  height: diagramHeight * scale,
+                  child: FittedBox(fit: BoxFit.contain, child: diagram),
+                ),
               );
             },
           ),
