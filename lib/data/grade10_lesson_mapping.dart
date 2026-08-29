@@ -45,3 +45,9 @@ const grade10LessonIdBySubtopicCode = <String, String>{
   'sine-law': 'c4',
   'cosine-law': 'c5',
 };
+
+/// Whether [lessonId] is one of MPM2D's own lessons -- used to gate
+/// features scoped to Grade 10 Math specifically, like
+/// lesson_mindmap_summary.dart's visual lesson overview.
+bool isGrade10MathLesson(String lessonId) =>
+    grade10LessonIdBySubtopicCode.values.contains(lessonId);
