@@ -22,7 +22,21 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
   bool _isSignUp = false;
   bool _isSubmitting = false;
+  bool _isResending = false;
   String? _errorMessage;
+
+  /// Set once a sign-in attempt fails specifically because the account's
+  /// email hasn't been confirmed yet — shown as a "resend the link"
+  /// action alongside the normal error text, rather than just a dead end.
+  String? _unconfirmedEmail;
+
+  /// Set right after a successful signUp() call that returned no session
+  /// — i.e. "Confirm email" is on in the Supabase dashboard and this
+  /// student needs to click the link in their inbox before they can sign
+  /// in at all. Non-null replaces the whole form with a "check your
+  /// email" screen; there's nothing left to submit until that happens.
+  String? _pendingConfirmationEmail;
+
   /// Sign-up only — which grade's courses this student should see. Sent as
   /// signUp() user metadata so handle_new_user() (schema_practice.sql) can
   /// set profiles.grade in the same insert that creates the profile row;
@@ -38,12 +52,19 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     super.dispose();
   }
 
+  /// The origin (scheme + host + port) this page is currently served
+  /// from — used as the email confirmation link's redirect target so it
+  /// lands back on whichever deployment sent it (production, or a local
+  /// dev server) instead of a hard-coded URL.
+  String get _redirectOrigin => Uri.base.origin;
+
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
     setState(() {
       _isSubmitting = true;
       _errorMessage = null;
+      _unconfirmedEmail = null;
     });
 
     final client = ref.read(supabaseClientProvider);
@@ -52,30 +73,49 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
     try {
       if (_isSignUp) {
-        await client.auth.signUp(
+        final response = await client.auth.signUp(
           email: email,
           password: password,
           data: {
             'display_name': _nameController.text.trim(),
             'grade': _selectedGrade,
           },
+          emailRedirectTo: _redirectOrigin,
         );
-        // Belt-and-suspenders: handle_new_user() (schema_practice.sql) also
-        // reads grade out of the metadata above, but that only takes effect
-        // once that SQL has been (re-)run against the database. Setting it
-        // directly here too — the same profiles table update Settings' own
-        // grade dropdown already uses — means a new student's grade (and
-        // therefore which courses visibleCoursesProvider shows them, see
+
+        // No session back means "Confirm email" is on in the Supabase
+        // dashboard and this account can't sign in yet — there's nothing
+        // to route into the app with, so show a "check your email" screen
+        // instead of the usual post-sign-up redirect.
+        if (response.session == null) {
+          if (!mounted) return;
+          setState(() {
+            _pendingConfirmationEmail = email;
+            _isSubmitting = false;
+          });
+          return;
+        }
+
+        // Confirmation is off (or this account was pre-confirmed some
+        // other way) -- signed in immediately, same as before confirmation
+        // existed. Belt-and-suspenders: handle_new_user()
+        // (schema_practice.sql) also reads grade out of the metadata
+        // above, but that only takes effect once that SQL has been
+        // (re-)run against the database. Setting it directly here too —
+        // the same profiles table update Settings' own grade dropdown
+        // already uses — means a new student's grade (and therefore which
+        // courses visibleCoursesProvider shows them, see
         // curriculum_providers.dart) is correct from their very first
         // sign-in regardless of whether that SQL step happened.
-        final newUserId = client.auth.currentUser?.id;
+        final newUserId = response.user?.id;
         final grade = _selectedGrade;
         if (newUserId != null && grade != null) {
-          await ref.read(profileRepositoryProvider).updateGrade(newUserId, grade);
+          await ref
+              .read(profileRepositoryProvider)
+              .updateGrade(newUserId, grade);
         }
       } else {
-        await client.auth
-            .signInWithPassword(email: email, password: password);
+        await client.auth.signInWithPassword(email: email, password: password);
       }
       if (!mounted) return;
       // A brand-new sign-up's profile row is always fresh (has_seen_intro
@@ -89,14 +129,52 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           ? null
           : await ref.read(profileRepositoryProvider).fetchProfile(userId);
       if (!mounted) return;
-      final showIntro = profile != null && !profile.isAdmin && !profile.hasSeenIntro;
+      final showIntro =
+          profile != null && !profile.isAdmin && !profile.hasSeenIntro;
       context.go(showIntro ? '/welcome' : '/');
     } on AuthException catch (e) {
-      setState(() => _errorMessage = e.message);
+      final unconfirmed = !_isSignUp && _looksLikeUnconfirmedEmail(e);
+      setState(() {
+        _errorMessage = unconfirmed
+            ? "This account's email hasn't been confirmed yet."
+            : e.message;
+        _unconfirmedEmail = unconfirmed ? email : null;
+      });
     } catch (e) {
       setState(() => _errorMessage = 'Something went wrong. Please try again.');
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  bool _looksLikeUnconfirmedEmail(AuthException e) {
+    final message = e.message.toLowerCase();
+    return message.contains('not confirmed') ||
+        message.contains('email_not_confirmed');
+  }
+
+  Future<void> _resendConfirmation(String email) async {
+    setState(() => _isResending = true);
+    try {
+      await ref
+          .read(supabaseClientProvider)
+          .auth
+          .resend(
+            type: OtpType.signup,
+            email: email,
+            emailRedirectTo: _redirectOrigin,
+          );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Confirmation email resent to $email.')),
+      );
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Couldn't resend the email: ${e.message}")),
+      );
+    } finally {
+      if (mounted) setState(() => _isResending = false);
     }
   }
 
@@ -119,118 +197,174 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             constraints: const BoxConstraints(maxWidth: 400),
             child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(24, 40, 24, 24),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Center(child: BrandBadge()),
-                    const SizedBox(height: 18),
-                    Text(
-                      'Astro STEM Labs',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: -0.2,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Center(child: BrandBadge()),
+                  const SizedBox(height: 18),
+                  Text(
+                    'Astro STEM Labs',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: -0.2,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Makes STEM learning fun and exciting',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: brandCoral,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  if (_pendingConfirmationEmail case final email?)
+                    _ConfirmationPendingView(
+                      email: email,
+                      isResending: _isResending,
+                      onResend: () => _resendConfirmation(email),
+                      onBackToSignIn: () => setState(() {
+                        _pendingConfirmationEmail = null;
+                        _isSignUp = false;
+                      }),
+                    )
+                  else
+                    Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            _isSignUp
+                                ? 'Create an account to see your practice test progress.'
+                                : 'Sign in to see your practice test progress.',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 24),
+                          if (_isSignUp) ...[
+                            TextFormField(
+                              controller: _nameController,
+                              textCapitalization: TextCapitalization.words,
+                              autofillHints: const [AutofillHints.name],
+                              decoration: _fieldDecoration(
+                                context,
+                                'Full name',
+                              ),
+                              validator: (value) =>
+                                  (value == null || value.trim().isEmpty)
+                                  ? 'Enter your name'
+                                  : null,
+                            ),
+                            const SizedBox(height: 12),
+                            DropdownButtonFormField<int>(
+                              initialValue: _selectedGrade,
+                              decoration: _fieldDecoration(context, 'Grade'),
+                              items: const [9, 10, 11, 12]
+                                  .map(
+                                    (g) => DropdownMenuItem(
+                                      value: g,
+                                      child: Text('Grade $g'),
+                                    ),
+                                  )
+                                  .toList(),
+                              // Only your grade's courses show up afterward (see
+                              // Profile & Preferences, which is also where this
+                              // can be changed later).
+                              onChanged: (value) =>
+                                  setState(() => _selectedGrade = value),
+                              validator: (value) =>
+                                  value == null ? 'Select your grade' : null,
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+                          TextFormField(
+                            controller: _emailController,
+                            keyboardType: TextInputType.emailAddress,
+                            autofillHints: const [AutofillHints.email],
+                            decoration: _fieldDecoration(context, 'Email'),
+                            validator: (value) =>
+                                (value == null || !value.contains('@'))
+                                ? 'Enter a valid email'
+                                : null,
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _passwordController,
+                            obscureText: true,
+                            autofillHints: const [AutofillHints.password],
+                            decoration: _fieldDecoration(context, 'Password'),
+                            validator: (value) =>
+                                (value == null || value.length < 6)
+                                ? 'Minimum 6 characters'
+                                : null,
+                            onFieldSubmitted: (_) => _submit(),
+                          ),
+                          if (_errorMessage != null) ...[
+                            const SizedBox(height: 12),
+                            Text(
+                              _errorMessage!,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                            ),
+                          ],
+                          if (_unconfirmedEmail case final email?) ...[
+                            const SizedBox(height: 4),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: TextButton(
+                                onPressed: _isResending
+                                    ? null
+                                    : () => _resendConfirmation(email),
+                                style: TextButton.styleFrom(
+                                  padding: EdgeInsets.zero,
+                                ),
+                                child: Text(
+                                  _isResending
+                                      ? 'Sending…'
+                                      : 'Resend confirmation email',
+                                ),
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 20),
+                          FilledButton(
+                            onPressed: _isSubmitting ? null : _submit,
+                            child: _isSubmitting
+                                ? const SizedBox(
+                                    height: 18,
+                                    width: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Text(
+                                    _isSignUp ? 'Create account' : 'Sign in',
+                                  ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextButton(
+                            onPressed: _isSubmitting
+                                ? null
+                                : () => setState(() {
+                                    _isSignUp = !_isSignUp;
+                                    _errorMessage = null;
+                                  }),
+                            child: Text(
+                              _isSignUp
+                                  ? 'Already have an account? Sign in'
+                                  : "Don't have an account? Create one",
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Makes STEM learning fun and exciting',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: brandCoral,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                      ),
-                    ),
-                    const SizedBox(height: 28),
-                    Text(
-                      _isSignUp
-                          ? 'Create an account to see your practice test progress.'
-                          : 'Sign in to see your practice test progress.',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 24),
-                    if (_isSignUp) ...[
-                      TextFormField(
-                        controller: _nameController,
-                        textCapitalization: TextCapitalization.words,
-                        autofillHints: const [AutofillHints.name],
-                        decoration: _fieldDecoration(context, 'Full name'),
-                        validator: (value) => (value == null || value.trim().isEmpty)
-                            ? 'Enter your name'
-                            : null,
-                      ),
-                      const SizedBox(height: 12),
-                      DropdownButtonFormField<int>(
-                        initialValue: _selectedGrade,
-                        decoration: _fieldDecoration(context, 'Grade'),
-                        items: const [9, 10, 11, 12]
-                            .map((g) => DropdownMenuItem(value: g, child: Text('Grade $g')))
-                            .toList(),
-                        // Only your grade's courses show up afterward (see
-                        // Profile & Preferences, which is also where this
-                        // can be changed later).
-                        onChanged: (value) => setState(() => _selectedGrade = value),
-                        validator: (value) => value == null ? 'Select your grade' : null,
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                    TextFormField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      autofillHints: const [AutofillHints.email],
-                      decoration: _fieldDecoration(context, 'Email'),
-                      validator: (value) => (value == null || !value.contains('@'))
-                          ? 'Enter a valid email'
-                          : null,
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _passwordController,
-                      obscureText: true,
-                      autofillHints: const [AutofillHints.password],
-                      decoration: _fieldDecoration(context, 'Password'),
-                      validator: (value) => (value == null || value.length < 6)
-                          ? 'Minimum 6 characters'
-                          : null,
-                      onFieldSubmitted: (_) => _submit(),
-                    ),
-                    if (_errorMessage != null) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        _errorMessage!,
-                        style: TextStyle(color: Theme.of(context).colorScheme.error),
-                      ),
-                    ],
-                    const SizedBox(height: 20),
-                    FilledButton(
-                      onPressed: _isSubmitting ? null : _submit,
-                      child: _isSubmitting
-                          ? const SizedBox(
-                              height: 18,
-                              width: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : Text(_isSignUp ? 'Create account' : 'Sign in'),
-                    ),
-                    const SizedBox(height: 8),
-                    TextButton(
-                      onPressed: _isSubmitting
-                          ? null
-                          : () => setState(() {
-                                _isSignUp = !_isSignUp;
-                                _errorMessage = null;
-                              }),
-                      child: Text(_isSignUp
-                          ? 'Already have an account? Sign in'
-                          : "Don't have an account? Create one"),
-                    ),
-                  ],
-                ),
+                ],
               ),
             ),
           ),
@@ -249,7 +383,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       labelText: label,
       filled: true,
       fillColor: scheme.surfaceContainerHigh,
-      border: OutlineInputBorder(borderRadius: radius, borderSide: BorderSide.none),
+      border: OutlineInputBorder(
+        borderRadius: radius,
+        borderSide: BorderSide.none,
+      ),
       enabledBorder: OutlineInputBorder(
         borderRadius: radius,
         borderSide: BorderSide(color: scheme.outlineVariant),
@@ -258,6 +395,64 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         borderRadius: radius,
         borderSide: BorderSide(color: scheme.primary, width: 1.5),
       ),
+    );
+  }
+}
+
+/// Replaces the sign-up form entirely once signUp() comes back with no
+/// session — meaning Supabase's "Confirm email" setting is on and this
+/// account can't do anything in the app until the student opens the link
+/// mailed to them. There's nothing left to submit at this point, so this
+/// is a dead end with two ways out: wait for the email (with a resend in
+/// case it didn't arrive), or back out to try signing in with a different
+/// account.
+class _ConfirmationPendingView extends StatelessWidget {
+  const _ConfirmationPendingView({
+    required this.email,
+    required this.isResending,
+    required this.onResend,
+    required this.onBackToSignIn,
+  });
+
+  final String email;
+  final bool isResending;
+  final VoidCallback onResend;
+  final VoidCallback onBackToSignIn;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Icon(Icons.mark_email_unread_outlined, size: 56, color: scheme.primary),
+        const SizedBox(height: 16),
+        Text(
+          'Check your email',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.titleLarge
+              ?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'We sent a confirmation link to $email. Open it on your phone or '
+          'computer, then come back here and sign in.',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        const SizedBox(height: 20),
+        OutlinedButton(
+          onPressed: isResending ? null : onResend,
+          child: Text(
+            isResending ? 'Sending…' : "Didn't get it? Resend the email",
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextButton(
+          onPressed: onBackToSignIn,
+          child: const Text('Back to sign in'),
+        ),
+      ],
     );
   }
 }
