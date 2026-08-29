@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/brand_badge.dart';
+import '../../domain/mastery_calculator.dart';
 import '../../models/practice_question.dart';
 import '../../models/subtopic_mastery.dart';
 import '../../state/auth_providers.dart';
@@ -170,13 +171,12 @@ class _PracticeTestPageState extends ConsumerState<PracticeTestPage> {
       // classroom view reflects this result the moment the student goes
       // back, instead of depending on that realtime push arriving.
       ref.invalidate(practiceMasteryProvider);
-      // Same reasoning — the Progress Report's bar for this topic should
-      // reflect a just-cleared tier immediately if the student checks it
-      // right after, not a stale fetch from before this attempt.
-      ref.invalidate(progressReportProvider(widget.courseCode));
-      // And the tier picker's own per-difficulty medal badge, if the
-      // student backs out to try another tier right after this one.
-      ref.invalidate(subtopicTierMedalsProvider(_ref));
+      // Same reasoning — the Progress Report page and this page's own
+      // tier picker (if the student backs out to try another tier) both
+      // compute their numbers from this, and should reflect a just-
+      // finished attempt immediately rather than a stale fetch from
+      // before it.
+      ref.invalidate(subtopicAttemptStatsProvider(widget.courseCode));
     } catch (error) {
       if (!mounted) return;
       setState(() => _awardingMedal = false);
@@ -205,9 +205,23 @@ class _PracticeTestPageState extends ConsumerState<PracticeTestPage> {
               final questionsAsync = ref.watch(
                 practiceQuestionsProvider(_ref),
               );
-              final tierMedals =
-                  ref.watch(subtopicTierMedalsProvider(_ref)).value ??
-                  const <String, String>{};
+              // Filtered to just this subtopic, then run through the same
+              // centralized calculator the Progress Report page uses, so
+              // this per-tier medal and that page's numbers can never
+              // disagree with each other.
+              final subtopicStats = (ref.watch(subtopicAttemptStatsProvider(widget.courseCode)).value ?? const [])
+                  .where((s) => s.unitCode == _ref.unitCode && s.subtopicCode == _ref.subtopicCode)
+                  .map((s) => DifficultyStats(
+                        difficulty: s.difficulty,
+                        attempted: s.attempted,
+                        correct: s.correct,
+                        firstTryCorrect: s.firstTryCorrect,
+                      ))
+                  .toList();
+              final tierMedals = {
+                for (final entry in calculateMastery(subtopicStats).byDifficulty.entries)
+                  entry.key: entry.value.medal,
+              };
               return questionsAsync.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (error, _) =>

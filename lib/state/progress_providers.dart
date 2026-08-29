@@ -2,11 +2,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/progress_repository.dart';
 import '../models/progress_status.dart';
+import '../models/subtopic_attempt_stat.dart';
 import '../models/subtopic_mastery.dart';
-import '../models/tier_progress.dart';
 import 'auth_providers.dart';
 import 'curriculum_providers.dart';
-import 'practice_test_providers.dart' show PracticeSubtopicRef;
 
 final progressRepositoryProvider = Provider<ProgressRepository>((ref) {
   return ProgressRepository(ref.watch(supabaseClientProvider));
@@ -60,35 +59,19 @@ final practiceMasteryProvider =
   );
 });
 
-/// The Progress Report's data for one course — a one-shot fetch (not a
-/// live stream, unlike [practiceMasteryProvider]) since it's only ever
-/// looked at on that page, not driving something already on screen the
-/// rest of the time. Callers that just changed the underlying data
-/// (finishing a practice tier) invalidate this explicitly, same pattern as
-/// every other write in this app.
-final progressReportProvider =
-    FutureProvider.family<List<TierProgress>, String>((ref, courseCode) {
+/// Raw per-(unit, subtopic, difficulty) attempt stats for one course — the
+/// single source both the Progress Report page and the practice test's
+/// tier picker compute their mastery %/medals from (via
+/// lib/domain/mastery_calculator.dart), so the two can never disagree with
+/// each other the way separately-cached numbers could. A one-shot fetch
+/// (not a live stream, unlike [practiceMasteryProvider]) — callers that
+/// just changed the underlying data (finishing a practice tier) invalidate
+/// this explicitly, same pattern as every other write in this app.
+final subtopicAttemptStatsProvider =
+    FutureProvider.family<List<SubtopicAttemptStat>, String>((ref, courseCode) {
   final user = ref.watch(currentUserProvider);
-  if (user == null) return Future.value(const <TierProgress>[]);
-  return ref.watch(progressRepositoryProvider).fetchTierProgress(courseCode);
-});
-
-/// difficulty -> medal for one subtopic, e.g. so the practice test's tier
-/// picker can show a genuinely different medal per difficulty (Gold on
-/// Easy, Bronze on Advanced) instead of subtopic_mastery's single
-/// best-across-every-tier medal. Same one-shot-fetch, explicit-invalidate
-/// treatment as [progressReportProvider].
-final subtopicTierMedalsProvider =
-    FutureProvider.family<Map<String, String>, PracticeSubtopicRef>((ref, subtopicRef) {
-  final user = ref.watch(currentUserProvider);
-  if (user == null) return Future.value(const <String, String>{});
-  return ref
-      .watch(progressRepositoryProvider)
-      .fetchTierMedals(
-        courseCode: subtopicRef.courseCode,
-        unitCode: subtopicRef.unitCode,
-        subtopicCode: subtopicRef.subtopicCode,
-      );
+  if (user == null) return Future.value(const <SubtopicAttemptStat>[]);
+  return ref.watch(progressRepositoryProvider).fetchSubtopicAttemptStats(courseCode);
 });
 
 /// This subtopic's mastery record for the signed-in student, or null if

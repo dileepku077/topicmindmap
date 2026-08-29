@@ -1,12 +1,23 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../models/subtopic_attempt_stat.dart';
 import '../models/subtopic_mastery.dart';
-import '../models/tier_progress.dart';
 
-/// Reads a student's practice-test mastery record — one row per subtopic
-/// they've completed at least once, updated in place by the database's
-/// award_medal() function as they improve. This app only ever reads them,
-/// to drive the mindmap's progress color-coding.
+/// Reads a student's practice-test progress. Two different shapes for two
+/// different purposes:
+///
+/// - [watchMastery] streams subtopic_mastery — one row per subtopic,
+///   holding the single best tier pass earned so far. This app only reads
+///   it, to drive the mindmap/sidebar's progress color-coding and medal
+///   badges (a different, older, coarser signal than mastery %).
+/// - [fetchSubtopicAttemptStats] returns raw per-(unit, subtopic,
+///   difficulty) attempt counts, computed live from attempts — the input
+///   the centralized mastery calculator (lib/domain/mastery_calculator.dart)
+///   works from. Deliberately NOT read from the topic_progress_report
+///   table: that table is a secondary, admin-queryable copy kept up to
+///   date by award_medal() as a side effect, not the source of truth, and
+///   computing live from attempts means the app's own mastery/medal
+///   numbers can never go stale relative to a table that fell out of sync.
 class ProgressRepository {
   ProgressRepository(this._client);
 
@@ -24,77 +35,17 @@ class ProgressRepository {
         .map((rows) => rows.map(SubtopicMastery.fromMap).toList());
   }
 
-  /// One row per (unit, subtopic, difficulty) tier with questions in the
-  /// bank, for the Progress Report's charts. The solved/total numbers
-  /// themselves come straight from topic_progress_report — a real table
-  /// award_medal() keeps up to date as students practice (see
-  /// supabase/schema_progress_report_table.sql) — rather than rejoining
-  /// attempts/questions/progress_resets live on every page load the way
-  /// this used to (topic_tier_progress() in schema_progress_report.sql,
-  /// still defined but no longer called from here).
-  ///
-  /// topic_progress_report only ever has a row for a tier once a student
-  /// has made at least one attempt at it, so it's paired with
-  /// tier_catalog() — pure curriculum structure (which tiers exist and how
-  /// many questions each has, no student data at all) — to fill in an
-  /// explicit 0-progress row for anything untouched. Without that, an
-  /// untouched unit's bar would be missing from the chart entirely instead
-  /// of reading as 0%.
-  Future<List<TierProgress>> fetchTierProgress(String courseCode) async {
-    final catalogRows = await _client.rpc(
-      'tier_catalog',
+  /// Raw per-tier attempt/correct/first-try-correct counts for every topic
+  /// in [courseCode] — see subtopic_attempt_stats() in
+  /// supabase/schema_mastery_rework.sql. A tier never attempted just has
+  /// no row; callers treat that as zero evidence, not zero mastery.
+  Future<List<SubtopicAttemptStat>> fetchSubtopicAttemptStats(String courseCode) async {
+    final rows = await _client.rpc(
+      'subtopic_attempt_stats',
       params: {'p_course_code': courseCode},
     );
-    final progressRows = await _client
-        .from('topic_progress_report')
-        .select()
-        .eq('course_code', courseCode);
-
-    final solvedByTier = <String, int>{
-      for (final row in progressRows)
-        _tierKey(
-          row['unit_code'] as String,
-          row['subtopic_code'] as String,
-          row['difficulty'] as String,
-        ): row['solved_questions'] as int,
-    };
-
-    return (catalogRows as List).map((row) {
-      final map = row as Map<String, dynamic>;
-      final unitCode = map['unit_code'] as String;
-      final subtopicCode = map['subtopic_code'] as String;
-      final difficulty = map['difficulty'] as String;
-      return TierProgress(
-        unitCode: unitCode,
-        subtopicCode: subtopicCode,
-        difficulty: difficulty,
-        totalQuestions: map['total_questions'] as int,
-        solvedQuestions: solvedByTier[_tierKey(unitCode, subtopicCode, difficulty)] ?? 0,
-      );
-    }).toList();
-  }
-
-  String _tierKey(String unitCode, String subtopicCode, String difficulty) =>
-      '$unitCode/$subtopicCode/$difficulty';
-
-  /// difficulty -> best medal earned on that specific tier for one
-  /// subtopic ('None' · 'Bronze' · 'Silver' · 'Gold' · 'Diamond'), read
-  /// straight from topic_progress_report. Unlike subtopic_mastery's single
-  /// best-across-every-tier medal, this is how the tier picker shows a
-  /// genuinely different medal per difficulty (Gold on Easy, Bronze on
-  /// Advanced, say) for the same topic. A tier never attempted just has no
-  /// entry.
-  Future<Map<String, String>> fetchTierMedals({
-    required String courseCode,
-    required String unitCode,
-    required String subtopicCode,
-  }) async {
-    final rows = await _client
-        .from('topic_progress_report')
-        .select('difficulty, medal')
-        .eq('course_code', courseCode)
-        .eq('unit_code', unitCode)
-        .eq('subtopic_code', subtopicCode);
-    return {for (final row in rows) row['difficulty'] as String: row['medal'] as String};
+    return (rows as List)
+        .map((row) => SubtopicAttemptStat.fromMap(row as Map<String, dynamic>))
+        .toList();
   }
 }
