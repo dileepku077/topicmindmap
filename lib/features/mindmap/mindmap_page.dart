@@ -25,7 +25,6 @@ import '../practice_test/practice_test_page.dart';
 import '../progress_report/progress_report_page.dart';
 import '../settings/settings_page.dart';
 import '../topic_detail/topic_detail_sheet.dart';
-import '../welcome/welcome_page.dart';
 import 'widgets/hoverable_node.dart';
 import 'widgets/mindmap_node_widget.dart';
 
@@ -589,14 +588,6 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
     // naturally falls through afterward.
     if (profile != null && !profile.isAdmin && profile.grade == null) {
       return const ChooseGradePage();
-    }
-    // Same gap for the welcome tour: the email/password flow's one-time
-    // redirect to it lives in login_page.dart's post-signup navigation,
-    // which a Google sign-in also never runs. Showing it inline here
-    // covers both that case and anyone who somehow lands on '/' before
-    // that redirect completes; WelcomePage marks itself seen on its own.
-    if (profile != null && !profile.isAdmin && !profile.hasSeenIntro) {
-      return const WelcomePage();
     }
 
     final coursesAsync = ref.watch(coursesProvider);
