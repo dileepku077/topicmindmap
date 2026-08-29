@@ -122,6 +122,69 @@ IconData iconForHeading(String heading) {
   if (h.contains('setting') || h.contains('setup') || h.contains('set up')) {
     return Icons.tune_outlined;
   }
+  // From here down: Grade 9/10 Science and Grade 11 Physics headings
+  // (assets/data/snc2d_topics_mindmap.json, sph3u_topics_mindmap.json)
+  // don't otherwise overlap much with the math-lesson patterns above.
+  if (h.startsWith('table:')) return Icons.table_chart_outlined;
+  if (h.contains('law') || h.contains('conservation')) {
+    return Icons.balance_outlined;
+  }
+  if (h.contains('circuit') ||
+      h.contains('current') ||
+      h.contains('voltage') ||
+      h.contains('charge') ||
+      h.contains('magnet')) {
+    return Icons.electrical_services_outlined;
+  }
+  if (h.contains('wave') || h.contains('sound') || h.contains('pitch')) {
+    return Icons.graphic_eq_outlined;
+  }
+  if (h.contains('light') ||
+      h.contains('reflect') ||
+      h.contains('lens') ||
+      h.contains('mirror') ||
+      h.contains('image') ||
+      h.contains('eye')) {
+    return Icons.visibility_outlined;
+  }
+  if (h.contains('cell') ||
+      h.contains('tissue') ||
+      h.contains('organ') ||
+      h.contains('blood') ||
+      h.contains('digest') ||
+      h.contains('circulat') ||
+      h.contains('respirat') ||
+      h.contains('muscle') ||
+      h.contains('nerv')) {
+    return Icons.biotech_outlined;
+  }
+  if (h.contains('acid') ||
+      h.contains('bond') ||
+      h.contains('react') ||
+      h.contains('compound') ||
+      h.contains('element') ||
+      h.contains('atom') ||
+      h.contains('ion')) {
+    return Icons.science_outlined;
+  }
+  if (h.contains('climate') ||
+      h.contains('greenhouse') ||
+      h.contains('ecosystem') ||
+      h.contains('ocean') ||
+      h.contains('atmosphere')) {
+    return Icons.eco_outlined;
+  }
+  if (h.contains('velocity') ||
+      h.contains('acceleration') ||
+      h.contains('motion') ||
+      h.contains('speed') ||
+      h.contains('displacement') ||
+      h.contains('distance')) {
+    return Icons.speed_outlined;
+  }
+  if (h.contains('energy') || h.contains('power') || h.contains('force')) {
+    return Icons.bolt_outlined;
+  }
   return Icons.label_important_outline;
 }
 

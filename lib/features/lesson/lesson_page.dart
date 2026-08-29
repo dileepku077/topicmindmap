@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/brand_badge.dart';
-import '../../data/grade10_lesson_mapping.dart';
 import '../../state/lesson_providers.dart';
 import 'html/html_lesson_view.dart';
 import 'lesson_mindmap_summary.dart';
@@ -84,18 +83,17 @@ class LessonBody extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Grade 10 Math (MPM2D) only for now -- every lesson there
-              // follows the same '## Section' heading structure this
-              // derives from, so it renders correctly with zero authored
-              // content. Other courses' lessons aren't guaranteed to
-              // follow that structure yet.
-              if (isGrade10MathLesson(lesson.id)) ...[
-                LessonMindmapSummary(
-                  title: lesson.title,
-                  content: lesson.content,
-                ),
-                const SizedBox(height: 20),
-              ],
+              // Every bundled lesson across all four courses (MTH1W,
+              // MPM2D, SNC2D, SPH3U -- see lesson_providers.dart's
+              // lessonIdFor) follows the same '## Section' heading
+              // structure this derives from, so it renders correctly with
+              // zero authored content. LessonMindmapSummary itself renders
+              // nothing if a lesson somehow has no '##' headings.
+              LessonMindmapSummary(
+                title: lesson.title,
+                content: lesson.content,
+              ),
+              const SizedBox(height: 20),
               HtmlLessonView(
                 key: ValueKey(lesson.id),
                 frameId: '${lesson.id}-full',
