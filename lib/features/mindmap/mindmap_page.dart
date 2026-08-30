@@ -21,9 +21,12 @@ import '../auth/complete_profile_page.dart';
 import '../auth/reset_password_page.dart';
 import '../classroom/classroom_view.dart';
 import '../classroom/curriculum_sidebar.dart';
+import '../dashboard/dashboard_action_row.dart';
+import '../improve/improve_page.dart';
 import '../lesson/lesson_page.dart';
 import '../practice_test/practice_test_page.dart';
 import '../progress_report/progress_report_page.dart';
+import '../unit_test/unit_test_page.dart';
 import 'widgets/hoverable_node.dart';
 import 'widgets/mindmap_node_widget.dart';
 
@@ -122,13 +125,27 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
   String? _embeddedLessonId;
   String? _embeddedLessonTitle;
   _MindmapPracticeTarget? _embeddedPractice;
+  _MindmapUnitTestTarget? _embeddedUnitTest;
   bool _embeddedProgressReport = false;
+  bool _embeddedImprove = false;
 
   void _openEmbeddedProgressReport() {
     setState(() {
       _embeddedProgressReport = true;
       _embeddedLessonId = null;
       _embeddedPractice = null;
+      _embeddedUnitTest = null;
+      _embeddedImprove = false;
+    });
+  }
+
+  void _openEmbeddedImprove() {
+    setState(() {
+      _embeddedImprove = true;
+      _embeddedLessonId = null;
+      _embeddedPractice = null;
+      _embeddedUnitTest = null;
+      _embeddedProgressReport = false;
     });
   }
 
@@ -137,7 +154,9 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
       _embeddedLessonId = lessonId;
       _embeddedLessonTitle = lessonTitle;
       _embeddedPractice = null;
+      _embeddedUnitTest = null;
       _embeddedProgressReport = false;
+      _embeddedImprove = false;
     });
   }
 
@@ -153,7 +172,22 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
         title: title,
       );
       _embeddedLessonId = null;
+      _embeddedUnitTest = null;
       _embeddedProgressReport = false;
+      _embeddedImprove = false;
+    });
+  }
+
+  void _openEmbeddedUnitTest(String unitCode, String unitTitle) {
+    setState(() {
+      _embeddedUnitTest = _MindmapUnitTestTarget(
+        unitCode: unitCode,
+        title: unitTitle,
+      );
+      _embeddedLessonId = null;
+      _embeddedPractice = null;
+      _embeddedProgressReport = false;
+      _embeddedImprove = false;
     });
   }
 
@@ -161,7 +195,9 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
     setState(() {
       _embeddedLessonId = null;
       _embeddedPractice = null;
+      _embeddedUnitTest = null;
       _embeddedProgressReport = false;
+      _embeddedImprove = false;
     });
   }
 
@@ -486,7 +522,9 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
       _classroomResetNonce++;
       _embeddedLessonId = null;
       _embeddedPractice = null;
+      _embeddedUnitTest = null;
       _embeddedProgressReport = false;
+      _embeddedImprove = false;
     });
     _fitToContent();
   }
@@ -808,6 +846,17 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                               onBack: _closeEmbedded,
                               child: const ProgressReportPage(embedded: true),
                             )
+                          : _embeddedImprove
+                          ? _MindmapEmbeddedPane(
+                              title: 'Improve',
+                              onBack: _closeEmbedded,
+                              child: ImprovePage(
+                                key: ValueKey('improve-${course.code}'),
+                                courseCode: course.code,
+                                embedded: true,
+                                onFinished: _closeEmbedded,
+                              ),
+                            )
                           : _embeddedPractice != null
                           ? _MindmapEmbeddedPane(
                               title: _embeddedPractice!.title,
@@ -825,6 +874,20 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                                 onOpenLesson: _openEmbeddedLesson,
                               ),
                             )
+                          : _embeddedUnitTest != null
+                          ? _MindmapEmbeddedPane(
+                              title: _embeddedUnitTest!.title,
+                              onBack: _closeEmbedded,
+                              child: UnitTestPage(
+                                key: ValueKey(
+                                  'unit-test-${_embeddedUnitTest!.unitCode}',
+                                ),
+                                courseCode: course.code,
+                                unitCode: _embeddedUnitTest!.unitCode,
+                                unitTitle: _embeddedUnitTest!.title,
+                                embedded: true,
+                              ),
+                            )
                           : _embeddedLessonId != null
                           ? _MindmapEmbeddedPane(
                               title: _embeddedLessonTitle ?? 'Lesson',
@@ -834,78 +897,111 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                                 lessonId: _embeddedLessonId!,
                               ),
                             )
-                          : LayoutBuilder(
-                              builder: (context, constraints) {
-                                final viewportSize = constraints.biggest;
-                                if (viewportSize != _lastViewportSize) {
-                                  final wasZero =
-                                      _lastViewportSize == Size.zero;
-                                  _lastViewportSize = viewportSize;
-                                  if (wasZero) {
-                                    WidgetsBinding.instance
-                                        .addPostFrameCallback(
-                                          (_) => _fitToContent(),
-                                        );
-                                  }
-                                }
-                                return Listener(
-                                  behavior: HitTestBehavior.opaque,
-                                  onPointerSignal: _handleMindmapScroll,
-                                  child: InteractiveViewer(
-                                    transformationController:
-                                        _transformController,
-                                    constrained: false,
-                                    // Disabled for the duration of any node-level
-                                    // pointer interaction (see _DraggableNode) so
-                                    // InteractiveViewer's own pan/scale recognizer
-                                    // never competes with — or nudges the canvas
-                                    // during — a tap or drag on a node. Also
-                                    // disabled while Cmd/Ctrl is held so its own
-                                    // built-in wheel-to-zoom doesn't
-                                    // double-process the same scroll tick our
-                                    // custom zoom handler is already applying
-                                    // (see _handleMindmapScroll).
-                                    panEnabled:
-                                        _canvasGesturesEnabled &&
-                                        !_zoomModifierHeld,
-                                    scaleEnabled:
-                                        _canvasGesturesEnabled &&
-                                        !_zoomModifierHeld,
-                                    minScale: _minZoom,
-                                    maxScale: _maxZoom,
-                                    boundaryMargin: const EdgeInsets.all(1200),
-                                    child: SizedBox(
-                                      width: _canvasSize.width,
-                                      height: _canvasSize.height,
-                                      child: Stack(
-                                        clipBehavior: Clip.none,
-                                        children: [
-                                          Positioned.fill(
-                                            child: CustomPaint(
-                                              painter: _MindmapEdgePainter(
-                                                positions: _positions,
-                                                units: units,
-                                                subtopicsByUnit:
-                                                    _subtopicsByUnit,
-                                                expandedUnitIds:
-                                                    _expandedUnitIds,
-                                                subtopicStatus: subtopicStatus,
-                                              ),
-                                            ),
-                                          ),
-                                          ..._buildNodes(
-                                            course,
-                                            units,
-                                            subtopicStatus,
-                                            subtopicScorePercent,
-                                            subtopicMedal,
-                                          ),
-                                        ],
+                          : Column(
+                              children: [
+                                if (_expandedUnitIds.isEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      20,
+                                      16,
+                                      20,
+                                      0,
+                                    ),
+                                    child: Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: DashboardActionRow(
+                                        course: course,
+                                        units: units,
+                                        subtopicsByUnit: _subtopicsByUnit,
+                                        onOpenLesson: _openEmbeddedLesson,
+                                        onResume: _openEmbeddedPractice,
+                                        onOpenImprove: _openEmbeddedImprove,
+                                        onStartUnitTest: _openEmbeddedUnitTest,
+                                        onOpenProgressReport:
+                                            _openEmbeddedProgressReport,
                                       ),
                                     ),
                                   ),
-                                );
-                              },
+                                Expanded(
+                                  child: LayoutBuilder(
+                                    builder: (context, constraints) {
+                                      final viewportSize = constraints.biggest;
+                                      if (viewportSize != _lastViewportSize) {
+                                        final wasZero =
+                                            _lastViewportSize == Size.zero;
+                                        _lastViewportSize = viewportSize;
+                                        if (wasZero) {
+                                          WidgetsBinding.instance
+                                              .addPostFrameCallback(
+                                                (_) => _fitToContent(),
+                                              );
+                                        }
+                                      }
+                                      return Listener(
+                                        behavior: HitTestBehavior.opaque,
+                                        onPointerSignal: _handleMindmapScroll,
+                                        child: InteractiveViewer(
+                                          transformationController:
+                                              _transformController,
+                                          constrained: false,
+                                          // Disabled for the duration of any node-level
+                                          // pointer interaction (see _DraggableNode) so
+                                          // InteractiveViewer's own pan/scale recognizer
+                                          // never competes with — or nudges the canvas
+                                          // during — a tap or drag on a node. Also
+                                          // disabled while Cmd/Ctrl is held so its own
+                                          // built-in wheel-to-zoom doesn't
+                                          // double-process the same scroll tick our
+                                          // custom zoom handler is already applying
+                                          // (see _handleMindmapScroll).
+                                          panEnabled:
+                                              _canvasGesturesEnabled &&
+                                              !_zoomModifierHeld,
+                                          scaleEnabled:
+                                              _canvasGesturesEnabled &&
+                                              !_zoomModifierHeld,
+                                          minScale: _minZoom,
+                                          maxScale: _maxZoom,
+                                          boundaryMargin: const EdgeInsets.all(
+                                            1200,
+                                          ),
+                                          child: SizedBox(
+                                            width: _canvasSize.width,
+                                            height: _canvasSize.height,
+                                            child: Stack(
+                                              clipBehavior: Clip.none,
+                                              children: [
+                                                Positioned.fill(
+                                                  child: CustomPaint(
+                                                    painter:
+                                                        _MindmapEdgePainter(
+                                                          positions: _positions,
+                                                          units: units,
+                                                          subtopicsByUnit:
+                                                              _subtopicsByUnit,
+                                                          expandedUnitIds:
+                                                              _expandedUnitIds,
+                                                          subtopicStatus:
+                                                              subtopicStatus,
+                                                        ),
+                                                  ),
+                                                ),
+                                                ..._buildNodes(
+                                                  course,
+                                                  units,
+                                                  subtopicStatus,
+                                                  subtopicScorePercent,
+                                                  subtopicMedal,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ],
                             ),
                     ),
                   ],
@@ -1029,6 +1125,13 @@ class _MindmapPracticeTarget {
 
   final String unitCode;
   final String subtopicCode;
+  final String title;
+}
+
+class _MindmapUnitTestTarget {
+  const _MindmapUnitTestTarget({required this.unitCode, required this.title});
+
+  final String unitCode;
   final String title;
 }
 

@@ -8,10 +8,10 @@ import '../../models/subtopic.dart';
 import '../../models/subtopic_mastery.dart';
 import '../../models/unit.dart';
 import '../../state/auth_providers.dart';
-import '../../state/lesson_providers.dart';
 import '../../state/practice_test_providers.dart';
 import '../../state/profile_providers.dart';
 import '../../state/progress_providers.dart';
+import '../dashboard/dashboard_action_row.dart';
 import '../improve/improve_page.dart';
 import '../lesson/lesson_page.dart';
 import '../practice_test/practice_test_page.dart';
@@ -623,21 +623,6 @@ class _HomePanel extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
     final displayName = ref.watch(profileProvider).value?.displayName;
-    final mastery = ref.watch(practiceMasteryProvider).value ?? const {};
-    final unitCodeById = ref.watch(unitCodeByIdProvider);
-
-    // This course's subtopics only, newest attempt first.
-    final courseSubtopicIds = {
-      for (final list in subtopicsByUnit.values)
-        for (final s in list) s.id,
-    };
-    final subtopicById = {
-      for (final list in subtopicsByUnit.values)
-        for (final s in list) s.id: s,
-    };
-    final recent =
-        mastery.entries.where((e) => courseSubtopicIds.contains(e.key)).toList()
-          ..sort((a, b) => b.value.updatedAt.compareTo(a.value.updatedAt));
 
     final mastered = units
         .where(
@@ -649,39 +634,6 @@ class _HomePanel extends ConsumerWidget {
               ProgressStatus.mastered,
         )
         .length;
-
-    // The Learn/Quiz/Test quick-start actions all point at the same
-    // subtopic/unit: whichever was practiced most recently, or the
-    // course's very first one if nothing has been attempted yet. Improve
-    // needs no target -- it picks its own questions.
-    Unit? findUnit(String? unitId) {
-      if (unitId == null) return null;
-      for (final unit in units) {
-        if (unit.id == unitId) return unit;
-      }
-      return null;
-    }
-
-    final resumeSubtopic = recent.isNotEmpty
-        ? subtopicById[recent.first.key]
-        : null;
-    final fallbackUnit = units.isNotEmpty ? units.first : null;
-    final fallbackSubtopics = fallbackUnit != null
-        ? (subtopicsByUnit[fallbackUnit.id] ?? const <Subtopic>[])
-        : const <Subtopic>[];
-    final targetSubtopic =
-        resumeSubtopic ??
-        (fallbackSubtopics.isNotEmpty ? fallbackSubtopics.first : null);
-    final targetUnit = findUnit(targetSubtopic?.unitId) ?? fallbackUnit;
-    final targetUnitCode = targetSubtopic != null
-        ? unitCodeById[targetSubtopic.unitId]
-        : null;
-    final lessonId = targetSubtopic != null
-        ? lessonIdFor(
-            courseCode: course.code,
-            subtopicCode: targetSubtopic.code,
-          )
-        : null;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(28),
@@ -702,63 +654,15 @@ class _HomePanel extends ConsumerWidget {
           ),
           if (user != null) ...[
             const SizedBox(height: 24),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                SizedBox(
-                  width: 150,
-                  child: _ActionCard(
-                    icon: Icons.menu_book_outlined,
-                    label: 'Learn',
-                    onTap: (lessonId != null && targetSubtopic != null)
-                        ? () => onOpenLesson(lessonId, targetSubtopic.title)
-                        : null,
-                  ),
-                ),
-                SizedBox(
-                  width: 150,
-                  child: _ActionCard(
-                    icon: Icons.edit_note_outlined,
-                    label: 'Quiz',
-                    onTap: (targetSubtopic != null && targetUnitCode != null)
-                        ? () => onResume(
-                            targetUnitCode,
-                            targetSubtopic.code,
-                            targetSubtopic.title,
-                          )
-                        : null,
-                  ),
-                ),
-                SizedBox(
-                  width: 150,
-                  child: _ActionCard(
-                    icon: Icons.trending_up_outlined,
-                    label: 'Improve',
-                    onTap: onOpenImprove,
-                    featured: true,
-                  ),
-                ),
-                SizedBox(
-                  width: 150,
-                  child: _ActionCard(
-                    icon: Icons.fact_check_outlined,
-                    label: 'Test',
-                    onTap: targetUnit != null
-                        ? () =>
-                              onStartUnitTest(targetUnit.code, targetUnit.title)
-                        : null,
-                  ),
-                ),
-                SizedBox(
-                  width: 150,
-                  child: _ActionCard(
-                    icon: Icons.bar_chart_outlined,
-                    label: 'Progress Report',
-                    onTap: onOpenProgressReport,
-                  ),
-                ),
-              ],
+            DashboardActionRow(
+              course: course,
+              units: units,
+              subtopicsByUnit: subtopicsByUnit,
+              onOpenLesson: onOpenLesson,
+              onResume: onResume,
+              onOpenImprove: onOpenImprove,
+              onStartUnitTest: onStartUnitTest,
+              onOpenProgressReport: onOpenProgressReport,
             ),
           ],
           const SizedBox(height: 20),
@@ -786,61 +690,6 @@ class _HomePanel extends ConsumerWidget {
     if (hour < 12) return 'Good morning';
     if (hour < 17) return 'Good afternoon';
     return 'Good evening';
-  }
-}
-
-/// One of the five quick-start actions on the dashboard. `onTap == null`
-/// (no lesson for this subtopic yet, or an edge case with no curriculum
-/// content loaded) renders as a plainly disabled tile rather than hiding
-/// itself, so the row stays visually consistent either way.
-class _ActionCard extends StatelessWidget {
-  const _ActionCard({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.featured = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback? onTap;
-
-  /// Picks out Improve in gold (theme.dart's brand tertiary) rather than
-  /// the other three actions' navy -- it's the app's newest, most
-  /// distinctive mode and has no per-topic target the way Learn/Quiz/Test
-  /// do, so it reads better as a standout than a fourth identical tile.
-  final bool featured;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final enabled = onTap != null;
-    final accent = featured ? scheme.tertiary : scheme.primary;
-    return Material(
-      color: scheme.surfaceContainerHigh,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 26, color: enabled ? accent : scheme.outline),
-              const SizedBox(height: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  color: enabled ? null : scheme.outline,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }
 
