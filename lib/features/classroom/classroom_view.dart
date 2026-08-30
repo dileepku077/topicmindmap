@@ -16,7 +16,6 @@ import '../improve/improve_page.dart';
 import '../lesson/lesson_page.dart';
 import '../practice_test/practice_test_page.dart';
 import '../progress_report/progress_report_page.dart';
-import '../settings/settings_page.dart';
 import '../unit_test/unit_test_page.dart';
 import 'curriculum_sidebar.dart';
 
@@ -73,7 +72,6 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
   String? _lessonTitle;
   _PracticeTarget? _practice;
   _UnitTestTarget? _unitTest;
-  bool _showSettings = false;
   bool _showProgressReport = false;
   bool _showImprove = false;
 
@@ -94,7 +92,6 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _lessonId = null;
       _practice = null;
       _unitTest = null;
-      _showSettings = false;
       _showProgressReport = false;
       _showImprove = false;
     });
@@ -107,7 +104,6 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _lessonId = null;
       _practice = null;
       _unitTest = null;
-      _showSettings = false;
       _showProgressReport = false;
       _showImprove = false;
     });
@@ -133,7 +129,6 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       );
       _lessonId = null;
       _unitTest = null;
-      _showSettings = false;
       _showProgressReport = false;
       _showImprove = false;
     });
@@ -145,7 +140,6 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _lessonTitle = lessonTitle;
       _practice = null;
       _unitTest = null;
-      _showSettings = false;
       _showProgressReport = false;
       _showImprove = false;
     });
@@ -160,7 +154,6 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       );
       _lessonId = null;
       _unitTest = null;
-      _showSettings = false;
       _showProgressReport = false;
       _showImprove = false;
     });
@@ -171,7 +164,6 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _unitTest = _UnitTestTarget(unitCode: unitCode, title: unitTitle);
       _lessonId = null;
       _practice = null;
-      _showSettings = false;
       _showProgressReport = false;
       _showImprove = false;
     });
@@ -179,9 +171,8 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
 
   /// Reachable straight from the dashboard's action row (_HomePanel), not
   /// tied to any unit/subtopic selection -- same reasoning as
-  /// _openSettings/_openProgressReport for clearing the selection, so the
-  /// breadcrumb reads "Home > Improve" regardless of where the student was
-  /// browsing.
+  /// _openProgressReport for clearing the selection, so the breadcrumb
+  /// reads "Home > Improve" regardless of where the student was browsing.
   void _openImprove() {
     setState(() {
       _showImprove = true;
@@ -190,42 +181,22 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _lessonId = null;
       _practice = null;
       _unitTest = null;
-      _showSettings = false;
       _showProgressReport = false;
     });
-  }
-
-  void _openSettings({VoidCallback? afterSelect}) {
-    setState(() {
-      _showSettings = true;
-      // Reachable from the sidebar at any depth, unlike the other leaf
-      // panes (always opened from within a specific unit/subtopic) —
-      // clear the selection so the breadcrumb reads "Home > Profile &
-      // Preferences" instead of dragging along wherever the student
-      // happened to be browsing.
-      _selectedUnitId = null;
-      _selectedSubtopic = null;
-      _lessonId = null;
-      _practice = null;
-      _unitTest = null;
-      _showProgressReport = false;
-      _showImprove = false;
-    });
-    afterSelect?.call();
   }
 
   void _openProgressReport({VoidCallback? afterSelect}) {
     setState(() {
       _showProgressReport = true;
-      // Same reasoning as _openSettings above — reachable from the
-      // sidebar at any depth, so the breadcrumb shouldn't drag along
+      // Reachable from the sidebar at any depth, unlike the other leaf
+      // panes (always opened from within a specific unit/subtopic) --
+      // clear the selection so the breadcrumb shouldn't drag along
       // wherever the student happened to be browsing.
       _selectedUnitId = null;
       _selectedSubtopic = null;
       _lessonId = null;
       _practice = null;
       _unitTest = null;
-      _showSettings = false;
       _showImprove = false;
     });
     afterSelect?.call();
@@ -242,7 +213,6 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _lessonId = null;
       _practice = null;
       _unitTest = null;
-      _showSettings = false;
       _showProgressReport = false;
       _showImprove = false;
     });
@@ -256,7 +226,6 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _lessonId = null;
       _practice = null;
       _unitTest = null;
-      _showSettings = false;
       _showProgressReport = false;
       _showImprove = false;
     });
@@ -282,8 +251,6 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       crumbs.add(_Crumb(_lessonTitle ?? 'Lesson', _backFromLeaf));
     } else if (_unitTest != null) {
       crumbs.add(_Crumb('Test', _backFromLeaf));
-    } else if (_showSettings) {
-      crumbs.add(_Crumb('Profile & Preferences', _backFromLeaf));
     } else if (_showProgressReport) {
       crumbs.add(_Crumb('Progress Report', _backFromLeaf));
     } else if (_showImprove) {
@@ -320,7 +287,6 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
         _selectSubtopic(subtopic);
         afterSelect?.call();
       },
-      onOpenSettings: () => _openSettings(afterSelect: afterSelect),
       onOpenProgressReport: () => _openProgressReport(afterSelect: afterSelect),
       collapsed: collapsed,
       onToggleCollapsed: onToggleCollapsed,
@@ -445,12 +411,6 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
           key: ValueKey('lesson-$lessonId'),
           lessonId: lessonId,
         ),
-      );
-    }
-    if (_showSettings) {
-      return _LeafPane(
-        breadcrumb: breadcrumb,
-        child: const SettingsPage(embedded: true),
       );
     }
     if (_showProgressReport) {

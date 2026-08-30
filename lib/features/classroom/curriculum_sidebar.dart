@@ -33,7 +33,6 @@ class CurriculumSidebar extends StatelessWidget {
     required this.isUnitExpanded,
     required this.onSelectUnit,
     required this.onSelectSubtopic,
-    required this.onOpenSettings,
     required this.onOpenProgressReport,
     this.selectedSubtopicId,
     this.onSelectHome,
@@ -58,13 +57,13 @@ class CurriculumSidebar extends StatelessWidget {
   final void Function(String unitId) onSelectUnit;
   final void Function(Subtopic subtopic) onSelectSubtopic;
 
-  /// Opens Profile & Preferences — the caller decides how ("embedded" in
-  /// place, keeping this sidebar on screen, in both callers today; see
-  /// mindmap_page.dart / classroom_view.dart), not this widget.
-  final VoidCallback onOpenSettings;
-
-  /// Opens the Progress Report bar chart — same "caller decides how"
-  /// treatment as [onOpenSettings].
+  /// Opens the Progress Report bar chart — the caller decides how
+  /// ("embedded" in place, keeping this sidebar on screen, in both
+  /// callers today; see mindmap_page.dart / classroom_view.dart), not
+  /// this widget. Profile & Preferences used to have a tile here too;
+  /// it now lives in the account menu at the top right of the app's
+  /// AppBar instead (see mindmap_page.dart), reachable from anywhere
+  /// regardless of which view is showing.
   final VoidCallback onOpenProgressReport;
   final String? selectedSubtopicId;
 
@@ -104,11 +103,14 @@ class CurriculumSidebar extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
               child: Row(
-                mainAxisAlignment:
-                    collapsed ? MainAxisAlignment.center : MainAxisAlignment.end,
+                mainAxisAlignment: collapsed
+                    ? MainAxisAlignment.center
+                    : MainAxisAlignment.end,
                 children: [
                   Tooltip(
-                    message: collapsed ? 'Show full sidebar' : 'Minimize sidebar',
+                    message: collapsed
+                        ? 'Show full sidebar'
+                        : 'Minimize sidebar',
                     child: IconButton(
                       visualDensity: VisualDensity.compact,
                       icon: Icon(
@@ -130,19 +132,16 @@ class CurriculumSidebar extends StatelessWidget {
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
                     child: Text(
                       course.title,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 20,
-                      ),
+                      style: Theme.of(context).textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.bold, fontSize: 20),
                     ),
                   ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                     child: Text(
                       course.gradeLabel,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(fontSize: 14),
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(fontSize: 14),
                     ),
                   ),
                 ],
@@ -154,13 +153,6 @@ class CurriculumSidebar extends StatelessWidget {
                     onTap: onSelectHome,
                     collapsed: collapsed,
                   ),
-                _NavRow(
-                  icon: Icons.person_outline,
-                  label: 'Profile & Preferences',
-                  selected: false,
-                  onTap: onOpenSettings,
-                  collapsed: collapsed,
-                ),
                 _NavRow(
                   icon: Icons.bar_chart_outlined,
                   label: 'Progress Report',
@@ -263,7 +255,9 @@ class _NavRow extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: collapsed ? 4 : 8, vertical: 2),
       child: Material(
-        color: selected ? scheme.primary.withValues(alpha: 0.12) : Colors.transparent,
+        color: selected
+            ? scheme.primary.withValues(alpha: 0.12)
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(8),
         child: InkWell(
           borderRadius: BorderRadius.circular(8),
@@ -325,7 +319,9 @@ class _UnitNavRow extends StatelessWidget {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
         child: Material(
-          color: expanded ? scheme.primary.withValues(alpha: 0.1) : Colors.transparent,
+          color: expanded
+              ? scheme.primary.withValues(alpha: 0.1)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           child: InkWell(
             borderRadius: BorderRadius.circular(8),
@@ -334,7 +330,9 @@ class _UnitNavRow extends StatelessWidget {
               message: unit.title,
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 10),
-                child: Center(child: Icon(status.icon, size: 18, color: status.color)),
+                child: Center(
+                  child: Icon(status.icon, size: 18, color: status.color),
+                ),
               ),
             ),
           ),
@@ -348,13 +346,18 @@ class _UnitNavRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Material(
-            color: expanded ? scheme.primary.withValues(alpha: 0.1) : Colors.transparent,
+            color: expanded
+                ? scheme.primary.withValues(alpha: 0.1)
+                : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
             child: InkWell(
               borderRadius: BorderRadius.circular(8),
               onTap: onTap,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   border: Border(
                     left: BorderSide(
@@ -377,15 +380,18 @@ class _UnitNavRow extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 17,
-                              fontWeight: expanded ? FontWeight.w700 : FontWeight.w500,
-                              color: expanded ? scheme.primary : scheme.onSurface,
+                              fontWeight: expanded
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                              color: expanded
+                                  ? scheme.primary
+                                  : scheme.onSurface,
                             ),
                           ),
                           Text(
                             '$subtopicCount ${subtopicCount == 1 ? 'topic' : 'topics'}',
-                            style: Theme.of(
-                              context,
-                            ).textTheme.bodySmall?.copyWith(fontSize: 14),
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(fontSize: 14),
                           ),
                           if (scorePercent != null) ...[
                             const SizedBox(height: 5),
@@ -405,7 +411,9 @@ class _UnitNavRow extends StatelessWidget {
                     Icon(
                       expanded ? Icons.expand_more : Icons.chevron_right,
                       size: 20,
-                      color: expanded ? scheme.primary : scheme.onSurfaceVariant,
+                      color: expanded
+                          ? scheme.primary
+                          : scheme.onSurfaceVariant,
                     ),
                   ],
                 ),
@@ -426,7 +434,9 @@ class _UnitNavRow extends StatelessWidget {
                         for (final subtopic in sortedSubtopics)
                           _SubtopicNavRow(
                             subtopic: subtopic,
-                            status: subtopicStatus[subtopic.id] ?? ProgressStatus.notStarted,
+                            status:
+                                subtopicStatus[subtopic.id] ??
+                                ProgressStatus.notStarted,
                             selected: subtopic.id == selectedSubtopicId,
                             onTap: () => onTapSubtopic(subtopic),
                           ),
@@ -461,7 +471,9 @@ class _SubtopicNavRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Material(
-      color: selected ? scheme.primary.withValues(alpha: 0.14) : Colors.transparent,
+      color: selected
+          ? scheme.primary.withValues(alpha: 0.14)
+          : Colors.transparent,
       borderRadius: BorderRadius.circular(6),
       child: InkWell(
         borderRadius: BorderRadius.circular(6),
