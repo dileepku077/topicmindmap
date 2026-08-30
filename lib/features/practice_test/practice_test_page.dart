@@ -7,6 +7,7 @@ import '../../domain/mastery_calculator.dart';
 import '../../models/practice_question.dart';
 import '../../models/subtopic_mastery.dart';
 import '../../state/auth_providers.dart';
+import '../../state/lesson_providers.dart';
 import '../../state/practice_test_providers.dart';
 import '../../state/progress_providers.dart';
 
@@ -29,6 +30,7 @@ class PracticeTestPage extends ConsumerStatefulWidget {
     required this.subtopicTitle,
     this.embedded = false,
     this.onFinished,
+    this.onOpenLesson,
   });
 
   final String courseCode;
@@ -46,6 +48,13 @@ class PracticeTestPage extends ConsumerStatefulWidget {
   /// Defaults to popping the route, which only makes sense when this
   /// isn't [embedded]; the classroom view always passes its own callback.
   final VoidCallback? onFinished;
+
+  /// Called when the student taps the "Learn" link on the difficulty
+  /// picker (only shown when a lesson exists for this subtopic — see
+  /// lessonIdFor). Defaults to pushing the standalone /lesson route, which
+  /// only makes sense when this isn't [embedded]; embedded callers pass
+  /// their own pane-swapping callback instead.
+  final void Function(String lessonId, String lessonTitle)? onOpenLesson;
 
   @override
   ConsumerState<PracticeTestPage> createState() => _PracticeTestPageState();
@@ -78,6 +87,15 @@ class _PracticeTestPageState extends ConsumerState<PracticeTestPage> {
     unitCode: widget.unitCode,
     subtopicCode: widget.subtopicCode,
   );
+
+  void _openLesson(BuildContext context, String lessonId) {
+    final onOpenLesson = widget.onOpenLesson;
+    if (onOpenLesson != null) {
+      onOpenLesson(lessonId, widget.subtopicTitle);
+    } else {
+      context.push('/lesson/$lessonId');
+    }
+  }
 
   void _selectTier(String tier) {
     setState(() {
@@ -180,9 +198,9 @@ class _PracticeTestPageState extends ConsumerState<PracticeTestPage> {
     } catch (error) {
       if (!mounted) return;
       setState(() => _awardingMedal = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Could not save your result: $error')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not save your result: $error')),
+      );
     }
   }
 
@@ -202,24 +220,36 @@ class _PracticeTestPageState extends ConsumerState<PracticeTestPage> {
           )
         : Consumer(
             builder: (context, ref, _) {
-              final questionsAsync = ref.watch(
-                practiceQuestionsProvider(_ref),
-              );
+              final questionsAsync = ref.watch(practiceQuestionsProvider(_ref));
               // Filtered to just this subtopic, then run through the same
               // centralized calculator the Progress Report page uses, so
               // this per-tier medal and that page's numbers can never
               // disagree with each other.
-              final subtopicStats = (ref.watch(subtopicAttemptStatsProvider(widget.courseCode)).value ?? const [])
-                  .where((s) => s.unitCode == _ref.unitCode && s.subtopicCode == _ref.subtopicCode)
-                  .map((s) => DifficultyStats(
-                        difficulty: s.difficulty,
-                        attempted: s.attempted,
-                        correct: s.correct,
-                        firstTryCorrect: s.firstTryCorrect,
-                      ))
-                  .toList();
+              final subtopicStats =
+                  (ref
+                              .watch(
+                                subtopicAttemptStatsProvider(widget.courseCode),
+                              )
+                              .value ??
+                          const [])
+                      .where(
+                        (s) =>
+                            s.unitCode == _ref.unitCode &&
+                            s.subtopicCode == _ref.subtopicCode,
+                      )
+                      .map(
+                        (s) => DifficultyStats(
+                          difficulty: s.difficulty,
+                          attempted: s.attempted,
+                          correct: s.correct,
+                          firstTryCorrect: s.firstTryCorrect,
+                        ),
+                      )
+                      .toList();
               final tierMedals = {
-                for (final entry in calculateMastery(subtopicStats).byDifficulty.entries)
+                for (final entry in calculateMastery(
+                  subtopicStats,
+                ).byDifficulty.entries)
                   entry.key: entry.value.medal,
               };
               return questionsAsync.when(
@@ -228,11 +258,18 @@ class _PracticeTestPageState extends ConsumerState<PracticeTestPage> {
                     Center(child: Text('Failed to load questions: $error')),
                 data: (questions) {
                   if (_selectedTier == null) {
+                    final lessonId = lessonIdFor(
+                      courseCode: widget.courseCode,
+                      subtopicCode: widget.subtopicCode,
+                    );
                     return _TierPickerView(
                       questions: questions,
                       subtopicTitle: widget.subtopicTitle,
                       tierMedals: tierMedals,
                       onSelectTier: _selectTier,
+                      onOpenLesson: lessonId == null
+                          ? null
+                          : () => _openLesson(context, lessonId),
                     );
                   }
 
@@ -381,9 +418,8 @@ class _QuestionView extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color:
-                    (answeredCorrectly ? Colors.green : scheme.error)
-                        .withValues(alpha: 0.1),
+                color: (answeredCorrectly ? Colors.green : scheme.error)
+                    .withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
                   color: (answeredCorrectly ? Colors.green : scheme.error)
@@ -490,18 +526,19 @@ class _OptionTile extends StatelessWidget {
 
 /// Shared by [_DifficultyChip] (in-quiz badge) and [_TierTile] (picker
 /// tile) so a tier reads as the same color in both places.
-Color _tierColor(BuildContext context, String difficulty) => switch (difficulty) {
-  'Easy' => Colors.green,
-  'Medium' => const Color(0xFFD9A404),
-  // Challenge/Advanced are MPM2D's own two tiers above Medium (see
-  // schema_difficulty_tiers.sql); Hard is still MCR3U/MHF4U's single top
-  // tier. Advanced and Hard share a color since neither ever appears
-  // alongside the other in the same subtopic — each is just "the hardest
-  // tier this course has."
-  'Challenge' => const Color(0xFFE8590C),
-  'Hard' || 'Advanced' => Theme.of(context).colorScheme.error,
-  _ => Theme.of(context).colorScheme.outline,
-};
+Color _tierColor(BuildContext context, String difficulty) =>
+    switch (difficulty) {
+      'Easy' => Colors.green,
+      'Medium' => const Color(0xFFD9A404),
+      // Challenge/Advanced are MPM2D's own two tiers above Medium (see
+      // schema_difficulty_tiers.sql); Hard is still MCR3U/MHF4U's single top
+      // tier. Advanced and Hard share a color since neither ever appears
+      // alongside the other in the same subtopic — each is just "the hardest
+      // tier this course has."
+      'Challenge' => const Color(0xFFE8590C),
+      'Hard' || 'Advanced' => Theme.of(context).colorScheme.error,
+      _ => Theme.of(context).colorScheme.outline,
+    };
 
 class _DifficultyChip extends StatelessWidget {
   const _DifficultyChip({required this.difficulty});
@@ -572,9 +609,8 @@ class _CompletionView extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               medal == 'None' ? 'Nice work!' : '$medal medal!',
-              style: Theme.of(
-                context,
-              ).textTheme.headlineSmall?.copyWith(color: color, fontWeight: FontWeight.bold),
+              style: Theme.of(context).textTheme.headlineSmall
+                  ?.copyWith(color: color, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(
@@ -592,7 +628,10 @@ class _CompletionView extends StatelessWidget {
                   onPressed: onBackToTiers,
                   child: const Text('Choose another level'),
                 ),
-                FilledButton(onPressed: onFinished, child: const Text('Continue')),
+                FilledButton(
+                  onPressed: onFinished,
+                  child: const Text('Continue'),
+                ),
               ],
             ),
           ],
@@ -614,6 +653,7 @@ class _TierPickerView extends StatelessWidget {
     required this.subtopicTitle,
     required this.tierMedals,
     required this.onSelectTier,
+    required this.onOpenLesson,
   });
 
   final List<PracticeQuestion> questions;
@@ -625,6 +665,14 @@ class _TierPickerView extends StatelessWidget {
   /// has no entry.
   final Map<String, String> tierMedals;
   final void Function(String tier) onSelectTier;
+
+  /// Null when this subtopic has no lesson (see lessonIdFor) -- the link
+  /// at the bottom just doesn't render rather than being shown disabled.
+  /// Landing here directly instead of on a separate overview page (see
+  /// classroom_view.dart's _selectSubtopic) means this is now the only
+  /// place left to reach the lesson from a subtopic selection, so it
+  /// needs to actually be reachable from here, not dropped.
+  final VoidCallback? onOpenLesson;
 
   static const _tierOrder = ['Easy', 'Medium', 'Challenge', 'Hard', 'Advanced'];
 
@@ -651,7 +699,10 @@ class _TierPickerView extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        Text('Choose a difficulty', style: Theme.of(context).textTheme.titleMedium),
+        Text(
+          'Choose a difficulty',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
         const SizedBox(height: 4),
         Text(
           '$subtopicTitle — pick a level to practice.',
@@ -678,6 +729,10 @@ class _TierPickerView extends StatelessWidget {
           ),
           const SizedBox(height: 10),
         ],
+        if (onOpenLesson != null) ...[
+          const SizedBox(height: 10),
+          _LearnLink(onTap: onOpenLesson!),
+        ],
       ],
     );
   }
@@ -698,6 +753,32 @@ class _TierPickerView extends StatelessWidget {
             child: const Text('Got it'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The one path left to the lesson once a subtopic selection lands
+/// directly on this difficulty picker instead of a separate overview
+/// page -- deliberately lower-emphasis than the tier tiles above it
+/// (outlined, not filled): practicing is the default action now, reading
+/// the lesson first is the opt-in.
+class _LearnLink extends StatelessWidget {
+  const _LearnLink({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return OutlinedButton.icon(
+      onPressed: onTap,
+      icon: const Icon(Icons.menu_book_outlined, size: 18),
+      label: const Text('Read the lesson first'),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: scheme.onSurfaceVariant,
+        side: BorderSide(color: scheme.outlineVariant),
+        padding: const EdgeInsets.symmetric(vertical: 12),
       ),
     );
   }
@@ -735,14 +816,20 @@ class _TierTile extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: tierColor.withValues(alpha: 0.35), width: 1.5),
+            border: Border.all(
+              color: tierColor.withValues(alpha: 0.35),
+              width: 1.5,
+            ),
           ),
           child: Row(
             children: [
               Container(
                 width: 10,
                 height: 10,
-                decoration: BoxDecoration(color: tierColor, shape: BoxShape.circle),
+                decoration: BoxDecoration(
+                  color: tierColor,
+                  shape: BoxShape.circle,
+                ),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -753,9 +840,8 @@ class _TierTile extends StatelessWidget {
                       children: [
                         Text(
                           tier,
-                          style: Theme.of(
-                            context,
-                          ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         if (medal != null && medal != 'None') ...[
                           const SizedBox(width: 6),
@@ -775,7 +861,11 @@ class _TierTile extends StatelessWidget {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.lock_outline, size: 18, color: scheme.onSurfaceVariant),
+                    Icon(
+                      Icons.lock_outline,
+                      size: 18,
+                      color: scheme.onSurfaceVariant,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       'Pro',

@@ -25,7 +25,6 @@ import '../lesson/lesson_page.dart';
 import '../practice_test/practice_test_page.dart';
 import '../progress_report/progress_report_page.dart';
 import '../settings/settings_page.dart';
-import '../topic_detail/topic_detail_sheet.dart';
 import 'widgets/hoverable_node.dart';
 import 'widgets/mindmap_node_widget.dart';
 
@@ -534,38 +533,30 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
     }
   }
 
-  void _openSubtopicFromSidebar(
-    Subtopic subtopic,
-    List<Unit> units,
-    Course course,
-    Map<String, ProgressStatus> subtopicStatus,
-  ) {
-    if (!_expandedUnitIds.contains(subtopic.unitId)) {
-      Unit? unit;
-      for (final candidate in units) {
-        if (candidate.id == subtopic.unitId) {
-          unit = candidate;
-          break;
-        }
-      }
-      if (unit != null) {
-        setState(() {
-          _ensureSubtopicPositions(unit!);
-          _expandedUnitIds.add(unit.id);
-        });
-        _fitToContent();
+  /// Selecting a subtopic from the sidebar used to open a standalone
+  /// overview sheet with separate Lesson/Practice links -- an extra tap
+  /// before actually practicing anything. Now it opens the practice
+  /// test's difficulty picker directly, same as tapping the subtopic's
+  /// own canvas node does; that picker has its own link to the lesson at
+  /// the bottom (see practice_test_page.dart).
+  void _openSubtopicFromSidebar(Subtopic subtopic, List<Unit> units) {
+    Unit? unit;
+    for (final candidate in units) {
+      if (candidate.id == subtopic.unitId) {
+        unit = candidate;
+        break;
       }
     }
-    final status = subtopicStatus[subtopic.id] ?? ProgressStatus.notStarted;
-    showTopicDetailSheet(
-      context,
-      subtopic: subtopic,
-      color: status.color,
-      courseCode: course.code,
-      onOpenLesson: _openEmbeddedLesson,
-      onOpenPractice: (unitCode) =>
-          _openEmbeddedPractice(unitCode, subtopic.code, subtopic.title),
-    );
+    final resolvedUnit = unit;
+    if (resolvedUnit == null) return;
+    if (!_expandedUnitIds.contains(subtopic.unitId)) {
+      setState(() {
+        _ensureSubtopicPositions(resolvedUnit);
+        _expandedUnitIds.add(resolvedUnit.id);
+      });
+      _fitToContent();
+    }
+    _openEmbeddedPractice(resolvedUnit.code, subtopic.code, subtopic.title);
   }
 
   @override
@@ -803,12 +794,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                         onSelectUnit: (unitId) =>
                             _toggleUnitById(unitId, units),
                         onSelectSubtopic: (subtopic) =>
-                            _openSubtopicFromSidebar(
-                              subtopic,
-                              units,
-                              course,
-                              subtopicStatus,
-                            ),
+                            _openSubtopicFromSidebar(subtopic, units),
                         collapsed: _sidebarCollapsed,
                         onToggleCollapsed: () => setState(
                           () => _sidebarCollapsed = !_sidebarCollapsed,
@@ -849,6 +835,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                                 subtopicTitle: _embeddedPractice!.title,
                                 embedded: true,
                                 onFinished: _closeEmbedded,
+                                onOpenLesson: _openEmbeddedLesson,
                               ),
                             )
                           : _embeddedLessonId != null
@@ -1028,18 +1015,8 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
             onDragStart: () => setState(() => _canvasGesturesEnabled = false),
             onDragUpdate: (delta) => _moveNode(subtopic.id, delta),
             onDragEnd: () => setState(() => _canvasGesturesEnabled = true),
-            onTap: () => showTopicDetailSheet(
-              context,
-              subtopic: subtopic,
-              color: status.color,
-              courseCode: course.code,
-              onOpenLesson: _openEmbeddedLesson,
-              onOpenPractice: (unitCode) => _openEmbeddedPractice(
-                unitCode,
-                subtopic.code,
-                subtopic.title,
-              ),
-            ),
+            onTap: () =>
+                _openEmbeddedPractice(unit.code, subtopic.code, subtopic.title),
             child: HoverableNode(
               message:
                   '${status.hoverMessage(scorePercent: subtopicScorePercent[subtopic.id])} Topic ${subtopic.orderIndex + 1} of '

@@ -17,21 +17,17 @@ import '../lesson/lesson_page.dart';
 import '../practice_test/practice_test_page.dart';
 import '../progress_report/progress_report_page.dart';
 import '../settings/settings_page.dart';
-import '../topic_detail/topic_detail_sheet.dart';
 import '../unit_test/unit_test_page.dart';
 import 'curriculum_sidebar.dart';
 
 /// The "classroom" alternative to the spatial mindmap: a left-hand list of
 /// units to navigate by, and a main panel that shows a dashboard, a unit's
-/// subtopics, a subtopic's overview, a lesson, or a practice test —
-/// entirely by swapping what's in the main panel, never by navigating to a
-/// different route. The unit list on the left stays on screen the whole
-/// time, including while reading a lesson or taking a practice test.
-///
-/// (The spatial mindmap still opens lessons/practice tests as their own
-/// full-screen routes via a modal sheet — see topic_detail_sheet.dart. That
-/// makes sense there since the mindmap has no side panel to lose; here it
-/// would defeat the point of having one.)
+/// subtopics, a lesson, or a practice test — entirely by swapping what's
+/// in the main panel, never by navigating to a different route. Picking a
+/// subtopic goes straight to its practice test's difficulty picker rather
+/// than a separate overview step — see _selectSubtopic. The unit list on
+/// the left stays on screen the whole time, including while reading a
+/// lesson or taking a practice test.
 class ClassroomView extends ConsumerStatefulWidget {
   const ClassroomView({
     super.key,
@@ -117,12 +113,25 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
     });
   }
 
+  /// Selecting a subtopic (from the sidebar or a unit's own subtopic list)
+  /// used to land on a standalone overview with separate Lesson/Practice
+  /// links -- an extra click before actually practicing anything. Now it
+  /// opens the practice test's difficulty picker directly, which has its
+  /// own link to the lesson at the bottom (see practice_test_page.dart).
+  /// That overview page (formerly topic_detail_sheet.dart) had no other
+  /// callers left in this app and was deleted.
   void _selectSubtopic(Subtopic subtopic) {
+    final unitCode = ref.read(unitCodeByIdProvider)[subtopic.unitId];
+    if (unitCode == null) return;
     setState(() {
       _selectedUnitId = subtopic.unitId;
       _selectedSubtopic = subtopic;
+      _practice = _PracticeTarget(
+        unitCode: unitCode,
+        subtopicCode: subtopic.code,
+        title: subtopic.title,
+      );
       _lessonId = null;
-      _practice = null;
       _unitTest = null;
       _showSettings = false;
       _showProgressReport = false;
@@ -424,6 +433,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
           subtopicTitle: practice.title,
           embedded: true,
           onFinished: _backFromLeaf,
+          onOpenLesson: _openLesson,
         ),
       );
     }
@@ -471,17 +481,6 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
           unitTitle: unitTest.title,
           embedded: true,
         ),
-      );
-    }
-    final subtopic = _selectedSubtopic;
-    if (subtopic != null) {
-      return _SubtopicPane(
-        breadcrumb: breadcrumb,
-        subtopic: subtopic,
-        courseCode: widget.course.code,
-        onOpenLesson: _openLesson,
-        onOpenPractice: (unitCode) =>
-            _openPractice(unitCode, subtopic.code, subtopic.title),
       );
     }
     if (selectedUnit == null) {
@@ -619,42 +618,6 @@ class _LeafPane extends StatelessWidget {
           child: breadcrumb,
         ),
         Expanded(child: child),
-      ],
-    );
-  }
-}
-
-/// The inline equivalent of the mindmap's modal subtopic-detail sheet —
-/// same [SubtopicOverview] content, just in the main pane with a
-/// breadcrumb trail instead of a dismissable sheet.
-class _SubtopicPane extends StatelessWidget {
-  const _SubtopicPane({
-    required this.breadcrumb,
-    required this.subtopic,
-    required this.courseCode,
-    required this.onOpenLesson,
-    required this.onOpenPractice,
-  });
-
-  final Widget breadcrumb;
-  final Subtopic subtopic;
-  final String courseCode;
-  final void Function(String lessonId, String lessonTitle) onOpenLesson;
-  final void Function(String unitCode) onOpenPractice;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(20),
-      children: [
-        breadcrumb,
-        const SizedBox(height: 12),
-        SubtopicOverview(
-          subtopic: subtopic,
-          courseCode: courseCode,
-          onOpenLesson: onOpenLesson,
-          onOpenPractice: onOpenPractice,
-        ),
       ],
     );
   }
