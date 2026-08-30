@@ -353,8 +353,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                         children: [
                           Text(
                             _isSignUp
-                                ? 'Create an account to see your practice test progress.'
-                                : 'Sign in to see your practice test progress.',
+                                ? 'Create an account to see your quiz progress.'
+                                : 'Sign in to see your quiz progress.',
                             style: Theme.of(context).textTheme.bodyMedium,
                             textAlign: TextAlign.center,
                           ),

@@ -332,7 +332,7 @@ class _PracticeTestPageState extends ConsumerState<PracticeTestPage> {
             const SizedBox(width: 10),
             Flexible(
               child: Text(
-                'Practice: ${widget.subtopicTitle}',
+                'Quiz: ${widget.subtopicTitle}',
                 overflow: TextOverflow.ellipsis,
               ),
             ),

@@ -246,7 +246,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       crumbs.add(_Crumb(subtopic.title, _backFromLeaf));
     }
     if (_practice != null) {
-      crumbs.add(_Crumb('Practice Test', _backFromLeaf));
+      crumbs.add(_Crumb('Quiz', _backFromLeaf));
     } else if (_lessonId != null) {
       crumbs.add(_Crumb(_lessonTitle ?? 'Lesson', _backFromLeaf));
     } else if (_unitTest != null) {

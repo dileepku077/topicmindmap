@@ -84,7 +84,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           courseCode: state.pathParameters['courseCode']!,
           unitCode: state.pathParameters['unitCode']!,
           subtopicCode: state.pathParameters['subtopicCode']!,
-          subtopicTitle: state.uri.queryParameters['title'] ?? 'Practice Test',
+          subtopicTitle: state.uri.queryParameters['title'] ?? 'Quiz',
         ),
       ),
       // courseCode/unitCode, not the unit's uuid — same natural-key

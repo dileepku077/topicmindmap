@@ -65,17 +65,15 @@ class _WelcomePageState extends ConsumerState<WelcomePage> {
               children: [
                 Text(
                   'Welcome! Here\'s what you can do',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: Theme.of(context).textTheme.headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   'A quick tour of the app — come back to this page any time from '
                   '"How to use this app" in the sidebar.',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
+                  style: Theme.of(context).textTheme.bodyMedium
+                      ?.copyWith(color: scheme.onSurfaceVariant),
                 ),
                 const SizedBox(height: 24),
                 const _FeatureCard(
@@ -103,7 +101,7 @@ class _WelcomePageState extends ConsumerState<WelcomePage> {
                 ),
                 const _FeatureCard(
                   icon: Icons.edit_note_outlined,
-                  title: 'Practice Test',
+                  title: 'Quiz',
                   body:
                       'Drill one topic at a time, picking Easy, Medium, Hard or '
                       'Advanced. You see whether each answer is right immediately, '
@@ -172,7 +170,11 @@ class _WelcomePageState extends ConsumerState<WelcomePage> {
 }
 
 class _FeatureCard extends StatelessWidget {
-  const _FeatureCard({required this.icon, required this.title, required this.body});
+  const _FeatureCard({
+    required this.icon,
+    required this.title,
+    required this.body,
+  });
 
   final IconData icon;
   final String title;
@@ -188,7 +190,9 @@ class _FeatureCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: scheme.surfaceContainerLow,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: scheme.outlineVariant.withValues(alpha: 0.4)),
+          border: Border.all(
+            color: scheme.outlineVariant.withValues(alpha: 0.4),
+          ),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -208,9 +212,8 @@ class _FeatureCard extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                    style: Theme.of(context).textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 4),
                   Text(body, style: Theme.of(context).textTheme.bodyMedium),
