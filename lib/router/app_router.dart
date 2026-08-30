@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../features/admin/admin_page.dart';
 import '../features/auth/login_page.dart';
+import '../features/legal/legal_page.dart';
 import '../features/lesson/lesson_page.dart';
 import '../features/mindmap/mindmap_page.dart';
 import '../features/practice_test/practice_test_page.dart';
@@ -17,11 +18,13 @@ import '../state/auth_providers.dart';
 
 /// Course content (the mindmap/classroom home, lessons, practice tests,
 /// settings, admin) is for signed-in accounts only — every route except
-/// `/login` redirects there if nobody's signed in, and `/login` itself
-/// redirects away once somebody is (no reason to show the sign-in form
-/// to an already-signed-in session). This is the single place that rule
-/// lives; individual pages no longer need their own "sign in to see
-/// this" fallback for it to actually be enforced navigation-wise.
+/// `/login`, `/privacy`, and `/terms` redirects there if nobody's signed
+/// in, and `/login` itself redirects away once somebody is (no reason to
+/// show the sign-in form to an already-signed-in session; the legal pages
+/// stay reachable either way, since a signed-in student can revisit them
+/// from Settings). This is the single place that rule lives; individual
+/// pages no longer need their own "sign in to see this" fallback for it
+/// to actually be enforced navigation-wise.
 final appRouterProvider = Provider<GoRouter>((ref) {
   final refreshStream = _GoRouterRefreshStream(
     ref.watch(supabaseClientProvider).auth.onAuthStateChange,
@@ -32,20 +35,26 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     initialLocation: '/',
     refreshListenable: refreshStream,
     redirect: (context, state) {
-      final loggedIn = ref.read(supabaseClientProvider).auth.currentUser != null;
+      final loggedIn =
+          ref.read(supabaseClientProvider).auth.currentUser != null;
       final onLoginPage = state.matchedLocation == '/login';
-      if (!loggedIn && !onLoginPage) return '/login';
+      const publicPaths = {'/login', '/privacy', '/terms'};
+      if (!loggedIn && !publicPaths.contains(state.matchedLocation)) {
+        return '/login';
+      }
       if (loggedIn && onLoginPage) return '/';
       return null;
     },
     routes: [
+      GoRoute(path: '/', builder: (context, state) => const MindmapPage()),
+      GoRoute(path: '/login', builder: (context, state) => const LoginPage()),
       GoRoute(
-        path: '/',
-        builder: (context, state) => const MindmapPage(),
+        path: '/privacy',
+        builder: (context, state) => const PrivacyPolicyPage(),
       ),
       GoRoute(
-        path: '/login',
-        builder: (context, state) => const LoginPage(),
+        path: '/terms',
+        builder: (context, state) => const TermsOfServicePage(),
       ),
       GoRoute(
         path: '/settings',
@@ -59,10 +68,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/progress',
         builder: (context, state) => const ProgressReportPage(),
       ),
-      GoRoute(
-        path: '/admin',
-        builder: (context, state) => const AdminPage(),
-      ),
+      GoRoute(path: '/admin', builder: (context, state) => const AdminPage()),
       GoRoute(
         path: '/lesson/:lessonId',
         builder: (context, state) =>
@@ -78,8 +84,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           courseCode: state.pathParameters['courseCode']!,
           unitCode: state.pathParameters['unitCode']!,
           subtopicCode: state.pathParameters['subtopicCode']!,
-          subtopicTitle:
-              state.uri.queryParameters['title'] ?? 'Practice Test',
+          subtopicTitle: state.uri.queryParameters['title'] ?? 'Practice Test',
         ),
       ),
       // courseCode/unitCode, not the unit's uuid — same natural-key

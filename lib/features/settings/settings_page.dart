@@ -36,7 +36,10 @@ class SettingsPage extends ConsumerWidget {
       padding: const EdgeInsets.all(20),
       children: [
         if (user != null) ...[
-          Text(user.email ?? 'Signed in', style: Theme.of(context).textTheme.bodyMedium),
+          Text(
+            user.email ?? 'Signed in',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
           const SizedBox(height: 12),
           if (!isAdmin) ...[const _PlanBadge(), const SizedBox(height: 24)],
         ],
@@ -53,6 +56,8 @@ class SettingsPage extends ConsumerWidget {
           const SizedBox(height: 28),
           const _ChangePasswordSection(verifyCurrentPassword: true),
         ],
+        const SizedBox(height: 28),
+        const _LegalSection(),
       ],
     );
 
@@ -90,10 +95,12 @@ class _ChangePasswordSection extends ConsumerStatefulWidget {
   final bool verifyCurrentPassword;
 
   @override
-  ConsumerState<_ChangePasswordSection> createState() => _ChangePasswordSectionState();
+  ConsumerState<_ChangePasswordSection> createState() =>
+      _ChangePasswordSectionState();
 }
 
-class _ChangePasswordSectionState extends ConsumerState<_ChangePasswordSection> {
+class _ChangePasswordSectionState
+    extends ConsumerState<_ChangePasswordSection> {
   final _currentPasswordController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
@@ -145,7 +152,10 @@ class _ChangePasswordSectionState extends ConsumerState<_ChangePasswordSection> 
         if (email == null) throw Exception('No signed-in account.');
         // signInWithPassword() itself is the check — it throws
         // AuthException on a wrong password without touching anything.
-        await client.auth.signInWithPassword(email: email, password: currentPassword);
+        await client.auth.signInWithPassword(
+          email: email,
+          password: currentPassword,
+        );
       }
       await client.auth.updateUser(UserAttributes(password: password));
       if (!mounted) return;
@@ -210,7 +220,10 @@ class _ChangePasswordSectionState extends ConsumerState<_ChangePasswordSection> 
         ),
         if (_error != null) ...[
           const SizedBox(height: 10),
-          Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          Text(
+            _error!,
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
         ],
         if (_saved) ...[
           const SizedBox(height: 10),
@@ -250,7 +263,8 @@ class _AppearanceSection extends ConsumerWidget {
           title: 'System',
           subtitle: "Follows your device's setting.",
           selected: themeMode == ThemeMode.system,
-          onTap: () => ref.read(themeModeProvider.notifier).set(ThemeMode.system),
+          onTap: () =>
+              ref.read(themeModeProvider.notifier).set(ThemeMode.system),
         ),
         const SizedBox(height: 10),
         _OptionTile(
@@ -258,7 +272,8 @@ class _AppearanceSection extends ConsumerWidget {
           title: 'Light',
           subtitle: 'A bright, clean theme.',
           selected: themeMode == ThemeMode.light,
-          onTap: () => ref.read(themeModeProvider.notifier).set(ThemeMode.light),
+          onTap: () =>
+              ref.read(themeModeProvider.notifier).set(ThemeMode.light),
         ),
         const SizedBox(height: 10),
         _OptionTile(
@@ -308,7 +323,11 @@ class _PlanBadge extends ConsumerWidget {
               const SizedBox(width: 6),
               Text(
                 isPro ? 'Pro plan' : 'Free plan',
-                style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 13),
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
               ),
               if (!isPro) ...[
                 const SizedBox(width: 8),
@@ -344,7 +363,8 @@ class _GradeSection extends ConsumerWidget {
 
     return profileAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, _) => Center(child: Text('Failed to load profile: $error')),
+      error: (error, _) =>
+          Center(child: Text('Failed to load profile: $error')),
       data: (profile) {
         final grade = profile?.grade;
         return Column(
@@ -409,13 +429,17 @@ class _DefaultViewSection extends ConsumerWidget {
 
     return profileAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, _) => Center(child: Text('Failed to load profile: $error')),
+      error: (error, _) =>
+          Center(child: Text('Failed to load profile: $error')),
       data: (profile) {
         final defaultView = profile?.defaultView ?? DefaultView.mindmap;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Default view', style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Default view',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 4),
             Text(
               "What you see first when you open Astro STEM Labs. Both show the "
@@ -434,7 +458,8 @@ class _DefaultViewSection extends ConsumerWidget {
             _OptionTile(
               icon: Icons.account_tree_outlined,
               title: 'Classroom',
-              subtitle: 'A unit list on the left and a dashboard that '
+              subtitle:
+                  'A unit list on the left and a dashboard that '
                   'picks up where you left off.',
               selected: defaultView == DefaultView.classroom,
               onTap: () => _setDefaultView(context, ref, DefaultView.classroom),
@@ -498,7 +523,10 @@ class _OptionTile extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(icon, color: selected ? scheme.primary : scheme.onSurfaceVariant),
+              Icon(
+                icon,
+                color: selected ? scheme.primary : scheme.onSurfaceVariant,
+              ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -512,18 +540,59 @@ class _OptionTile extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 2),
-                    Text(subtitle, style: Theme.of(context).textTheme.bodySmall),
+                    Text(
+                      subtitle,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                   ],
                 ),
               ),
               Icon(
-                selected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                selected
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked,
                 color: selected ? scheme.primary : scheme.outlineVariant,
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Always visible, signed in or not -- same reasoning as _AppearanceSection:
+/// these aren't account-specific, so there's no reason to hide them behind
+/// a sign-in wall. Also linked from the sign-up form itself
+/// (login_page.dart's _TermsNotice); this is just the other way back to
+/// them afterward.
+class _LegalSection extends StatelessWidget {
+  const _LegalSection();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Legal', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 4),
+        TextButton(
+          onPressed: () => context.push('/privacy'),
+          style: TextButton.styleFrom(
+            padding: EdgeInsets.zero,
+            alignment: Alignment.centerLeft,
+          ),
+          child: const Text('Privacy Policy'),
+        ),
+        TextButton(
+          onPressed: () => context.push('/terms'),
+          style: TextButton.styleFrom(
+            padding: EdgeInsets.zero,
+            alignment: Alignment.centerLeft,
+          ),
+          child: const Text('Terms of Service'),
+        ),
+      ],
     );
   }
 }

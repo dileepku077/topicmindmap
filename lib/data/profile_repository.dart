@@ -30,6 +30,10 @@ class ProfileRepository {
     return _client.from('profiles').update({'grade': grade}).eq('id', userId);
   }
 
+  Future<void> updateAge(String userId, int age) {
+    return _client.from('profiles').update({'age': age}).eq('id', userId);
+  }
+
   Future<void> markIntroSeen(String userId) {
     return _client
         .from('profiles')

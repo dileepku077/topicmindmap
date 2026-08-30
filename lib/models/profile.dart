@@ -36,6 +36,7 @@ class Profile {
     required this.id,
     required this.displayName,
     required this.grade,
+    required this.age,
     required this.defaultView,
     required this.subscriptionTier,
     required this.isAdmin,
@@ -45,6 +46,12 @@ class Profile {
   final String id;
   final String? displayName;
   final int? grade;
+
+  /// Collected at signup for accounts created after schema_age_check.sql
+  /// (email/password only -- see login_page.dart). Null for every account
+  /// that predates it, and for "Continue with Google" sign-ups, which have
+  /// no form step to collect this during the OAuth redirect.
+  final int? age;
   final DefaultView defaultView;
   final SubscriptionTier subscriptionTier;
 
@@ -66,6 +73,7 @@ class Profile {
       id: map['id'] as String,
       displayName: map['display_name'] as String?,
       grade: map['grade'] as int?,
+      age: map['age'] as int?,
       defaultView: DefaultView.fromName(map['default_view'] as String?),
       subscriptionTier: SubscriptionTier.fromName(
         map['subscription_tier'] as String?,

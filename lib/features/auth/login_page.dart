@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -44,11 +45,30 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   /// courses show up.
   int? _selectedGrade;
 
+  /// Sign-up only — this app is built for Ontario high-school students, so
+  /// the form won't submit outside a 14-20 range (see
+  /// supabase/schema_age_check.sql, which enforces the same floor/ceiling
+  /// server-side). A dropdown rather than a free-text field, same reasoning
+  /// as grade: it can't produce an out-of-range value in the first place.
+  int? _selectedAge;
+
+  final _termsTapRecognizer = TapGestureRecognizer();
+  final _privacyTapRecognizer = TapGestureRecognizer();
+
+  @override
+  void initState() {
+    super.initState();
+    _termsTapRecognizer.onTap = () => context.push('/terms');
+    _privacyTapRecognizer.onTap = () => context.push('/privacy');
+  }
+
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
     _nameController.dispose();
+    _termsTapRecognizer.dispose();
+    _privacyTapRecognizer.dispose();
     super.dispose();
   }
 
@@ -79,6 +99,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           data: {
             'display_name': _nameController.text.trim(),
             'grade': _selectedGrade,
+            'age': _selectedAge,
           },
           emailRedirectTo: _redirectOrigin,
         );
@@ -109,10 +130,14 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         // sign-in regardless of whether that SQL step happened.
         final newUserId = response.user?.id;
         final grade = _selectedGrade;
+        final age = _selectedAge;
         if (newUserId != null && grade != null) {
           await ref
               .read(profileRepositoryProvider)
               .updateGrade(newUserId, grade);
+        }
+        if (newUserId != null && age != null) {
+          await ref.read(profileRepositoryProvider).updateAge(newUserId, age);
         }
       } else {
         await client.auth.signInWithPassword(email: email, password: password);
@@ -335,6 +360,19 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                   value == null ? 'Select your grade' : null,
                             ),
                             const SizedBox(height: 12),
+                            DropdownButtonFormField<int>(
+                              initialValue: _selectedAge,
+                              decoration: _fieldDecoration(context, 'Age'),
+                              items: [
+                                for (var a = 14; a <= 20; a++)
+                                  DropdownMenuItem(value: a, child: Text('$a')),
+                              ],
+                              onChanged: (value) =>
+                                  setState(() => _selectedAge = value),
+                              validator: (value) =>
+                                  value == null ? 'Select your age' : null,
+                            ),
+                            const SizedBox(height: 12),
                           ],
                           TextFormField(
                             controller: _emailController,
@@ -384,6 +422,13 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                       : 'Resend confirmation email',
                                 ),
                               ),
+                            ),
+                          ],
+                          if (_isSignUp) ...[
+                            const SizedBox(height: 14),
+                            _TermsNotice(
+                              termsRecognizer: _termsTapRecognizer,
+                              privacyRecognizer: _privacyTapRecognizer,
                             ),
                           ],
                           const SizedBox(height: 20),
@@ -449,6 +494,54 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         borderRadius: radius,
         borderSide: BorderSide(color: scheme.primary, width: 1.5),
       ),
+    );
+  }
+}
+
+/// "By creating an account, you agree to..." shown only at sign-up, with
+/// Terms of Service / Privacy Policy as inline tap targets rather than a
+/// separate checkbox -- both routes (see app_router.dart) are reachable
+/// without signing in, so a prospective student or parent can read them
+/// before ever submitting the form.
+class _TermsNotice extends StatelessWidget {
+  const _TermsNotice({
+    required this.termsRecognizer,
+    required this.privacyRecognizer,
+  });
+
+  final TapGestureRecognizer termsRecognizer;
+  final TapGestureRecognizer privacyRecognizer;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final baseStyle = Theme.of(context).textTheme.bodySmall
+        ?.copyWith(color: scheme.onSurfaceVariant);
+    final linkStyle = baseStyle?.copyWith(
+      color: scheme.primary,
+      fontWeight: FontWeight.w600,
+      decoration: TextDecoration.underline,
+    );
+    return Text.rich(
+      TextSpan(
+        style: baseStyle,
+        children: [
+          const TextSpan(text: 'By creating an account, you agree to our '),
+          TextSpan(
+            text: 'Terms of Service',
+            style: linkStyle,
+            recognizer: termsRecognizer,
+          ),
+          const TextSpan(text: ' and '),
+          TextSpan(
+            text: 'Privacy Policy',
+            style: linkStyle,
+            recognizer: privacyRecognizer,
+          ),
+          const TextSpan(text: '.'),
+        ],
+      ),
+      textAlign: TextAlign.center,
     );
   }
 }
