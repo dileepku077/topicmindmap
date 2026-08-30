@@ -65,8 +65,9 @@ class Profile {
 
   /// Whether the "How to use this app" welcome page (welcome_page.dart)
   /// has been shown yet — see supabase/schema_onboarding.sql. Drives the
-  /// one-time redirect in login_page.dart; the sidebar's own link to the
-  /// same page ignores this and is always reachable regardless.
+  /// one-time redirect in login_page.dart; the AppBar's own question-mark
+  /// icon link to the same page ignores this and is always reachable
+  /// regardless.
   final bool hasSeenIntro;
 
   bool get isPro => subscriptionTier == SubscriptionTier.pro;

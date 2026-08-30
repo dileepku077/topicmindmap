@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../models/course.dart';
 import '../../models/subtopic.dart';
@@ -145,13 +144,6 @@ class CurriculumSidebar extends StatelessWidget {
                   label: 'Progress Report',
                   selected: false,
                   onTap: onOpenProgressReport,
-                  collapsed: collapsed,
-                ),
-                _NavRow(
-                  icon: Icons.help_outline,
-                  label: 'How to use this app',
-                  selected: false,
-                  onTap: () => context.push('/welcome'),
                   collapsed: collapsed,
                 ),
                 if (!collapsed)

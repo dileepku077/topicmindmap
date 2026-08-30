@@ -9,7 +9,7 @@ import '../../state/profile_providers.dart';
 /// A one-screen tour of the app's own features, shown automatically the
 /// first time a student signs in (see the redirect in login_page.dart,
 /// driven by profiles.has_seen_intro) and reachable afterward any time via
-/// "How to use this app" in the sidebar (curriculum_sidebar.dart). Static
+/// the question-mark icon in the AppBar (mindmap_page.dart). Static
 /// content only — no per-student data — so it's cheap to keep a plain
 /// StatelessWidget-ish page rather than something driven by providers.
 class WelcomePage extends ConsumerStatefulWidget {
@@ -70,8 +70,8 @@ class _WelcomePageState extends ConsumerState<WelcomePage> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'A quick tour of the app — come back to this page any time from '
-                  '"How to use this app" in the sidebar.',
+                  'A quick tour of the app — come back to this page any time '
+                  'from the question-mark icon at the top right.',
                   style: Theme.of(context).textTheme.bodyMedium
                       ?.copyWith(color: scheme.onSurfaceVariant),
                 ),
