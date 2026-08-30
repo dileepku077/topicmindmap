@@ -27,9 +27,14 @@ enum ProgressStatus {
 }
 
 extension ProgressStatusDisplay on ProgressStatus {
+  // "Struggling" reads as a judgment, not a status -- this app is meant to
+  // make gradual progress feel encouraging, so even the lowest (non-zero)
+  // band gets a forward-looking word. "Learning", not "Progressing": that
+  // word's already taken by the tier above, and a student below 50% is
+  // still building the basics rather than visibly progressing yet.
   String get label => switch (this) {
     ProgressStatus.notStarted => 'Not started',
-    ProgressStatus.struggling => 'Struggling',
+    ProgressStatus.struggling => 'Learning',
     ProgressStatus.developing => 'Progressing',
     ProgressStatus.nearingCompletion => 'Nearing completion',
     ProgressStatus.mastered => 'Completed',
@@ -46,7 +51,10 @@ extension ProgressStatusDisplay on ProgressStatus {
 
   IconData get icon => switch (this) {
     ProgressStatus.notStarted => Icons.circle_outlined,
-    ProgressStatus.struggling => Icons.error,
+    // A lightly-filled donut, not an error/exclamation glyph -- same
+    // "how full is the ring" motif as developing's donut_large, just
+    // earlier along it, rather than iconography that reads as a warning.
+    ProgressStatus.struggling => Icons.donut_small,
     ProgressStatus.developing => Icons.donut_large,
     ProgressStatus.nearingCompletion => Icons.check_circle_outline,
     ProgressStatus.mastered => Icons.check_circle,
@@ -62,7 +70,7 @@ extension ProgressStatusDisplay on ProgressStatus {
       ProgressStatus.notStarted =>
         "Haven't started this $noun yet — plan to give it a try.",
       ProgressStatus.struggling =>
-        "Still finding this $noun tough$score — spend more time practicing it.",
+        "Just getting started on this $noun$score — keep practicing and it'll click.",
       ProgressStatus.developing =>
         "Making progress on this $noun$score — keep practicing to build it up.",
       ProgressStatus.nearingCompletion =>
