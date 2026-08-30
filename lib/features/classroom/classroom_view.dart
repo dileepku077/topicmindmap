@@ -583,11 +583,12 @@ class _LeafPane extends StatelessWidget {
   }
 }
 
-/// The dashboard shown before a unit is picked — a personalized greeting, a
-/// card resuming whichever subtopic was practiced most recently in this
-/// course, four quick-start actions (Learn/Quiz/Improve/Test), and a
-/// per-unit progress list so the whole course's standing is visible
-/// without drilling into each unit first.
+/// The dashboard shown before a unit is picked — a personalized greeting,
+/// four quick-start actions (Learn/Quiz/Improve/Test, all targeting
+/// whichever subtopic was practiced most recently, or the course's first
+/// if nothing has been attempted yet), and a per-unit progress list so the
+/// whole course's standing is visible without drilling into each unit
+/// first.
 class _HomePanel extends ConsumerWidget {
   const _HomePanel({
     required this.course,
@@ -695,23 +696,12 @@ class _HomePanel extends ConsumerWidget {
           const SizedBox(height: 4),
           Text(
             user == null
-                ? 'Sign in to track your progress and pick up where you left off.'
-                : 'Pick up where you left off, or start something new.',
+                ? 'Sign in to track your progress.'
+                : 'Choose what to work on next.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
-          const SizedBox(height: 24),
-          if (user != null && recent.isNotEmpty)
-            _ResumeCard(
-              subtopic: subtopicById[recent.first.key],
-              mastery: recent.first.value,
-              unitCode: unitCodeById[subtopicById[recent.first.key]?.unitId],
-              onContinue: (unitCode, subtopicCode, title) =>
-                  onResume(unitCode, subtopicCode, title),
-            )
-          else
-            _EmptyHomeCard(signedIn: user != null),
           if (user != null) ...[
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             Wrap(
               spacing: 10,
               runSpacing: 10,
@@ -960,114 +950,6 @@ class _UnitProgressRow extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _ResumeCard extends StatelessWidget {
-  const _ResumeCard({
-    required this.subtopic,
-    required this.mastery,
-    required this.unitCode,
-    required this.onContinue,
-  });
-
-  final Subtopic? subtopic;
-  final SubtopicMastery mastery;
-  final String? unitCode;
-  final void Function(String unitCode, String subtopicCode, String title)
-  onContinue;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final subtopic = this.subtopic;
-    final unitCode = this.unitCode;
-    if (subtopic == null || unitCode == null) {
-      return const _EmptyHomeCard(signedIn: true);
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: scheme.primary,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'PICK UP WHERE YOU LEFT OFF',
-            style: TextStyle(
-              color: scheme.onPrimary.withValues(alpha: 0.75),
-              fontWeight: FontWeight.w700,
-              fontSize: 12,
-              letterSpacing: 0.8,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            subtopic.title,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              color: scheme.onPrimary,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '${mastery.bestFirstTry} of ${mastery.totalQuestions} correct on the first try',
-            style: TextStyle(color: scheme.onPrimary.withValues(alpha: 0.9)),
-          ),
-          const SizedBox(height: 14),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: (mastery.scorePercent / 100).clamp(0, 1),
-              minHeight: 8,
-              backgroundColor: scheme.onPrimary.withValues(alpha: 0.25),
-              valueColor: AlwaysStoppedAnimation(scheme.onPrimary),
-            ),
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: scheme.onPrimary,
-                foregroundColor: scheme.primary,
-              ),
-              onPressed: () =>
-                  onContinue(unitCode, subtopic.code, subtopic.title),
-              child: const Text('Continue'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EmptyHomeCard extends StatelessWidget {
-  const _EmptyHomeCard({required this.signedIn});
-
-  final bool signedIn;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: scheme.outlineVariant),
-      ),
-      child: Text(
-        signedIn
-            ? "You haven't started a practice test yet — pick a unit from the left to begin."
-            : 'Pick a unit from the left to explore this course.',
-        style: Theme.of(context).textTheme.bodyMedium,
       ),
     );
   }
