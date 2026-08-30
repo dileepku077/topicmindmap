@@ -188,10 +188,10 @@ IconData iconForHeading(String heading) {
   return Icons.label_important_outline;
 }
 
-const double _hubWidth = 180;
-const double _hubHeight = 68;
-const double _subWidth = 200;
-const double _subHeight = 120;
+const double _hubWidth = 200;
+const double _hubHeight = 78;
+const double _subWidth = 220;
+const double _subHeight = 132;
 const double _subGap = 18;
 
 /// Branch box size shrinks as a lesson has more sections -- otherwise the
@@ -201,9 +201,9 @@ const double _subGap = 18;
 ({double width, double height, double fontSize, int maxLines}) _branchSizeFor(
   int count,
 ) {
-  if (count <= 6) return (width: 138, height: 72, fontSize: 12, maxLines: 2);
-  if (count <= 8) return (width: 120, height: 76, fontSize: 11.5, maxLines: 3);
-  return (width: 104, height: 80, fontSize: 11, maxLines: 3);
+  if (count <= 6) return (width: 152, height: 82, fontSize: 14, maxLines: 2);
+  if (count <= 8) return (width: 134, height: 88, fontSize: 13, maxLines: 3);
+  return (width: 118, height: 92, fontSize: 12.5, maxLines: 3);
 }
 
 /// Places [count] branch nodes evenly around a circle centered on the hub,
@@ -325,63 +325,71 @@ class _LessonMindmapSummaryState extends State<LessonMindmapSummary> {
       subColor = _branchColor(context, expanded, sections.length);
     }
 
-    final diagram = SizedBox(
-      width: diagramWidth,
-      height: diagramHeight,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          CustomPaint(
-            size: Size(diagramWidth, diagramHeight),
-            painter: _SpokePainter(
-              hubCenter: center,
-              branchCenters: branchCenters,
-              color: scheme.primary.withValues(alpha: 0.35),
-              extraLine: hasExpanded
-                  ? (
-                      from: branchCenters[expanded],
-                      to: subCenter!,
-                      color: subColor!,
-                    )
-                  : null,
-            ),
-          ),
-          for (var i = 0; i < sections.length; i++)
-            Positioned(
-              left: branchCenters[i].dx - branchSize.width / 2,
-              top: branchCenters[i].dy - branchSize.height / 2,
-              width: branchSize.width,
-              height: branchSize.height,
-              child: _BranchNode(
-                heading: sections[i].heading,
-                icon: iconForHeading(sections[i].heading),
-                color: _branchColor(context, i, sections.length),
-                size: branchSize,
-                selected: _expandedIndex == i,
-                onTap: () => toggle(i),
+    // Opts out of the app-wide text-scale boost (app.dart): every node's
+    // font size and box size here were sized together so text fits its
+    // box exactly (see _layoutBranches) -- letting the global scaler also
+    // multiply these on top would grow the text without growing the boxes
+    // to match, clipping labels instead of making them more readable.
+    final diagram = MediaQuery(
+      data: MediaQuery.of(context).copyWith(textScaler: TextScaler.noScaling),
+      child: SizedBox(
+        width: diagramWidth,
+        height: diagramHeight,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            CustomPaint(
+              size: Size(diagramWidth, diagramHeight),
+              painter: _SpokePainter(
+                hubCenter: center,
+                branchCenters: branchCenters,
+                color: scheme.primary.withValues(alpha: 0.35),
+                extraLine: hasExpanded
+                    ? (
+                        from: branchCenters[expanded],
+                        to: subCenter!,
+                        color: subColor!,
+                      )
+                    : null,
               ),
             ),
-          if (hasExpanded)
-            Positioned(
-              left: subCenter!.dx - _subWidth / 2,
-              top: subCenter.dy - _subHeight / 2,
-              width: _subWidth,
-              height: _subHeight,
-              child: _SubNode(
-                section: sections[expanded],
-                icon: iconForHeading(sections[expanded].heading),
-                color: subColor!,
-                onClose: () => toggle(expanded),
+            for (var i = 0; i < sections.length; i++)
+              Positioned(
+                left: branchCenters[i].dx - branchSize.width / 2,
+                top: branchCenters[i].dy - branchSize.height / 2,
+                width: branchSize.width,
+                height: branchSize.height,
+                child: _BranchNode(
+                  heading: sections[i].heading,
+                  icon: iconForHeading(sections[i].heading),
+                  color: _branchColor(context, i, sections.length),
+                  size: branchSize,
+                  selected: _expandedIndex == i,
+                  onTap: () => toggle(i),
+                ),
               ),
+            if (hasExpanded)
+              Positioned(
+                left: subCenter!.dx - _subWidth / 2,
+                top: subCenter.dy - _subHeight / 2,
+                width: _subWidth,
+                height: _subHeight,
+                child: _SubNode(
+                  section: sections[expanded],
+                  icon: iconForHeading(sections[expanded].heading),
+                  color: subColor!,
+                  onClose: () => toggle(expanded),
+                ),
+              ),
+            Positioned(
+              left: center.dx - _hubWidth / 2,
+              top: center.dy - _hubHeight / 2,
+              width: _hubWidth,
+              height: _hubHeight,
+              child: _HubNode(title: widget.title),
             ),
-          Positioned(
-            left: center.dx - _hubWidth / 2,
-            top: center.dy - _hubHeight / 2,
-            width: _hubWidth,
-            height: _hubHeight,
-            child: _HubNode(title: widget.title),
-          ),
-        ],
+          ],
+        ),
       ),
     );
 
@@ -532,7 +540,7 @@ class _HubNode extends StatelessWidget {
               style: TextStyle(
                 color: scheme.onPrimary,
                 fontWeight: FontWeight.bold,
-                fontSize: 13,
+                fontSize: 15,
                 height: 1.15,
               ),
             ),
@@ -590,13 +598,13 @@ class _BranchNode extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 22,
-                height: 22,
+                width: 26,
+                height: 26,
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.16),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(icon, size: 13, color: color),
+                child: Icon(icon, size: 15, color: color),
               ),
               const SizedBox(height: 4),
               Flexible(
@@ -662,7 +670,7 @@ class _SubNode extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Icon(icon, size: 15, color: color),
+                  Icon(icon, size: 17, color: color),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
@@ -672,11 +680,11 @@ class _SubNode extends StatelessWidget {
                       style: TextStyle(
                         color: scheme.onSurface,
                         fontWeight: FontWeight.bold,
-                        fontSize: 12.5,
+                        fontSize: 14,
                       ),
                     ),
                   ),
-                  Icon(Icons.close, size: 15, color: scheme.onSurfaceVariant),
+                  Icon(Icons.close, size: 17, color: scheme.onSurfaceVariant),
                 ],
               ),
               const SizedBox(height: 6),
@@ -687,7 +695,7 @@ class _SubNode extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: scheme.onSurfaceVariant,
-                    fontSize: 11,
+                    fontSize: 12.5,
                     height: 1.3,
                   ),
                 ),
