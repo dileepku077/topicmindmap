@@ -432,7 +432,7 @@ class _DefaultViewSection extends ConsumerWidget {
       error: (error, _) =>
           Center(child: Text('Failed to load profile: $error')),
       data: (profile) {
-        final defaultView = profile?.defaultView ?? DefaultView.mindmap;
+        final defaultView = profile?.defaultView ?? DefaultView.classroom;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

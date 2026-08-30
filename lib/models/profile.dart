@@ -1,6 +1,9 @@
 /// Which screen a student sees first when they open the app —
 /// the spatial mindmap, or the classroom view (classroom_view.dart).
-/// Persisted per-account so it's remembered across sign-ins.
+/// Persisted per-account so it's remembered across sign-ins. Classroom is
+/// the default for a new account (see profiles.default_view's own column
+/// default in supabase/schema_preferences.sql) -- this fallback only
+/// matters for the rare case of a genuinely null/unrecognized value.
 enum DefaultView {
   mindmap,
   classroom;
@@ -8,7 +11,7 @@ enum DefaultView {
   static DefaultView fromName(String? name) {
     return DefaultView.values.firstWhere(
       (v) => v.name == name,
-      orElse: () => DefaultView.mindmap,
+      orElse: () => DefaultView.classroom,
     );
   }
 }

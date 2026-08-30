@@ -1,0 +1,12 @@
+-- ---------------------------------------------------------------------------
+-- Classroom is now the default view for new accounts
+-- ---------------------------------------------------------------------------
+-- profiles.default_view (schema_preferences.sql) originally defaulted new
+-- accounts to 'mindmap'. Switching the column default only -- not
+-- backfilling existing rows -- since every row already has an explicit
+-- 'mindmap' or 'classroom' value (the column is `not null`), there's no way
+-- to tell "never touched this setting" apart from "deliberately chose
+-- Mindmap in Profile & Preferences" in the data as it stands. Leaving
+-- existing accounts alone avoids silently overriding a real choice; only
+-- newly created accounts pick up 'classroom' from here on.
+alter table public.profiles alter column default_view set default 'classroom';
