@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/brand_badge.dart';
 import '../../state/lesson_providers.dart';
 import 'html/html_lesson_view.dart';
-import 'lesson_mindmap_summary.dart';
 
 /// A short (~5-10 minute), self-contained explanation of one subtopic,
 /// opened from its "Lesson" link in the mindmap so a student can learn the
@@ -83,17 +82,6 @@ class LessonBody extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Every bundled lesson across all four courses (MTH1W,
-              // MPM2D, SNC2D, SPH3U -- see lesson_providers.dart's
-              // lessonIdFor) follows the same '## Section' heading
-              // structure this derives from, so it renders correctly with
-              // zero authored content. LessonMindmapSummary itself renders
-              // nothing if a lesson somehow has no '##' headings.
-              LessonMindmapSummary(
-                title: lesson.title,
-                content: lesson.content,
-              ),
-              const SizedBox(height: 20),
               HtmlLessonView(
                 key: ValueKey(lesson.id),
                 frameId: '${lesson.id}-full',
