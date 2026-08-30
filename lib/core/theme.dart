@@ -49,12 +49,34 @@ const _lightOnSurfaceVariant = Color(0xFF5C6670);
 const _lightOutline = Color(0xFFD4D9DD);
 const _lightOutlineVariant = Color(0xFFE6E9EB);
 
+/// The gold from the login page's own brand mark (brandGradient in
+/// brand_badge.dart), promoted to a proper Material tertiary role instead
+/// of staying a one-off constant only the login page ever touched.
+/// [ColorScheme.fromSeed] would otherwise auto-derive tertiary as a muted
+/// purple off the navy seed -- unrelated to this app's actual brand color
+/// and never used anywhere, which is exactly the "accent that doesn't
+/// show up anywhere but the login screen" gap this closes. Dark, warm
+/// text/icon colors on top of it rather than white: gold sits at a light,
+/// mid-saturation tone even against a dark app background, so it needs
+/// the same "dark content on a light chip" contrast treatment in both
+/// themes, not the theme's own light/dark split.
+const _brandGold = Color(0xFFF4A93B);
+const _onBrandGold = Color(0xFF4A2E00);
+const _brandGoldContainerLight = Color(0xFFFFF0D4);
+const _onBrandGoldContainerLight = Color(0xFF5C3D00);
+const _brandGoldContainerDark = Color(0xFF4A3510);
+const _onBrandGoldContainerDark = Color(0xFFFFE1A8);
+
 ThemeData buildLightTheme() {
   final scheme = ColorScheme.fromSeed(seedColor: _lightPrimary).copyWith(
     primary: _lightPrimary,
     onPrimary: Colors.white,
     secondary: _lightSecondary,
     onSecondary: Colors.white,
+    tertiary: _brandGold,
+    onTertiary: _onBrandGold,
+    tertiaryContainer: _brandGoldContainerLight,
+    onTertiaryContainer: _onBrandGoldContainerLight,
     surface: _lightBackground,
     onSurface: _lightOnSurface,
     onSurfaceVariant: _lightOnSurfaceVariant,
@@ -76,7 +98,9 @@ ThemeData buildLightTheme() {
     // headlineSmall instead so the app's most-seen brand moment gets the
     // same treatment as the login page's.
     appBarTheme: AppBarTheme(
-      titleTextStyle: textTheme.headlineSmall?.copyWith(color: scheme.onSurface),
+      titleTextStyle: textTheme.headlineSmall?.copyWith(
+        color: scheme.onSurface,
+      ),
     ),
   );
 }
@@ -101,19 +125,27 @@ const _darkSecondary = Color(0xFF4DBDBE);
 const _darkOnSecondary = Color(0xFF08302F);
 
 ThemeData buildDarkTheme() {
-  final scheme = ColorScheme.fromSeed(
-    seedColor: _lightPrimary,
-    brightness: Brightness.dark,
-  ).copyWith(
-    secondary: _darkSecondary,
-    onSecondary: _darkOnSecondary,
-    surface: _darkBackground,
-    onSurface: _darkOnSurface,
-    onSurfaceVariant: _darkOnSurfaceVariant,
-    surfaceContainerHighest: _darkSurfaceContainerHighest,
-    outline: _darkOutline,
-    outlineVariant: _darkOutlineVariant,
-  );
+  final scheme =
+      ColorScheme.fromSeed(
+        seedColor: _lightPrimary,
+        brightness: Brightness.dark,
+      ).copyWith(
+        secondary: _darkSecondary,
+        onSecondary: _darkOnSecondary,
+        // Same brand gold as the light theme -- it already reads well against
+        // a dark background without a separate dark-tuned hue, unlike
+        // secondary above.
+        tertiary: _brandGold,
+        onTertiary: _onBrandGold,
+        tertiaryContainer: _brandGoldContainerDark,
+        onTertiaryContainer: _onBrandGoldContainerDark,
+        surface: _darkBackground,
+        onSurface: _darkOnSurface,
+        onSurfaceVariant: _darkOnSurfaceVariant,
+        surfaceContainerHighest: _darkSurfaceContainerHighest,
+        outline: _darkOutline,
+        outlineVariant: _darkOutlineVariant,
+      );
   final base = ThemeData(
     useMaterial3: true,
     colorScheme: scheme,
@@ -123,7 +155,9 @@ ThemeData buildDarkTheme() {
   return base.copyWith(
     textTheme: textTheme,
     appBarTheme: AppBarTheme(
-      titleTextStyle: textTheme.headlineSmall?.copyWith(color: scheme.onSurface),
+      titleTextStyle: textTheme.headlineSmall?.copyWith(
+        color: scheme.onSurface,
+      ),
     ),
   );
 }

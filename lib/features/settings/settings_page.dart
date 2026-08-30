@@ -304,7 +304,9 @@ class _PlanBadge extends ConsumerWidget {
       error: (error, _) => const SizedBox.shrink(),
       data: (profile) {
         final isPro = profile?.isPro ?? false;
-        final color = isPro ? scheme.secondary : scheme.onSurfaceVariant;
+        // Gold reads as "premium tier" more directly than teal ever did --
+        // see theme.dart's tertiary role.
+        final color = isPro ? scheme.tertiary : scheme.onSurfaceVariant;
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(

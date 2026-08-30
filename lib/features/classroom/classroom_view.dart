@@ -823,6 +823,7 @@ class _HomePanel extends ConsumerWidget {
                     icon: Icons.trending_up_outlined,
                     label: 'Improve',
                     onTap: onOpenImprove,
+                    featured: true,
                   ),
                 ),
                 SizedBox(
@@ -876,16 +877,24 @@ class _ActionCard extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onTap,
+    this.featured = false,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback? onTap;
 
+  /// Picks out Improve in gold (theme.dart's brand tertiary) rather than
+  /// the other three actions' navy -- it's the app's newest, most
+  /// distinctive mode and has no per-topic target the way Learn/Quiz/Test
+  /// do, so it reads better as a standout than a fourth identical tile.
+  final bool featured;
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final enabled = onTap != null;
+    final accent = featured ? scheme.tertiary : scheme.primary;
     return Material(
       color: scheme.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(14),
@@ -897,11 +906,7 @@ class _ActionCard extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                icon,
-                size: 26,
-                color: enabled ? scheme.primary : scheme.outline,
-              ),
+              Icon(icon, size: 26, color: enabled ? accent : scheme.outline),
               const SizedBox(height: 8),
               Text(
                 label,

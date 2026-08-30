@@ -49,7 +49,10 @@ class AdminPage extends ConsumerWidget {
             itemBuilder: (context) {
               final email = ref.read(currentUserProvider)?.email;
               return [
-                PopupMenuItem(enabled: false, child: Text(email ?? 'Signed in')),
+                PopupMenuItem(
+                  enabled: false,
+                  child: Text(email ?? 'Signed in'),
+                ),
                 const PopupMenuItem(
                   value: 'settings',
                   child: Text('Profile & Preferences'),
@@ -63,7 +66,8 @@ class AdminPage extends ConsumerWidget {
       ),
       body: profileAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text('Failed to load profile: $error')),
+        error: (error, _) =>
+            Center(child: Text('Failed to load profile: $error')),
         data: (profile) {
           // The real check lives server-side in every RPC this page calls;
           // this just keeps a non-admin from looking at an empty screen
@@ -110,7 +114,8 @@ class _StudentListState extends ConsumerState<_StudentList> {
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
           child: TextField(
             controller: _searchController,
-            onChanged: (value) => setState(() => _query = value.trim().toLowerCase()),
+            onChanged: (value) =>
+                setState(() => _query = value.trim().toLowerCase()),
             decoration: InputDecoration(
               hintText: 'Search by email',
               prefixIcon: const Icon(Icons.search),
@@ -125,14 +130,17 @@ class _StudentListState extends ConsumerState<_StudentList> {
                       }),
                     ),
               isDense: true,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
           ),
         ),
         Expanded(
           child: studentsAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (error, _) => Center(child: Text('Failed to load students: $error')),
+            error: (error, _) =>
+                Center(child: Text('Failed to load students: $error')),
             data: (students) {
               if (students.isEmpty) {
                 return const Center(child: Text('No student accounts yet.'));
@@ -149,7 +157,8 @@ class _StudentListState extends ConsumerState<_StudentList> {
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
                 itemCount: filtered.length,
                 separatorBuilder: (_, _) => const SizedBox(height: 10),
-                itemBuilder: (context, index) => _StudentRow(student: filtered[index]),
+                itemBuilder: (context, index) =>
+                    _StudentRow(student: filtered[index]),
               );
             },
           ),
@@ -190,24 +199,30 @@ class _StudentRow extends ConsumerWidget {
                   student.displayName?.isNotEmpty == true
                       ? student.displayName!
                       : student.email,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                  style: Theme.of(context).textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 2),
-                Text(student.email, style: Theme.of(context).textTheme.bodySmall),
+                Text(
+                  student.email,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
                   runSpacing: 6,
                   children: [
                     _Chip(
-                      label: student.grade == null ? 'No grade' : 'Grade ${student.grade}',
+                      label: student.grade == null
+                          ? 'No grade'
+                          : 'Grade ${student.grade}',
                       color: scheme.onSurfaceVariant,
                     ),
                     _Chip(
                       label: isPro ? 'Pro' : 'Free',
-                      color: isPro ? scheme.secondary : scheme.onSurfaceVariant,
+                      // Gold reads as "premium tier" more directly than
+                      // teal ever did -- see theme.dart's tertiary role.
+                      color: isPro ? scheme.tertiary : scheme.onSurfaceVariant,
                       filled: isPro,
                     ),
                   ],
@@ -269,7 +284,11 @@ class _Chip extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 11),
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w700,
+          fontSize: 11,
+        ),
       ),
     );
   }
@@ -289,7 +308,9 @@ class _EditStudentDialog extends ConsumerStatefulWidget {
 }
 
 class _EditStudentDialogState extends ConsumerState<_EditStudentDialog> {
-  late final _nameController = TextEditingController(text: widget.student.displayName);
+  late final _nameController = TextEditingController(
+    text: widget.student.displayName,
+  );
   late int? _grade = widget.student.grade;
   late SubscriptionTier _tier = widget.student.subscriptionTier;
   bool _saving = false;
@@ -307,12 +328,14 @@ class _EditStudentDialogState extends ConsumerState<_EditStudentDialog> {
       _error = null;
     });
     try {
-      await ref.read(adminRepositoryProvider).updateStudent(
-        studentId: widget.student.id,
-        grade: _grade,
-        subscriptionTier: _tier,
-        displayName: _nameController.text.trim(),
-      );
+      await ref
+          .read(adminRepositoryProvider)
+          .updateStudent(
+            studentId: widget.student.id,
+            grade: _grade,
+            subscriptionTier: _tier,
+            displayName: _nameController.text.trim(),
+          );
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } catch (error) {
@@ -352,14 +375,23 @@ class _EditStudentDialogState extends ConsumerState<_EditStudentDialog> {
               initialValue: _tier,
               decoration: const InputDecoration(labelText: 'Subscription'),
               items: const [
-                DropdownMenuItem(value: SubscriptionTier.free, child: Text('Free')),
-                DropdownMenuItem(value: SubscriptionTier.pro, child: Text('Pro')),
+                DropdownMenuItem(
+                  value: SubscriptionTier.free,
+                  child: Text('Free'),
+                ),
+                DropdownMenuItem(
+                  value: SubscriptionTier.pro,
+                  child: Text('Pro'),
+                ),
               ],
               onChanged: (value) => setState(() => _tier = value ?? _tier),
             ),
             if (_error != null) ...[
               const SizedBox(height: 12),
-              Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
             ],
           ],
         ),
@@ -384,7 +416,8 @@ class _ResetPasswordDialog extends ConsumerStatefulWidget {
   final AdminStudent student;
 
   @override
-  ConsumerState<_ResetPasswordDialog> createState() => _ResetPasswordDialogState();
+  ConsumerState<_ResetPasswordDialog> createState() =>
+      _ResetPasswordDialogState();
 }
 
 class _ResetPasswordDialogState extends ConsumerState<_ResetPasswordDialog> {
@@ -415,7 +448,9 @@ class _ResetPasswordDialogState extends ConsumerState<_ResetPasswordDialog> {
       if (!mounted) return;
       Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Password updated for ${widget.student.email}.")),
+        SnackBar(
+          content: Text("Password updated for ${widget.student.email}."),
+        ),
       );
     } catch (error) {
       setState(() {
@@ -444,7 +479,10 @@ class _ResetPasswordDialogState extends ConsumerState<_ResetPasswordDialog> {
             ),
             if (_error != null) ...[
               const SizedBox(height: 12),
-              Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+              Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
             ],
           ],
         ),
@@ -469,7 +507,8 @@ class _DeleteStudentDialog extends ConsumerStatefulWidget {
   final AdminStudent student;
 
   @override
-  ConsumerState<_DeleteStudentDialog> createState() => _DeleteStudentDialogState();
+  ConsumerState<_DeleteStudentDialog> createState() =>
+      _DeleteStudentDialogState();
 }
 
 class _DeleteStudentDialogState extends ConsumerState<_DeleteStudentDialog> {
@@ -496,7 +535,10 @@ class _DeleteStudentDialogState extends ConsumerState<_DeleteStudentDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      icon: Icon(Icons.warning_amber_rounded, color: Theme.of(context).colorScheme.error),
+      icon: Icon(
+        Icons.warning_amber_rounded,
+        color: Theme.of(context).colorScheme.error,
+      ),
       title: const Text('Delete this account?'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
@@ -508,7 +550,10 @@ class _DeleteStudentDialogState extends ConsumerState<_DeleteStudentDialog> {
           ),
           if (_error != null) ...[
             const SizedBox(height: 12),
-            Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            Text(
+              _error!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
           ],
         ],
       ),
