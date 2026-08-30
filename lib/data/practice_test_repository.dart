@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../models/improve_question.dart';
 import '../models/practice_question.dart';
 
 /// Calls the security-definer database functions in
@@ -82,9 +83,23 @@ class PracticeTestRepository {
   /// without deleting history. Scoped to the whole course on purpose; see
   /// schema_practice.sql.
   Future<void> resetProgress({required String courseCode}) {
-    return _client.rpc(
-      'reset_progress',
-      params: {'p_course_code': courseCode},
+    return _client.rpc('reset_progress', params: {'p_course_code': courseCode});
+  }
+
+  /// A batch of questions targeting whichever misconceptions this student
+  /// is currently still getting wrong, across the whole course rather than
+  /// one subtopic — see schema_improve.sql. Empty means there's nothing to
+  /// drill right now (no repeated misconceptions found), not an error.
+  Future<List<ImproveQuestion>> fetchImproveQuestions({
+    required String courseCode,
+    int limit = 12,
+  }) async {
+    final rows = await _client.rpc(
+      'improve_questions',
+      params: {'p_course_code': courseCode, 'p_limit': limit},
     );
+    return (rows as List)
+        .map((row) => ImproveQuestion.fromMap(row as Map<String, dynamic>))
+        .toList();
   }
 }

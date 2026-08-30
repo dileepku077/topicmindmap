@@ -775,6 +775,7 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
                     subtopicsByUnit: _subtopicsByUnit,
                     subtopicStatus: subtopicStatus,
                     subtopicScorePercent: subtopicScorePercent,
+                    subtopicMedal: subtopicMedal,
                     sidebarCollapsed: _sidebarCollapsed,
                     onToggleSidebarCollapsed: () =>
                         setState(() => _sidebarCollapsed = !_sidebarCollapsed),

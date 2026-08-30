@@ -8,9 +8,11 @@ import '../../models/subtopic.dart';
 import '../../models/subtopic_mastery.dart';
 import '../../models/unit.dart';
 import '../../state/auth_providers.dart';
+import '../../state/lesson_providers.dart';
 import '../../state/practice_test_providers.dart';
 import '../../state/profile_providers.dart';
 import '../../state/progress_providers.dart';
+import '../improve/improve_page.dart';
 import '../lesson/lesson_page.dart';
 import '../practice_test/practice_test_page.dart';
 import '../progress_report/progress_report_page.dart';
@@ -38,6 +40,7 @@ class ClassroomView extends ConsumerStatefulWidget {
     required this.subtopicsByUnit,
     required this.subtopicStatus,
     required this.subtopicScorePercent,
+    required this.subtopicMedal,
     this.sidebarCollapsed = false,
     this.onToggleSidebarCollapsed,
   });
@@ -47,6 +50,13 @@ class ClassroomView extends ConsumerStatefulWidget {
   final Map<String, List<Subtopic>> subtopicsByUnit;
   final Map<String, ProgressStatus> subtopicStatus;
   final Map<String, double> subtopicScorePercent;
+
+  /// Used by the dashboard's per-unit progress list (_HomePanel) to show a
+  /// medal badge alongside each unit's score -- the sidebar/mindmap already
+  /// compute this (see subtopicMedalProvider), so it just rides along here
+  /// too rather than being recomputed.
+  final Map<String, String> subtopicMedal;
+
   /// Mirrors the mindmap view's own sidebar state (see mindmap_page.dart)
   /// so minimizing the left-hand unit list to an icon rail is consistent
   /// across both views. Only takes effect at >=720px; below that the
@@ -69,6 +79,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
   _UnitTestTarget? _unitTest;
   bool _showSettings = false;
   bool _showProgressReport = false;
+  bool _showImprove = false;
 
   @override
   void didUpdateWidget(covariant ClassroomView oldWidget) {
@@ -89,6 +100,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _unitTest = null;
       _showSettings = false;
       _showProgressReport = false;
+      _showImprove = false;
     });
   }
 
@@ -101,6 +113,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _unitTest = null;
       _showSettings = false;
       _showProgressReport = false;
+      _showImprove = false;
     });
   }
 
@@ -113,6 +126,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _unitTest = null;
       _showSettings = false;
       _showProgressReport = false;
+      _showImprove = false;
     });
   }
 
@@ -124,16 +138,22 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _unitTest = null;
       _showSettings = false;
       _showProgressReport = false;
+      _showImprove = false;
     });
   }
 
   void _openPractice(String unitCode, String subtopicCode, String title) {
     setState(() {
-      _practice = _PracticeTarget(unitCode: unitCode, subtopicCode: subtopicCode, title: title);
+      _practice = _PracticeTarget(
+        unitCode: unitCode,
+        subtopicCode: subtopicCode,
+        title: title,
+      );
       _lessonId = null;
       _unitTest = null;
       _showSettings = false;
       _showProgressReport = false;
+      _showImprove = false;
     });
   }
 
@@ -142,6 +162,25 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _unitTest = _UnitTestTarget(unitCode: unitCode, title: unitTitle);
       _lessonId = null;
       _practice = null;
+      _showSettings = false;
+      _showProgressReport = false;
+      _showImprove = false;
+    });
+  }
+
+  /// Reachable straight from the dashboard's action row (_HomePanel), not
+  /// tied to any unit/subtopic selection -- same reasoning as
+  /// _openSettings/_openProgressReport for clearing the selection, so the
+  /// breadcrumb reads "Home > Improve" regardless of where the student was
+  /// browsing.
+  void _openImprove() {
+    setState(() {
+      _showImprove = true;
+      _selectedUnitId = null;
+      _selectedSubtopic = null;
+      _lessonId = null;
+      _practice = null;
+      _unitTest = null;
       _showSettings = false;
       _showProgressReport = false;
     });
@@ -161,6 +200,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _practice = null;
       _unitTest = null;
       _showProgressReport = false;
+      _showImprove = false;
     });
     afterSelect?.call();
   }
@@ -177,6 +217,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _practice = null;
       _unitTest = null;
       _showSettings = false;
+      _showImprove = false;
     });
     afterSelect?.call();
   }
@@ -194,6 +235,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _unitTest = null;
       _showSettings = false;
       _showProgressReport = false;
+      _showImprove = false;
     });
   }
 
@@ -207,6 +249,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       _unitTest = null;
       _showSettings = false;
       _showProgressReport = false;
+      _showImprove = false;
     });
   }
 
@@ -234,6 +277,8 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       crumbs.add(_Crumb('Profile & Preferences', _backFromLeaf));
     } else if (_showProgressReport) {
       crumbs.add(_Crumb('Progress Report', _backFromLeaf));
+    } else if (_showImprove) {
+      crumbs.add(_Crumb('Improve', _backFromLeaf));
     }
     final current = crumbs.removeLast();
     crumbs.add(_Crumb(current.label, null));
@@ -302,7 +347,10 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
               onToggleCollapsed: widget.onToggleSidebarCollapsed,
             ),
           ),
-          VerticalDivider(width: 1, color: scheme.outlineVariant.withValues(alpha: 0.3)),
+          VerticalDivider(
+            width: 1,
+            color: scheme.outlineVariant.withValues(alpha: 0.3),
+          ),
           Expanded(child: _buildMain(selectedUnit)),
         ],
       );
@@ -311,7 +359,11 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: Colors.transparent,
-      drawer: Drawer(child: SafeArea(child: _buildSidebar(afterSelect: () => Navigator.pop(context)))),
+      drawer: Drawer(
+        child: SafeArea(
+          child: _buildSidebar(afterSelect: () => Navigator.pop(context)),
+        ),
+      ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -342,7 +394,10 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
               ),
             ),
           ),
-          Divider(height: 1, color: scheme.outlineVariant.withValues(alpha: 0.3)),
+          Divider(
+            height: 1,
+            color: scheme.outlineVariant.withValues(alpha: 0.3),
+          ),
           Expanded(child: _buildMain(selectedUnit)),
         ],
       ),
@@ -360,7 +415,9 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       return _LeafPane(
         breadcrumb: breadcrumb,
         child: PracticeTestPage(
-          key: ValueKey('practice-${practice.unitCode}-${practice.subtopicCode}'),
+          key: ValueKey(
+            'practice-${practice.unitCode}-${practice.subtopicCode}',
+          ),
           courseCode: widget.course.code,
           unitCode: practice.unitCode,
           subtopicCode: practice.subtopicCode,
@@ -374,7 +431,10 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
     if (lessonId != null) {
       return _LeafPane(
         breadcrumb: breadcrumb,
-        child: LessonBody(key: ValueKey('lesson-$lessonId'), lessonId: lessonId),
+        child: LessonBody(
+          key: ValueKey('lesson-$lessonId'),
+          lessonId: lessonId,
+        ),
       );
     }
     if (_showSettings) {
@@ -387,6 +447,17 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       return _LeafPane(
         breadcrumb: breadcrumb,
         child: const ProgressReportPage(embedded: true),
+      );
+    }
+    if (_showImprove) {
+      return _LeafPane(
+        breadcrumb: breadcrumb,
+        child: ImprovePage(
+          key: ValueKey('improve-${widget.course.code}'),
+          courseCode: widget.course.code,
+          embedded: true,
+          onFinished: _backFromLeaf,
+        ),
       );
     }
     final unitTest = _unitTest;
@@ -419,7 +490,13 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
         units: widget.units,
         subtopicsByUnit: widget.subtopicsByUnit,
         subtopicStatus: widget.subtopicStatus,
+        subtopicScorePercent: widget.subtopicScorePercent,
+        subtopicMedal: widget.subtopicMedal,
         onResume: _openPractice,
+        onOpenLesson: _openLesson,
+        onStartUnitTest: _openUnitTest,
+        onOpenImprove: _openImprove,
+        onSelectUnit: _selectUnit,
       );
     }
     return _UnitPanel(
@@ -428,7 +505,8 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
       subtopics: widget.subtopicsByUnit[selectedUnit.id] ?? const [],
       subtopicStatus: widget.subtopicStatus,
       onTapSubtopic: _selectSubtopic,
-      onStartUnitTest: () => _openUnitTest(selectedUnit.code, selectedUnit.title),
+      onStartUnitTest: () =>
+          _openUnitTest(selectedUnit.code, selectedUnit.title),
     );
   }
 }
@@ -495,7 +573,10 @@ class _BreadcrumbTrail extends StatelessWidget {
                     onTap: trail[i].onTap,
                     borderRadius: BorderRadius.circular(4),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 2,
+                        vertical: 2,
+                      ),
                       child: Text(
                         trail[i].label,
                         style: TextStyle(
@@ -512,9 +593,8 @@ class _BreadcrumbTrail extends StatelessWidget {
           ),
         Text(
           current.label,
-          style: Theme.of(
-            context,
-          ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+          style: Theme.of(context).textTheme.headlineSmall
+              ?.copyWith(fontWeight: FontWeight.bold),
         ),
       ],
     );
@@ -580,25 +660,40 @@ class _SubtopicPane extends StatelessWidget {
   }
 }
 
-/// The dashboard shown before a unit is picked — a personalized greeting,
-/// a card resuming whichever subtopic was practiced most recently in this
-/// course, and an overall progress summary.
+/// The dashboard shown before a unit is picked — a personalized greeting, a
+/// card resuming whichever subtopic was practiced most recently in this
+/// course, four quick-start actions (Learn/Quiz/Improve/Test), and a
+/// per-unit progress list so the whole course's standing is visible
+/// without drilling into each unit first.
 class _HomePanel extends ConsumerWidget {
   const _HomePanel({
     required this.course,
     required this.units,
     required this.subtopicsByUnit,
     required this.subtopicStatus,
+    required this.subtopicScorePercent,
+    required this.subtopicMedal,
     required this.onResume,
+    required this.onOpenLesson,
+    required this.onStartUnitTest,
+    required this.onOpenImprove,
+    required this.onSelectUnit,
   });
 
   final Course course;
   final List<Unit> units;
   final Map<String, List<Subtopic>> subtopicsByUnit;
   final Map<String, ProgressStatus> subtopicStatus;
+  final Map<String, double> subtopicScorePercent;
+  final Map<String, String> subtopicMedal;
 
   /// (unitCode, subtopicCode, title) — opens that subtopic's practice test.
-  final void Function(String unitCode, String subtopicCode, String title) onResume;
+  final void Function(String unitCode, String subtopicCode, String title)
+  onResume;
+  final void Function(String lessonId, String lessonTitle) onOpenLesson;
+  final void Function(String unitCode, String unitTitle) onStartUnitTest;
+  final VoidCallback onOpenImprove;
+  final void Function(String unitId) onSelectUnit;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -609,10 +704,12 @@ class _HomePanel extends ConsumerWidget {
 
     // This course's subtopics only, newest attempt first.
     final courseSubtopicIds = {
-      for (final list in subtopicsByUnit.values) for (final s in list) s.id,
+      for (final list in subtopicsByUnit.values)
+        for (final s in list) s.id,
     };
     final subtopicById = {
-      for (final list in subtopicsByUnit.values) for (final s in list) s.id: s,
+      for (final list in subtopicsByUnit.values)
+        for (final s in list) s.id: s,
     };
     final recent =
         mastery.entries.where((e) => courseSubtopicIds.contains(e.key)).toList()
@@ -620,12 +717,47 @@ class _HomePanel extends ConsumerWidget {
 
     final mastered = units
         .where(
-          (u) => aggregateUnitStatus(
-            (subtopicsByUnit[u.id] ?? const []).map((s) => s.id),
-            subtopicStatus,
-          ) == ProgressStatus.mastered,
+          (u) =>
+              aggregateUnitStatus(
+                (subtopicsByUnit[u.id] ?? const []).map((s) => s.id),
+                subtopicStatus,
+              ) ==
+              ProgressStatus.mastered,
         )
         .length;
+
+    // The Learn/Quiz/Test quick-start actions all point at the same
+    // subtopic/unit: whichever was practiced most recently, or the
+    // course's very first one if nothing has been attempted yet. Improve
+    // needs no target -- it picks its own questions.
+    Unit? findUnit(String? unitId) {
+      if (unitId == null) return null;
+      for (final unit in units) {
+        if (unit.id == unitId) return unit;
+      }
+      return null;
+    }
+
+    final resumeSubtopic = recent.isNotEmpty
+        ? subtopicById[recent.first.key]
+        : null;
+    final fallbackUnit = units.isNotEmpty ? units.first : null;
+    final fallbackSubtopics = fallbackUnit != null
+        ? (subtopicsByUnit[fallbackUnit.id] ?? const <Subtopic>[])
+        : const <Subtopic>[];
+    final targetSubtopic =
+        resumeSubtopic ??
+        (fallbackSubtopics.isNotEmpty ? fallbackSubtopics.first : null);
+    final targetUnit = findUnit(targetSubtopic?.unitId) ?? fallbackUnit;
+    final targetUnitCode = targetSubtopic != null
+        ? unitCodeById[targetSubtopic.unitId]
+        : null;
+    final lessonId = targetSubtopic != null
+        ? lessonIdFor(
+            courseCode: course.code,
+            subtopicCode: targetSubtopic.code,
+          )
+        : null;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(28),
@@ -634,9 +766,8 @@ class _HomePanel extends ConsumerWidget {
         children: [
           Text(
             '${_greeting()}${displayName != null ? ', $displayName' : ''}',
-            style: Theme.of(
-              context,
-            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+            style: Theme.of(context).textTheme.headlineSmall
+                ?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 4),
           Text(
@@ -656,9 +787,71 @@ class _HomePanel extends ConsumerWidget {
             )
           else
             _EmptyHomeCard(signedIn: user != null),
-          const SizedBox(height: 16),
+          if (user != null) ...[
+            const SizedBox(height: 20),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                SizedBox(
+                  width: 150,
+                  child: _ActionCard(
+                    icon: Icons.menu_book_outlined,
+                    label: 'Learn',
+                    onTap: (lessonId != null && targetSubtopic != null)
+                        ? () => onOpenLesson(lessonId, targetSubtopic.title)
+                        : null,
+                  ),
+                ),
+                SizedBox(
+                  width: 150,
+                  child: _ActionCard(
+                    icon: Icons.edit_note_outlined,
+                    label: 'Quiz',
+                    onTap: (targetSubtopic != null && targetUnitCode != null)
+                        ? () => onResume(
+                            targetUnitCode,
+                            targetSubtopic.code,
+                            targetSubtopic.title,
+                          )
+                        : null,
+                  ),
+                ),
+                SizedBox(
+                  width: 150,
+                  child: _ActionCard(
+                    icon: Icons.trending_up_outlined,
+                    label: 'Improve',
+                    onTap: onOpenImprove,
+                  ),
+                ),
+                SizedBox(
+                  width: 150,
+                  child: _ActionCard(
+                    icon: Icons.fact_check_outlined,
+                    label: 'Test',
+                    onTap: targetUnit != null
+                        ? () =>
+                              onStartUnitTest(targetUnit.code, targetUnit.title)
+                        : null,
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 20),
           if (user != null && units.isNotEmpty)
             _MedalSummaryRow(mastered: mastered, total: units.length),
+          const SizedBox(height: 20),
+          if (units.isNotEmpty)
+            _UnitProgressList(
+              units: units,
+              subtopicsByUnit: subtopicsByUnit,
+              subtopicStatus: subtopicStatus,
+              subtopicScorePercent: subtopicScorePercent,
+              subtopicMedal: subtopicMedal,
+              onTapUnit: onSelectUnit,
+            ),
           const SizedBox(height: 16),
           const _CommunityCard(),
         ],
@@ -674,6 +867,176 @@ class _HomePanel extends ConsumerWidget {
   }
 }
 
+/// One of the four quick-start actions on the dashboard. `onTap == null`
+/// (no lesson for this subtopic yet, or an edge case with no curriculum
+/// content loaded) renders as a plainly disabled tile rather than hiding
+/// itself, so the set of four stays visually consistent either way.
+class _ActionCard extends StatelessWidget {
+  const _ActionCard({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final enabled = onTap != null;
+    return Material(
+      color: scheme.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 26,
+                color: enabled ? scheme.primary : scheme.outline,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: enabled ? null : scheme.outline,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One row per unit, ordered same as the sidebar, each showing an
+/// aggregate progress bar/percent/medal and opening straight into that
+/// unit's own subtopic list on tap -- the same drill-down the sidebar's
+/// own unit links already use.
+class _UnitProgressList extends StatelessWidget {
+  const _UnitProgressList({
+    required this.units,
+    required this.subtopicsByUnit,
+    required this.subtopicStatus,
+    required this.subtopicScorePercent,
+    required this.subtopicMedal,
+    required this.onTapUnit,
+  });
+
+  final List<Unit> units;
+  final Map<String, List<Subtopic>> subtopicsByUnit;
+  final Map<String, ProgressStatus> subtopicStatus;
+  final Map<String, double> subtopicScorePercent;
+  final Map<String, String> subtopicMedal;
+  final void Function(String unitId) onTapUnit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Topics',
+          style: Theme.of(context).textTheme.titleMedium
+              ?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 10),
+        for (final unit in units) ...[
+          _UnitProgressRow(
+            unit: unit,
+            scorePercent: aggregateUnitScorePercent(
+              (subtopicsByUnit[unit.id] ?? const []).map((s) => s.id),
+              subtopicScorePercent,
+            ),
+            medal: aggregateUnitMedal(
+              (subtopicsByUnit[unit.id] ?? const []).map((s) => s.id),
+              subtopicMedal,
+            ),
+            onTap: () => onTapUnit(unit.id),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ],
+    );
+  }
+}
+
+class _UnitProgressRow extends StatelessWidget {
+  const _UnitProgressRow({
+    required this.unit,
+    required this.scorePercent,
+    required this.medal,
+    required this.onTap,
+  });
+
+  final Unit unit;
+  final double? scorePercent;
+  final String? medal;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final percent = scorePercent ?? 0;
+    return Material(
+      color: scheme.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      unit.title,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 6),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(999),
+                      child: LinearProgressIndicator(
+                        value: (percent / 100).clamp(0, 1),
+                        minHeight: 6,
+                        backgroundColor: scheme.surfaceContainerHighest,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 14),
+              MedalBadge(medal: medal, size: 20),
+              const SizedBox(width: 6),
+              Text(
+                '${percent.round()}%',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(Icons.chevron_right, color: scheme.outline),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ResumeCard extends StatelessWidget {
   const _ResumeCard({
     required this.subtopic,
@@ -685,7 +1048,8 @@ class _ResumeCard extends StatelessWidget {
   final Subtopic? subtopic;
   final SubtopicMastery mastery;
   final String? unitCode;
-  final void Function(String unitCode, String subtopicCode, String title) onContinue;
+  final void Function(String unitCode, String subtopicCode, String title)
+  onContinue;
 
   @override
   Widget build(BuildContext context) {
@@ -745,7 +1109,8 @@ class _ResumeCard extends StatelessWidget {
                 backgroundColor: scheme.onPrimary,
                 foregroundColor: scheme.primary,
               ),
-              onPressed: () => onContinue(unitCode, subtopic.code, subtopic.title),
+              onPressed: () =>
+                  onContinue(unitCode, subtopic.code, subtopic.title),
               child: const Text('Continue'),
             ),
           ),
@@ -841,9 +1206,8 @@ class _CommunityCard extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 'From Astro STEM Labs',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                style: Theme.of(context).textTheme.titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w700),
               ),
             ],
           ),
@@ -927,10 +1291,11 @@ class _UnitPanel extends StatelessWidget {
                       children: [
                         Text(
                           'Take a mock test',
-                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: scheme.primary,
-                          ),
+                          style: Theme.of(context).textTheme.titleSmall
+                              ?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: scheme.primary,
+                              ),
                         ),
                         const SizedBox(height: 2),
                         Text(

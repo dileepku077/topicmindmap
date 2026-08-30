@@ -1,13 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/practice_test_repository.dart';
+import '../models/improve_question.dart';
 import '../models/practice_question.dart';
 import 'auth_providers.dart';
 import 'curriculum_providers.dart';
 
-final practiceTestRepositoryProvider = Provider<PracticeTestRepository>((
-  ref,
-) {
+final practiceTestRepositoryProvider = Provider<PracticeTestRepository>((ref) {
   return PracticeTestRepository(ref.watch(supabaseClientProvider));
 });
 
@@ -59,4 +58,15 @@ final practiceQuestionsProvider =
             unitCode: subtopicRef.unitCode,
             subtopicCode: subtopicRef.subtopicCode,
           );
+    });
+
+/// A fresh batch of Improve questions for [courseCode] — a one-shot fetch,
+/// not a live stream, same as [practiceQuestionsProvider]; a new session is
+/// requested explicitly (see improve_page.dart) rather than silently
+/// re-shuffling mid-session.
+final improveQuestionsProvider =
+    FutureProvider.family<List<ImproveQuestion>, String>((ref, courseCode) {
+      return ref
+          .watch(practiceTestRepositoryProvider)
+          .fetchImproveQuestions(courseCode: courseCode);
     });
