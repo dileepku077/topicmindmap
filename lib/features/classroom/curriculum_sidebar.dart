@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../models/course.dart';
-import '../../models/progress_status.dart';
 import '../../models/subtopic.dart';
 import '../../models/unit.dart';
-import '../../state/progress_providers.dart';
 
 /// The left-hand unit/subtopic list shared by the classroom view and the
 /// mindmap view — same accordion (tap a unit, its subtopics expand in
@@ -28,8 +26,6 @@ class CurriculumSidebar extends StatelessWidget {
     required this.course,
     required this.units,
     required this.subtopicsByUnit,
-    required this.subtopicStatus,
-    required this.subtopicScorePercent,
     required this.isUnitExpanded,
     required this.onSelectUnit,
     required this.onSelectSubtopic,
@@ -44,15 +40,6 @@ class CurriculumSidebar extends StatelessWidget {
   final Course course;
   final List<Unit> units;
   final Map<String, List<Subtopic>> subtopicsByUnit;
-  final Map<String, ProgressStatus> subtopicStatus;
-
-  /// Best-score percent per subtopic — same map every caller already
-  /// computes for its own main content. Aggregated per unit here (see
-  /// `aggregateUnitScorePercent`) to drive the thin progress bar under
-  /// each unit row, the same "visible progress" idea the classroom
-  /// dashboard's own resume card already uses, just extended to the nav
-  /// list.
-  final Map<String, double> subtopicScorePercent;
   final bool Function(String unitId) isUnitExpanded;
   final void Function(String unitId) onSelectUnit;
   final void Function(Subtopic subtopic) onSelectSubtopic;
@@ -185,15 +172,6 @@ class CurriculumSidebar extends StatelessWidget {
                   _UnitNavRow(
                     unit: unit,
                     subtopics: subtopicsByUnit[unit.id] ?? const [],
-                    subtopicStatus: subtopicStatus,
-                    status: aggregateUnitStatus(
-                      (subtopicsByUnit[unit.id] ?? const []).map((s) => s.id),
-                      subtopicStatus,
-                    ),
-                    scorePercent: aggregateUnitScorePercent(
-                      (subtopicsByUnit[unit.id] ?? const []).map((s) => s.id),
-                      subtopicScorePercent,
-                    ),
                     expanded: isUnitExpanded(unit.id),
                     selectedSubtopicId: selectedSubtopicId,
                     onTap: () => onSelectUnit(unit.id),
@@ -277,9 +255,6 @@ class _UnitNavRow extends StatelessWidget {
   const _UnitNavRow({
     required this.unit,
     required this.subtopics,
-    required this.subtopicStatus,
-    required this.status,
-    required this.scorePercent,
     required this.expanded,
     required this.selectedSubtopicId,
     required this.onTap,
@@ -289,14 +264,6 @@ class _UnitNavRow extends StatelessWidget {
 
   final Unit unit;
   final List<Subtopic> subtopics;
-  final Map<String, ProgressStatus> subtopicStatus;
-  final ProgressStatus status;
-
-  /// This unit's overall completion percent (0-100) — see
-  /// `aggregateUnitScorePercent` — or null until at least one of its
-  /// subtopics has been attempted, in which case no progress bar shows at
-  /// all rather than a misleading empty one.
-  final double? scorePercent;
   final bool expanded;
   final String? selectedSubtopicId;
   final VoidCallback onTap;
@@ -309,13 +276,17 @@ class _UnitNavRow extends StatelessWidget {
     final subtopicCount = subtopics.length;
     final sortedSubtopics = [...subtopics]
       ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+    // Plain, not status-colored -- the dashboard's own per-unit progress
+    // list already shows completion; this nav list stays a simple way to
+    // jump to a topic, same treatment as the Home/Progress Report rows
+    // above it.
+    final iconColor = expanded ? scheme.primary : scheme.onSurfaceVariant;
 
     if (collapsed) {
-      // No room for the title, progress bar, or an expanded subtopic list
-      // at rail width — just a tappable status icon. Tapping still drives
-      // the caller's normal select/expand logic (it just isn't visible
-      // here), so switching back to full width picks up right where the
-      // rail left off.
+      // No room for the title or an expanded subtopic list at rail width
+      // — just a tappable icon. Tapping still drives the caller's normal
+      // select/expand logic (it just isn't visible here), so switching
+      // back to full width picks up right where the rail left off.
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
         child: Material(
@@ -331,7 +302,7 @@ class _UnitNavRow extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 child: Center(
-                  child: Icon(status.icon, size: 18, color: status.color),
+                  child: Icon(Icons.topic_outlined, size: 18, color: iconColor),
                 ),
               ),
             ),
@@ -368,7 +339,7 @@ class _UnitNavRow extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    Icon(status.icon, size: 17, color: status.color),
+                    Icon(Icons.topic_outlined, size: 17, color: iconColor),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(
@@ -393,18 +364,6 @@ class _UnitNavRow extends StatelessWidget {
                             style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(fontSize: 14),
                           ),
-                          if (scorePercent != null) ...[
-                            const SizedBox(height: 5),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(999),
-                              child: LinearProgressIndicator(
-                                value: (scorePercent! / 100).clamp(0, 1),
-                                minHeight: 3,
-                                backgroundColor: scheme.surfaceContainerHighest,
-                                color: status.color,
-                              ),
-                            ),
-                          ],
                         ],
                       ),
                     ),
@@ -434,9 +393,6 @@ class _UnitNavRow extends StatelessWidget {
                         for (final subtopic in sortedSubtopics)
                           _SubtopicNavRow(
                             subtopic: subtopic,
-                            status:
-                                subtopicStatus[subtopic.id] ??
-                                ProgressStatus.notStarted,
                             selected: subtopic.id == selectedSubtopicId,
                             onTap: () => onTapSubtopic(subtopic),
                           ),
@@ -450,20 +406,19 @@ class _UnitNavRow extends StatelessWidget {
   }
 }
 
-/// One subtopic, nested under its expanded unit in the sidebar — compact
-/// compared to the main pane's own subtopic cards, since it only needs to
-/// support quick jumping straight to that subtopic, not carry a score
-/// badge.
+/// One subtopic, nested under its expanded unit in the sidebar — just a
+/// title to tap, no status icon or score: this list is for jumping to a
+/// topic quickly, not for reading progress (see the dashboard's own
+/// per-unit progress list, and the difficulty picker's per-tier medals,
+/// for that).
 class _SubtopicNavRow extends StatelessWidget {
   const _SubtopicNavRow({
     required this.subtopic,
-    required this.status,
     required this.selected,
     required this.onTap,
   });
 
   final Subtopic subtopic;
-  final ProgressStatus status;
   final bool selected;
   final VoidCallback onTap;
 
@@ -482,8 +437,6 @@ class _SubtopicNavRow extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
           child: Row(
             children: [
-              Icon(status.icon, size: 15, color: status.color),
-              const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   subtopic.title,
