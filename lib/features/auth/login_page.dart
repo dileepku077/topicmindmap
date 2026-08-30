@@ -330,10 +330,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                               controller: _nameController,
                               textCapitalization: TextCapitalization.words,
                               autofillHints: const [AutofillHints.name],
-                              decoration: _fieldDecoration(
-                                context,
-                                'Full name',
-                              ),
+                              decoration: _fieldDecoration(context, 'Name'),
                               validator: (value) =>
                                   (value == null || value.trim().isEmpty)
                                   ? 'Enter your name'
@@ -347,7 +344,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                   .map(
                                     (g) => DropdownMenuItem(
                                       value: g,
-                                      child: Text('Grade $g'),
+                                      child: Text('$g'),
                                     ),
                                   )
                                   .toList(),
