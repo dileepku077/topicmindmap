@@ -18,6 +18,7 @@ import '../../state/profile_providers.dart';
 import '../../state/progress_providers.dart';
 import '../admin/admin_page.dart';
 import '../auth/complete_profile_page.dart';
+import '../auth/reset_password_page.dart';
 import '../classroom/classroom_view.dart';
 import '../classroom/curriculum_sidebar.dart';
 import '../lesson/lesson_page.dart';
@@ -569,6 +570,15 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Takes priority over every other gate below, admin included -- a
+    // student who just clicked a "reset your password" email link should
+    // set the new one before doing anything else, not land straight back
+    // in the app on the recovery link's session. See
+    // PasswordRecoveryNotifier's doc comment for why this needs its own
+    // latched provider rather than reading the auth stream directly.
+    if (ref.watch(passwordRecoveryProvider)) {
+      return const ResetPasswordPage();
+    }
     // An admin's "Home" is the admin screen, not a course -- they aren't
     // a student, so the mindmap/classroom picker and every course-related
     // fetch below would just be noise for that account. Not gated behind

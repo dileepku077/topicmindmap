@@ -38,6 +38,18 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   /// email" screen; there's nothing left to submit until that happens.
   String? _pendingConfirmationEmail;
 
+  /// True while the "Forgot password?" flow (below the password field, sign
+  /// in mode only) is showing instead of the normal form -- same "swap the
+  /// whole form for a single-purpose view" pattern as
+  /// [_pendingConfirmationEmail]/[_ConfirmationPendingView].
+  bool _isForgotPassword = false;
+  bool _isSendingReset = false;
+
+  /// Set once resetPasswordForEmail() succeeds -- [_ForgotPasswordView]
+  /// switches from the email-entry step to a "check your email"
+  /// confirmation once this is true.
+  bool _resetLinkSent = false;
+
   /// Sign-up only — which grade's courses this student should see. Sent as
   /// signUp() user metadata so handle_new_user() (schema_practice.sql) can
   /// set profiles.grade in the same insert that creates the profile row;
@@ -230,6 +242,35 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     }
   }
 
+  /// Supabase's own recovery flow (see reset_password_page.dart for the
+  /// other half of it): this only ever sends an email -- it never confirms
+  /// whether that address actually has an account, the same
+  /// doesn't-leak-which-emails-exist behavior signUp() has.
+  Future<void> _sendPasswordReset() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty || !email.contains('@')) {
+      setState(() => _errorMessage = 'Enter a valid email');
+      return;
+    }
+    setState(() {
+      _isSendingReset = true;
+      _errorMessage = null;
+    });
+    try {
+      await ref
+          .read(supabaseClientProvider)
+          .auth
+          .resetPasswordForEmail(email, redirectTo: _redirectOrigin);
+      if (!mounted) return;
+      setState(() => _resetLinkSent = true);
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      setState(() => _errorMessage = e.message);
+    } finally {
+      if (mounted) setState(() => _isSendingReset = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -282,6 +323,20 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       onBackToSignIn: () => setState(() {
                         _pendingConfirmationEmail = null;
                         _isSignUp = false;
+                      }),
+                    )
+                  else if (_isForgotPassword)
+                    _ForgotPasswordView(
+                      emailController: _emailController,
+                      isSending: _isSendingReset,
+                      linkSent: _resetLinkSent,
+                      errorMessage: _errorMessage,
+                      fieldDecoration: _fieldDecoration,
+                      onSendReset: _sendPasswordReset,
+                      onBackToSignIn: () => setState(() {
+                        _isForgotPassword = false;
+                        _resetLinkSent = false;
+                        _errorMessage = null;
                       }),
                     )
                   else
@@ -393,6 +448,23 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                 : null,
                             onFieldSubmitted: (_) => _submit(),
                           ),
+                          if (!_isSignUp) ...[
+                            const SizedBox(height: 4),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton(
+                                onPressed: _isSubmitting
+                                    ? null
+                                    : () => setState(
+                                        () => _isForgotPassword = true,
+                                      ),
+                                style: TextButton.styleFrom(
+                                  padding: EdgeInsets.zero,
+                                ),
+                                child: const Text('Forgot password?'),
+                              ),
+                            ),
+                          ],
                           if (_errorMessage != null) ...[
                             const SizedBox(height: 12),
                             Text(
@@ -539,6 +611,117 @@ class _TermsNotice extends StatelessWidget {
         ],
       ),
       textAlign: TextAlign.center,
+    );
+  }
+}
+
+/// Replaces the sign-in form with a self-serve password reset: enter your
+/// email, get a link, click it and land on reset_password_page.dart (via
+/// mindmap_page.dart's gate on passwordRecoveryProvider) to set a new one.
+/// Two steps in one widget, like [_ConfirmationPendingView] -- the email
+/// field before sending, a "check your email" message after.
+class _ForgotPasswordView extends StatelessWidget {
+  const _ForgotPasswordView({
+    required this.emailController,
+    required this.isSending,
+    required this.linkSent,
+    required this.errorMessage,
+    required this.fieldDecoration,
+    required this.onSendReset,
+    required this.onBackToSignIn,
+  });
+
+  final TextEditingController emailController;
+  final bool isSending;
+  final bool linkSent;
+  final String? errorMessage;
+  final InputDecoration Function(BuildContext, String) fieldDecoration;
+  final VoidCallback onSendReset;
+  final VoidCallback onBackToSignIn;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    if (linkSent) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Icon(
+            Icons.mark_email_unread_outlined,
+            size: 56,
+            color: scheme.primary,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Check your email',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleLarge
+                ?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'If ${emailController.text.trim()} has an account, we sent a '
+            'link to reset the password. Open it, then come back here.',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 20),
+          TextButton(
+            onPressed: onBackToSignIn,
+            child: const Text('Back to sign in'),
+          ),
+        ],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Reset your password',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.titleLarge
+              ?.copyWith(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          "Enter your email and we'll send you a link to reset your "
+          'password.',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        const SizedBox(height: 20),
+        TextField(
+          controller: emailController,
+          keyboardType: TextInputType.emailAddress,
+          autofillHints: const [AutofillHints.email],
+          decoration: fieldDecoration(context, 'Email'),
+          onSubmitted: (_) => onSendReset(),
+        ),
+        if (errorMessage != null) ...[
+          const SizedBox(height: 12),
+          Text(
+            errorMessage!,
+            style: TextStyle(color: scheme.error),
+            textAlign: TextAlign.center,
+          ),
+        ],
+        const SizedBox(height: 20),
+        FilledButton(
+          onPressed: isSending ? null : onSendReset,
+          child: isSending
+              ? const SizedBox(
+                  height: 18,
+                  width: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Send reset link'),
+        ),
+        const SizedBox(height: 8),
+        TextButton(
+          onPressed: onBackToSignIn,
+          child: const Text('Back to sign in'),
+        ),
+      ],
     );
   }
 }
