@@ -17,7 +17,7 @@ import '../../state/curriculum_providers.dart';
 import '../../state/profile_providers.dart';
 import '../../state/progress_providers.dart';
 import '../admin/admin_page.dart';
-import '../auth/choose_grade_page.dart';
+import '../auth/complete_profile_page.dart';
 import '../classroom/classroom_view.dart';
 import '../classroom/curriculum_sidebar.dart';
 import '../lesson/lesson_page.dart';
@@ -581,13 +581,25 @@ class _MindmapPageState extends ConsumerState<MindmapPage> {
       return const AdminPage();
     }
     // Google sign-ins never pass through the email/password form's grade
-    // dropdown (login_page.dart), so a first-time Google student can reach
-    // here with no grade set. Ask once, in place of the usual content, the
-    // same way an admin sees AdminPage instead -- ChooseGradePage
-    // invalidates profileProvider itself once picked, so this just
-    // naturally falls through afterward.
-    if (profile != null && !profile.isAdmin && profile.grade == null) {
-      return const ChooseGradePage();
+    // and age fields (login_page.dart), so a first-time Google student can
+    // reach here with either unset. Age is only ever asked for a Google
+    // account specifically (isGoogleAccount) -- an existing email/password
+    // account predating schema_age_check.sql also has age == null, but it
+    // already ran the gate at signup once, so there's no reason to
+    // retroactively interrupt it here too. Ask whatever's still missing, in
+    // place of the usual content, same as an admin seeing AdminPage instead
+    // -- CompleteProfilePage invalidates profileProvider itself as each
+    // question is answered, so this just naturally falls through once both
+    // are set.
+    final needsGrade =
+        profile != null && !profile.isAdmin && profile.grade == null;
+    final needsAge =
+        profile != null &&
+        !profile.isAdmin &&
+        profile.age == null &&
+        isGoogleAccount(ref.watch(currentUserProvider));
+    if (needsGrade || needsAge) {
+      return CompleteProfilePage(needsGrade: needsGrade, needsAge: needsAge);
     }
 
     final coursesAsync = ref.watch(coursesProvider);

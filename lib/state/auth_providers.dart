@@ -14,3 +14,9 @@ final currentUserProvider = Provider<User?>((ref) {
   ref.watch(authStateChangesProvider);
   return ref.watch(supabaseClientProvider).auth.currentUser;
 });
+
+/// Whether [user] signed up via "Continue with Google" rather than
+/// email/password -- used to gate the age question in
+/// complete_profile_page.dart, since only the Google path has no signup
+/// form step to collect it during the OAuth redirect (see login_page.dart).
+bool isGoogleAccount(User? user) => user?.appMetadata['provider'] == 'google';
