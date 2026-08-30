@@ -285,7 +285,6 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
         _selectSubtopic(subtopic);
         afterSelect?.call();
       },
-      onOpenProgressReport: () => _openProgressReport(afterSelect: afterSelect),
       collapsed: collapsed,
       onToggleCollapsed: onToggleCollapsed,
     );
@@ -453,6 +452,7 @@ class _ClassroomViewState extends ConsumerState<ClassroomView> {
         onOpenLesson: _openLesson,
         onStartUnitTest: _openUnitTest,
         onOpenImprove: _openImprove,
+        onOpenProgressReport: () => _openProgressReport(),
         onSelectUnit: _selectUnit,
       );
     }
@@ -582,11 +582,11 @@ class _LeafPane extends StatelessWidget {
 }
 
 /// The dashboard shown before a unit is picked — a personalized greeting,
-/// four quick-start actions (Learn/Quiz/Improve/Test, all targeting
-/// whichever subtopic was practiced most recently, or the course's first
-/// if nothing has been attempted yet), and a per-unit progress list so the
-/// whole course's standing is visible without drilling into each unit
-/// first.
+/// five quick-start actions (Learn/Quiz/Improve/Test all target whichever
+/// subtopic was practiced most recently, or the course's first if nothing
+/// has been attempted yet; Progress Report needs no target), and a
+/// per-unit progress list so the whole course's standing is visible
+/// without drilling into each unit first.
 class _HomePanel extends ConsumerWidget {
   const _HomePanel({
     required this.course,
@@ -599,6 +599,7 @@ class _HomePanel extends ConsumerWidget {
     required this.onOpenLesson,
     required this.onStartUnitTest,
     required this.onOpenImprove,
+    required this.onOpenProgressReport,
     required this.onSelectUnit,
   });
 
@@ -615,6 +616,7 @@ class _HomePanel extends ConsumerWidget {
   final void Function(String lessonId, String lessonTitle) onOpenLesson;
   final void Function(String unitCode, String unitTitle) onStartUnitTest;
   final VoidCallback onOpenImprove;
+  final VoidCallback onOpenProgressReport;
   final void Function(String unitId) onSelectUnit;
 
   @override
@@ -748,6 +750,14 @@ class _HomePanel extends ConsumerWidget {
                         : null,
                   ),
                 ),
+                SizedBox(
+                  width: 150,
+                  child: _ActionCard(
+                    icon: Icons.bar_chart_outlined,
+                    label: 'Progress Report',
+                    onTap: onOpenProgressReport,
+                  ),
+                ),
               ],
             ),
           ],
@@ -779,10 +789,10 @@ class _HomePanel extends ConsumerWidget {
   }
 }
 
-/// One of the four quick-start actions on the dashboard. `onTap == null`
+/// One of the five quick-start actions on the dashboard. `onTap == null`
 /// (no lesson for this subtopic yet, or an edge case with no curriculum
 /// content loaded) renders as a plainly disabled tile rather than hiding
-/// itself, so the set of four stays visually consistent either way.
+/// itself, so the row stays visually consistent either way.
 class _ActionCard extends StatelessWidget {
   const _ActionCard({
     required this.icon,

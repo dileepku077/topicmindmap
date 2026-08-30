@@ -28,7 +28,7 @@ class CurriculumSidebar extends StatelessWidget {
     required this.isUnitExpanded,
     required this.onSelectUnit,
     required this.onSelectSubtopic,
-    required this.onOpenProgressReport,
+    this.onOpenProgressReport,
     this.selectedSubtopicId,
     this.onSelectHome,
     this.homeSelected = false,
@@ -43,14 +43,16 @@ class CurriculumSidebar extends StatelessWidget {
   final void Function(String unitId) onSelectUnit;
   final void Function(Subtopic subtopic) onSelectSubtopic;
 
-  /// Opens the Progress Report bar chart — the caller decides how
-  /// ("embedded" in place, keeping this sidebar on screen, in both
-  /// callers today; see mindmap_page.dart / classroom_view.dart), not
-  /// this widget. Profile & Preferences used to have a tile here too;
-  /// it now lives in the account menu at the top right of the app's
-  /// AppBar instead (see mindmap_page.dart), reachable from anywhere
-  /// regardless of which view is showing.
-  final VoidCallback onOpenProgressReport;
+  /// Opens the Progress Report bar chart, embedded in place (the caller
+  /// decides how; see mindmap_page.dart). Null hides the row entirely --
+  /// the classroom view no longer passes this, since Progress Report
+  /// lives in its own dashboard's action row now (_HomePanel); the
+  /// mindmap view still does, having no dashboard of its own to put it
+  /// in instead. Profile & Preferences and "How to use this app" used to
+  /// have tiles here too; both now live in the account menu/AppBar at
+  /// the top right instead (see mindmap_page.dart), reachable from
+  /// anywhere regardless of which view is showing.
+  final VoidCallback? onOpenProgressReport;
   final String? selectedSubtopicId;
 
   /// Null hides the "Home" row entirely — the mindmap view has no
@@ -139,13 +141,14 @@ class CurriculumSidebar extends StatelessWidget {
                     onTap: onSelectHome,
                     collapsed: collapsed,
                   ),
-                _NavRow(
-                  icon: Icons.bar_chart_outlined,
-                  label: 'Progress Report',
-                  selected: false,
-                  onTap: onOpenProgressReport,
-                  collapsed: collapsed,
-                ),
+                if (onOpenProgressReport != null)
+                  _NavRow(
+                    icon: Icons.bar_chart_outlined,
+                    label: 'Progress Report',
+                    selected: false,
+                    onTap: onOpenProgressReport!,
+                    collapsed: collapsed,
+                  ),
                 if (!collapsed)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 20, 16, 6),
@@ -270,8 +273,7 @@ class _UnitNavRow extends StatelessWidget {
       ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
     // Plain, not status-colored -- the dashboard's own per-unit progress
     // list already shows completion; this nav list stays a simple way to
-    // jump to a topic, same treatment as the Home/Progress Report rows
-    // above it.
+    // jump to a topic, same treatment as the Home row above it.
     final iconColor = expanded ? scheme.primary : scheme.onSurfaceVariant;
 
     if (collapsed) {
