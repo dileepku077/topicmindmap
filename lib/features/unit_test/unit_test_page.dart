@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/brand_badge.dart';
+import '../../models/progress_status.dart';
 import '../../models/subtopic.dart';
 import '../../models/unit_test.dart';
 import '../../state/curriculum_providers.dart';
@@ -80,7 +81,8 @@ class _UnitTestPageState extends ConsumerState<UnitTestPage> {
         _paper = paper;
         _answers.clear();
         for (final item in paper) {
-          if (item.chosenIndex != null) _answers[item.itemNo] = item.chosenIndex!;
+          if (item.chosenIndex != null)
+            _answers[item.itemNo] = item.chosenIndex!;
         }
         // A resumed paper opens at the first unanswered question rather
         // than at the top, so coming back from a dropped connection
@@ -107,11 +109,17 @@ class _UnitTestPageState extends ConsumerState<UnitTestPage> {
     try {
       await ref
           .read(unitTestRepositoryProvider)
-          .answer(testId: _start!.testId, itemNo: item.itemNo, chosenIndex: chosen);
+          .answer(
+            testId: _start!.testId,
+            itemNo: item.itemNo,
+            chosenIndex: chosen,
+          );
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('That answer did not save. Tap it again.')),
+          const SnackBar(
+            content: Text('That answer did not save. Tap it again.'),
+          ),
         );
       }
     }
@@ -372,7 +380,10 @@ class _PaperView extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 20),
-        SelectableText(item.prompt, style: Theme.of(context).textTheme.titleLarge),
+        SelectableText(
+          item.prompt,
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
         const SizedBox(height: 20),
         // Nothing here says whether the choice was right. A picked option
         // just looks picked, and stays changeable until the paper is
@@ -435,7 +446,9 @@ class _TestOptionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Material(
-      color: picked ? scheme.primary.withValues(alpha: 0.08) : scheme.surfaceContainerHigh,
+      color: picked
+          ? scheme.primary.withValues(alpha: 0.08)
+          : scheme.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: enabled ? onTap : null,
@@ -452,12 +465,16 @@ class _TestOptionTile extends StatelessWidget {
           child: Row(
             children: [
               Icon(
-                picked ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                picked
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked,
                 size: 18,
                 color: picked ? scheme.primary : scheme.outlineVariant,
               ),
               const SizedBox(width: 12),
-              Expanded(child: SelectableText(text, onTap: enabled ? onTap : null)),
+              Expanded(
+                child: SelectableText(text, onTap: enabled ? onTap : null),
+              ),
             ],
           ),
         ),
@@ -465,14 +482,6 @@ class _TestOptionTile extends StatelessWidget {
     );
   }
 }
-
-Color _difficultyColor(BuildContext context, String difficulty) => switch (difficulty) {
-  'Easy' => Colors.green,
-  'Medium' => const Color(0xFFD9A404),
-  'Challenge' => const Color(0xFFE8590C),
-  'Hard' || 'Advanced' => Theme.of(context).colorScheme.error,
-  _ => Theme.of(context).colorScheme.outline,
-};
 
 class _ResultsView extends ConsumerWidget {
   const _ResultsView({
@@ -505,7 +514,8 @@ class _ResultsView extends ConsumerWidget {
     if (unit == null) return const {};
     final subtopics = ref.watch(subtopicsProvider).value ?? const <Subtopic>[];
     return {
-      for (final s in subtopics.where((s) => s.unitId == unit.id)) s.code: s.title,
+      for (final s in subtopics.where((s) => s.unitId == unit.id))
+        s.code: s.title,
     };
   }
 
@@ -523,14 +533,13 @@ class _ResultsView extends ConsumerWidget {
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.displayMedium?.copyWith(
             fontWeight: FontWeight.bold,
-            color: _difficultyColor(
-              context,
-              score.scorePercent >= 90
-                  ? 'Easy'
-                  : score.scorePercent >= 70
-                  ? 'Medium'
-                  : 'Challenge',
-            ),
+            // This is the student's own score, not a question's
+            // difficulty -- colored with the app's one progress palette
+            // (ProgressStatus) rather than a separate scale, same
+            // reasoning as everywhere else progress shows up.
+            color: ProgressStatus.fromScorePercent(
+              score.scorePercent.toDouble(),
+            ).color,
           ),
         ),
         const SizedBox(height: 4),
@@ -549,7 +558,10 @@ class _ResultsView extends ConsumerWidget {
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 28),
-        Text('Where the marks went', style: Theme.of(context).textTheme.titleMedium),
+        Text(
+          'Where the marks went',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
         const SizedBox(height: 12),
         for (final row in breakdown)
           Padding(
@@ -557,7 +569,10 @@ class _ResultsView extends ConsumerWidget {
             child: _BreakdownRow(
               title: titles[row.subtopicCode] ?? row.subtopicCode,
               row: row,
-              lessonId: lessonIdFor(courseCode: courseCode, subtopicCode: row.subtopicCode),
+              lessonId: lessonIdFor(
+                courseCode: courseCode,
+                subtopicCode: row.subtopicCode,
+              ),
             ),
           ),
         if (review.isNotEmpty) ...[
@@ -567,14 +582,19 @@ class _ResultsView extends ConsumerWidget {
             child: TextButton.icon(
               onPressed: onToggleReview,
               icon: Icon(showReview ? Icons.expand_less : Icons.expand_more),
-              label: Text(showReview ? 'Hide the questions' : 'Go through the questions'),
+              label: Text(
+                showReview ? 'Hide the questions' : 'Go through the questions',
+              ),
             ),
           ),
           if (showReview)
             for (final row in review)
               Padding(
                 padding: const EdgeInsets.only(bottom: 10),
-                child: _ReviewRow(row: row, subtopicTitle: titles[row.subtopicCode]),
+                child: _ReviewRow(
+                  row: row,
+                  subtopicTitle: titles[row.subtopicCode],
+                ),
               ),
         ],
         const SizedBox(height: 20),
@@ -594,7 +614,11 @@ class _ResultsView extends ConsumerWidget {
 }
 
 class _BreakdownRow extends StatelessWidget {
-  const _BreakdownRow({required this.title, required this.row, required this.lessonId});
+  const _BreakdownRow({
+    required this.title,
+    required this.row,
+    required this.lessonId,
+  });
 
   final String title;
   final UnitTestBreakdown row;
@@ -624,7 +648,10 @@ class _BreakdownRow extends StatelessWidget {
             child: Text(
               '${row.percent}%',
               textAlign: TextAlign.right,
-              style: TextStyle(fontWeight: FontWeight.w700, color: scheme.onSurfaceVariant),
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: scheme.onSurfaceVariant,
+              ),
             ),
           ),
           if (lessonId != null)
@@ -680,7 +707,10 @@ class _ReviewRow extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          SelectableText(row.prompt, style: Theme.of(context).textTheme.bodyMedium),
+          SelectableText(
+            row.prompt,
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
           if (row.chosenText != null) ...[
             const SizedBox(height: 6),
             Text(

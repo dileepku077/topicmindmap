@@ -9,6 +9,7 @@ import '../../state/auth_providers.dart';
 import '../../state/curriculum_providers.dart';
 import '../../state/practice_test_providers.dart';
 import '../../state/progress_providers.dart';
+import '../practice_test/practice_test_page.dart' show tierRank;
 
 /// A targeted drill built from a student's own repeated mistakes, not a
 /// chosen subtopic -- see `improve_questions` in schema_improve.sql, which
@@ -376,16 +377,36 @@ class _ImproveOptionTile extends StatelessWidget {
   }
 }
 
-/// Same color scale as practice_test_page.dart's private `_tierColor`,
-/// duplicated for the same reason as [_ImproveOptionTile] above.
-Color _improveTierColor(BuildContext context, String difficulty) =>
-    switch (difficulty) {
-      'Easy' => Colors.green,
-      'Medium' => const Color(0xFFD9A404),
-      'Challenge' => const Color(0xFFE8590C),
-      'Hard' || 'Advanced' => Theme.of(context).colorScheme.error,
-      _ => Theme.of(context).colorScheme.outline,
-    };
+/// A row of filled/outline stars showing how hard a tier is, out of the
+/// hardest this app offers -- not a color, since color is reserved for a
+/// student's own progress (green specifically always means "knows this
+/// well"). Reuses [tierRank] from practice_test_page.dart, but duplicates
+/// the widget itself for the same reason as [_ImproveOptionTile] above.
+class _ImproveTierLevelStars extends StatelessWidget {
+  const _ImproveTierLevelStars({required this.difficulty});
+
+  final String difficulty;
+
+  static const _maxRank = 4;
+  static const _size = 10.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final rank = tierRank(difficulty);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 1; i <= _maxRank; i++)
+          Icon(
+            i <= rank ? Icons.star : Icons.star_outline,
+            size: _size,
+            color: i <= rank ? scheme.onSurfaceVariant : scheme.outlineVariant,
+          ),
+      ],
+    );
+  }
+}
 
 class _ImproveDifficultyChip extends StatelessWidget {
   const _ImproveDifficultyChip({required this.difficulty});
@@ -394,20 +415,27 @@ class _ImproveDifficultyChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = _improveTierColor(context, difficulty);
+    final scheme = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
+        color: scheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(
-        difficulty,
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.w700,
-          fontSize: 11,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            difficulty,
+            style: TextStyle(
+              color: scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+              fontSize: 11,
+            ),
+          ),
+          const SizedBox(width: 5),
+          _ImproveTierLevelStars(difficulty: difficulty),
+        ],
       ),
     );
   }

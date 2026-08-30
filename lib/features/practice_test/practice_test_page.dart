@@ -524,21 +524,54 @@ class _OptionTile extends StatelessWidget {
   }
 }
 
-/// Shared by [_DifficultyChip] (in-quiz badge) and [_TierTile] (picker
-/// tile) so a tier reads as the same color in both places.
-Color _tierColor(BuildContext context, String difficulty) =>
-    switch (difficulty) {
-      'Easy' => Colors.green,
-      'Medium' => const Color(0xFFD9A404),
-      // Challenge/Advanced are MPM2D's own two tiers above Medium (see
-      // schema_difficulty_tiers.sql); Hard is still MCR3U/MHF4U's single top
-      // tier. Advanced and Hard share a color since neither ever appears
-      // alongside the other in the same subtopic — each is just "the hardest
-      // tier this course has."
-      'Challenge' => const Color(0xFFE8590C),
-      'Hard' || 'Advanced' => Theme.of(context).colorScheme.error,
-      _ => Theme.of(context).colorScheme.outline,
-    };
+/// How many tiers separate [difficulty] from the easiest one its course
+/// offers, 1-4 -- shown as a star rating (see [_TierLevelStars]) instead
+/// of a color. Color is reserved for a student's own progress
+/// (ProgressStatus's traffic-signal palette; green specifically always
+/// means "knows this well"), so it was never really available to also
+/// mean "how hard is this question" without the two meanings colliding —
+/// Easy's old green looked identical to "mastered."
+///
+/// Hard and Advanced share the top rank: each is a different course's own
+/// single hardest tier (see schema_difficulty_tiers.sql) and the two
+/// never appear together in the same subtopic, so both reading as "the
+/// hardest this topic gets" is correct either way.
+int tierRank(String difficulty) => switch (difficulty) {
+  'Easy' => 1,
+  'Medium' => 2,
+  'Challenge' => 3,
+  'Hard' || 'Advanced' => 4,
+  _ => 1,
+};
+
+const _maxTierRank = 4;
+
+/// [tierRank] filled stars out of [_maxTierRank], the rest outlined --
+/// shared by [_DifficultyChip] (in-quiz badge) and [_TierTile] (picker
+/// tile) so a tier reads the same way in both places.
+class _TierLevelStars extends StatelessWidget {
+  const _TierLevelStars({required this.difficulty, this.size = 13});
+
+  final String difficulty;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final rank = tierRank(difficulty);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 1; i <= _maxTierRank; i++)
+          Icon(
+            i <= rank ? Icons.star : Icons.star_outline,
+            size: size,
+            color: i <= rank ? scheme.onSurfaceVariant : scheme.outlineVariant,
+          ),
+      ],
+    );
+  }
+}
 
 class _DifficultyChip extends StatelessWidget {
   const _DifficultyChip({required this.difficulty});
@@ -547,20 +580,27 @@ class _DifficultyChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = _tierColor(context, difficulty);
+    final scheme = Theme.of(context).colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
+        color: scheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(
-        difficulty,
-        style: TextStyle(
-          color: color,
-          fontWeight: FontWeight.w700,
-          fontSize: 11,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            difficulty,
+            style: TextStyle(
+              color: scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+              fontSize: 11,
+            ),
+          ),
+          const SizedBox(width: 5),
+          _TierLevelStars(difficulty: difficulty, size: 10),
+        ],
       ),
     );
   }
@@ -805,7 +845,6 @@ class _TierTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final tierColor = _tierColor(context, tier);
     return Material(
       color: scheme.surfaceContainerHigh,
       borderRadius: BorderRadius.circular(12),
@@ -816,21 +855,11 @@ class _TierTile extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: tierColor.withValues(alpha: 0.35),
-              width: 1.5,
-            ),
+            border: Border.all(color: scheme.outlineVariant, width: 1.5),
           ),
           child: Row(
             children: [
-              Container(
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(
-                  color: tierColor,
-                  shape: BoxShape.circle,
-                ),
-              ),
+              _TierLevelStars(difficulty: tier, size: 16),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
