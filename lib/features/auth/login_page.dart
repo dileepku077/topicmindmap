@@ -155,20 +155,26 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         await client.auth.signInWithPassword(email: email, password: password);
       }
       if (!mounted) return;
-      // A brand-new sign-up's profile row is always fresh (has_seen_intro
-      // defaults false), and an existing account that predates this
-      // feature reads false the same way — either way, first sign-in
-      // after this shipped goes to the tour once. Admins skip it: they're
-      // routed straight to the admin screen anyway (see mindmap_page.dart)
-      // and have no student-facing features to be walked through.
-      final userId = client.auth.currentUser?.id;
-      final profile = userId == null
-          ? null
-          : await ref.read(profileRepositoryProvider).fetchProfile(userId);
-      if (!mounted) return;
-      final showIntro =
-          profile != null && !profile.isAdmin && !profile.hasSeenIntro;
-      context.go(showIntro ? '/welcome' : '/');
+      // Only a fresh registration goes to the tour -- gated on _isSignUp
+      // itself, not has_seen_intro, so a returning student signing in
+      // normally is never sent there just because that flag happens to
+      // still be false on their account (it used to check the flag on
+      // every sign-in, which meant any account that reached false for any
+      // reason -- not only a brand-new one -- got routed to the tour on
+      // its next ordinary sign-in too). Admins skip it even on their own
+      // sign-up: they're routed straight to the admin screen anyway (see
+      // mindmap_page.dart) and have no student-facing features to be
+      // walked through.
+      if (_isSignUp) {
+        final userId = client.auth.currentUser?.id;
+        final profile = userId == null
+            ? null
+            : await ref.read(profileRepositoryProvider).fetchProfile(userId);
+        if (!mounted) return;
+        context.go(profile != null && !profile.isAdmin ? '/welcome' : '/');
+      } else {
+        context.go('/');
+      }
     } on AuthException catch (e) {
       final unconfirmed = !_isSignUp && _looksLikeUnconfirmedEmail(e);
       setState(() {
