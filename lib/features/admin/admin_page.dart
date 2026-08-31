@@ -8,29 +8,35 @@ import '../../models/profile.dart';
 import '../../state/admin_providers.dart';
 import '../../state/auth_providers.dart';
 import '../../state/profile_providers.dart';
+import 'admin_question_editor.dart';
 
-/// Student account management for admins — grade, subscription tier,
-/// password, and account deletion — the UI half of
-/// supabase/schema_admin.sql. Every action here calls a `security
-/// definer` RPC that re-checks admin access itself; this page's own
-/// gate (below) is a convenience for everyone else, not the real
-/// security boundary.
-class AdminPage extends ConsumerWidget {
+enum _AdminSection { students, questions }
+
+/// Student account management, and the question-bank editor, for admins —
+/// the UI half of supabase/schema_admin.sql and
+/// supabase/schema_admin_questions.sql. Every action either section takes
+/// calls a `security definer` RPC that re-checks admin access itself; this
+/// page's own gate (below) is a convenience for everyone else, not the
+/// real security boundary.
+class AdminPage extends ConsumerStatefulWidget {
   const AdminPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AdminPage> createState() => _AdminPageState();
+}
+
+class _AdminPageState extends ConsumerState<AdminPage> {
+  _AdminSection _section = _AdminSection.students;
+
+  @override
+  Widget build(BuildContext context) {
     final profileAsync = ref.watch(profileProvider);
 
     return Scaffold(
       appBar: AppBar(
         title: const Row(
           mainAxisSize: MainAxisSize.min,
-          children: [
-            BrandBadge(size: 28),
-            SizedBox(width: 10),
-            Text('Student Admin'),
-          ],
+          children: [BrandBadge(size: 28), SizedBox(width: 10), Text('Admin')],
         ),
         // The admin's Home *is* this page (see mindmap_page.dart's own
         // build, which redirects here for any is_admin account before it
@@ -80,7 +86,38 @@ class AdminPage extends ConsumerWidget {
               ),
             );
           }
-          return const _StudentList();
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: SegmentedButton<_AdminSection>(
+                    segments: const [
+                      ButtonSegment(
+                        value: _AdminSection.students,
+                        icon: Icon(Icons.people_outline, size: 18),
+                        label: Text('Students'),
+                      ),
+                      ButtonSegment(
+                        value: _AdminSection.questions,
+                        icon: Icon(Icons.quiz_outlined, size: 18),
+                        label: Text('Questions'),
+                      ),
+                    ],
+                    selected: {_section},
+                    onSelectionChanged: (selection) =>
+                        setState(() => _section = selection.first),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: _section == _AdminSection.students
+                    ? const _StudentList()
+                    : const AdminQuestionEditor(),
+              ),
+            ],
+          );
         },
       ),
     );

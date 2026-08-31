@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../models/admin_question.dart';
 import '../models/admin_student.dart';
 import '../models/profile.dart';
 
@@ -55,6 +56,52 @@ class AdminRepository {
     return _client.rpc(
       'admin_delete_student',
       params: {'p_student_id': studentId},
+    );
+  }
+
+  /// Every question for one (course, unit, subtopic, difficulty) tier,
+  /// unredacted — see schema_admin_questions.sql. `difficulty` null returns
+  /// every tier in the subtopic, in that same order.
+  Future<List<AdminQuestion>> listQuestions({
+    required String courseCode,
+    required String unitCode,
+    required String subtopicCode,
+    String? difficulty,
+  }) async {
+    final rows = await _client.rpc(
+      'admin_list_questions',
+      params: {
+        'p_course_code': courseCode,
+        'p_unit_code': unitCode,
+        'p_subtopic_code': subtopicCode,
+        'p_difficulty': difficulty,
+      },
+    );
+    return (rows as List)
+        .map((row) => AdminQuestion.fromMap(row as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Saves a correction to one question's prompt, options (text +
+  /// feedback), correct answer, and misconception tag. Difficulty and
+  /// which subtopic/tier it belongs to aren't editable through this call —
+  /// see the RPC's own doc comment for why.
+  Future<void> updateQuestion({
+    required int questionId,
+    required String prompt,
+    required List<AdminQuestionOption> options,
+    required int correctIndex,
+    String? misconceptionTag,
+  }) {
+    return _client.rpc(
+      'admin_update_question',
+      params: {
+        'p_question_id': questionId,
+        'p_prompt': prompt,
+        'p_options': options.map((o) => o.toMap()).toList(),
+        'p_correct_index': correctIndex,
+        'p_misconception_tag': misconceptionTag,
+      },
     );
   }
 }
