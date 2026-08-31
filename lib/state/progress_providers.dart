@@ -11,6 +11,15 @@ final progressRepositoryProvider = Provider<ProgressRepository>((ref) {
   return ProgressRepository(ref.watch(supabaseClientProvider));
 });
 
+// A failed RPC call here (missing function, stale schema cache after a
+// migration hasn't been run yet) is a schema problem, never a transient
+// network blip -- same reasoning as curriculum_providers.dart's own
+// _noRetry. Without this, Riverpod's default retry policy retries up to
+// 10 times with backoff (~40s) before surfacing the error, which looks
+// exactly like the Progress Report "just spinning" instead of showing
+// what's actually wrong.
+Duration? _noRetry(int retryCount, Object error) => null;
+
 /// subtopic_mastery keys on (course_code, unit_code, subtopic_code) — stable
 /// text codes — rather than subtopic.id, because schema.sql drops and
 /// recreates courses/units/subtopics (and every uuid with them) on every
@@ -75,7 +84,7 @@ final subtopicAttemptStatsProvider =
       return ref
           .watch(progressRepositoryProvider)
           .fetchSubtopicAttemptStats(courseCode);
-    });
+    }, retry: _noRetry);
 
 /// The (course, time window) selection behind
 /// [subtopicAttemptStatsRangeProvider] — a plain value type so Riverpod's
@@ -126,7 +135,7 @@ final subtopicAttemptStatsRangeProvider =
             since: filter.since,
             until: filter.until,
           );
-    });
+    }, retry: _noRetry);
 
 /// This subtopic's mastery record for the signed-in student, or null if
 /// they haven't completed a pass of it yet.

@@ -92,36 +92,36 @@ class _ProgressReportPageState extends ConsumerState<ProgressReportPage> {
   _RangePreset _preset = _RangePreset.allTime;
   DateTimeRange? _customRange;
 
-  /// The (since, until) bounds [_preset] (and, for [_RangePreset.custom],
-  /// [_customRange]) currently resolve to -- null/null means "all time",
-  /// same as before this selector existed. The presets are rolling windows
-  /// off "now" rather than calendar week/month boundaries, which is both
-  /// simpler and almost certainly what "last 7 days" reads as to a
-  /// student anyway.
-  (DateTime?, DateTime?) get _bounds {
+  /// The bounds fed to [subtopicAttemptStatsRangeProvider] -- null/null
+  /// means "all time". Deliberately plain fields, set once whenever the
+  /// selection actually changes (see [_applyPreset]/[_pickCustomRange]),
+  /// rather than a getter that calls DateTime.now() fresh on every
+  /// build(): that would hand the range-family provider a brand new
+  /// (millisecond-different) DateTime on every rebuild, which Riverpod
+  /// reads as an entirely new request every time -- an endless
+  /// loading-forever spinner, since no single request ever gets the
+  /// chance to actually resolve before a "newer" one supersedes it.
+  DateTime? _since;
+  DateTime? _until;
+
+  void _applyPreset(_RangePreset preset) {
     final now = DateTime.now();
-    return switch (_preset) {
-      _RangePreset.allTime => (null, null),
-      _RangePreset.lastWeek => (now.subtract(const Duration(days: 7)), null),
-      _RangePreset.lastMonth => (now.subtract(const Duration(days: 30)), null),
-      _RangePreset.custom =>
-        _customRange == null
-            ? (null, null)
-            : (
-                _customRange!.start,
-                // Inclusive of the whole end day, not just the instant
-                // midnight starts it -- showDateRangePicker hands back
-                // midnight-of-day dates.
-                DateTime(
-                  _customRange!.end.year,
-                  _customRange!.end.month,
-                  _customRange!.end.day,
-                  23,
-                  59,
-                  59,
-                ),
-              ),
-    };
+    setState(() {
+      _preset = preset;
+      switch (preset) {
+        case _RangePreset.allTime:
+          _since = null;
+          _until = null;
+        case _RangePreset.lastWeek:
+          _since = now.subtract(const Duration(days: 7));
+          _until = null;
+        case _RangePreset.lastMonth:
+          _since = now.subtract(const Duration(days: 30));
+          _until = null;
+        case _RangePreset.custom:
+          break; // set by _pickCustomRange instead.
+      }
+    });
   }
 
   Future<void> _pickCustomRange() async {
@@ -138,6 +138,17 @@ class _ProgressReportPageState extends ConsumerState<ProgressReportPage> {
     setState(() {
       _preset = _RangePreset.custom;
       _customRange = picked;
+      _since = picked.start;
+      // Inclusive of the whole end day, not just the instant midnight
+      // starts it -- showDateRangePicker hands back midnight-of-day dates.
+      _until = DateTime(
+        picked.end.year,
+        picked.end.month,
+        picked.end.day,
+        23,
+        59,
+        59,
+      );
     });
   }
 
@@ -145,7 +156,7 @@ class _ProgressReportPageState extends ConsumerState<ProgressReportPage> {
     if (preset == _RangePreset.custom) {
       _pickCustomRange();
     } else {
-      setState(() => _preset = preset);
+      _applyPreset(preset);
     }
   }
 
@@ -160,13 +171,12 @@ class _ProgressReportPageState extends ConsumerState<ProgressReportPage> {
       final units = [...ref.watch(courseUnitsProvider)]
         ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
       final subtopics = ref.watch(courseSubtopicsProvider);
-      final (since, until) = _bounds;
       final statsAsync = ref.watch(
         subtopicAttemptStatsRangeProvider(
           SubtopicStatsRangeFilter(
             courseCode: course.code,
-            since: since,
-            until: until,
+            since: _since,
+            until: _until,
           ),
         ),
       );
