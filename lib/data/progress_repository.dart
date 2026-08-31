@@ -29,7 +29,12 @@ class ProgressRepository {
     return _client
         .from('subtopic_mastery')
         .stream(
-          primaryKey: ['student_id', 'course_code', 'unit_code', 'subtopic_code'],
+          primaryKey: [
+            'student_id',
+            'course_code',
+            'unit_code',
+            'subtopic_code',
+          ],
         )
         .eq('student_id', studentId)
         .map((rows) => rows.map(SubtopicMastery.fromMap).toList());
@@ -39,10 +44,23 @@ class ProgressRepository {
   /// in [courseCode] — see subtopic_attempt_stats() in
   /// supabase/schema_mastery_rework.sql. A tier never attempted just has
   /// no row; callers treat that as zero evidence, not zero mastery.
-  Future<List<SubtopicAttemptStat>> fetchSubtopicAttemptStats(String courseCode) async {
+  ///
+  /// [since]/[until] narrow this to a time window (see
+  /// supabase/schema_progress_report_range.sql) for the Progress Report
+  /// page's date-range selector — null/null (the default) reports on the
+  /// student's whole history, same as before that selector existed.
+  Future<List<SubtopicAttemptStat>> fetchSubtopicAttemptStats(
+    String courseCode, {
+    DateTime? since,
+    DateTime? until,
+  }) async {
     final rows = await _client.rpc(
       'subtopic_attempt_stats',
-      params: {'p_course_code': courseCode},
+      params: {
+        'p_course_code': courseCode,
+        'p_since': since?.toUtc().toIso8601String(),
+        'p_until': until?.toUtc().toIso8601String(),
+      },
     );
     return (rows as List)
         .map((row) => SubtopicAttemptStat.fromMap(row as Map<String, dynamic>))

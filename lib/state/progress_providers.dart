@@ -39,24 +39,25 @@ final _subtopicIdByCodeProvider = Provider<Map<String, String>>((ref) {
 /// Live subtopicId -> this student's mastery record, for every subtopic
 /// they've completed at least once. Empty (and static) when browsing as a
 /// guest, or before curriculum content has finished loading.
-final practiceMasteryProvider =
-    StreamProvider<Map<String, SubtopicMastery>>((ref) {
+final practiceMasteryProvider = StreamProvider<Map<String, SubtopicMastery>>((
+  ref,
+) {
   final user = ref.watch(currentUserProvider);
   if (user == null) {
     return Stream.value(const <String, SubtopicMastery>{});
   }
   final subtopicIdByCode = ref.watch(_subtopicIdByCodeProvider);
-  return ref.watch(progressRepositoryProvider).watchMastery(user.id).map(
-    (rows) {
-      final bySubtopic = <String, SubtopicMastery>{};
-      for (final row in rows) {
-        final code = '${row.courseCode}/${row.unitCode}/${row.subtopicCode}';
-        final subtopicId = subtopicIdByCode[code];
-        if (subtopicId != null) bySubtopic[subtopicId] = row;
-      }
-      return bySubtopic;
-    },
-  );
+  return ref.watch(progressRepositoryProvider).watchMastery(user.id).map((
+    rows,
+  ) {
+    final bySubtopic = <String, SubtopicMastery>{};
+    for (final row in rows) {
+      final code = '${row.courseCode}/${row.unitCode}/${row.subtopicCode}';
+      final subtopicId = subtopicIdByCode[code];
+      if (subtopicId != null) bySubtopic[subtopicId] = row;
+    }
+    return bySubtopic;
+  });
 });
 
 /// Raw per-(unit, subtopic, difficulty) attempt stats for one course — the
@@ -69,15 +70,70 @@ final practiceMasteryProvider =
 /// this explicitly, same pattern as every other write in this app.
 final subtopicAttemptStatsProvider =
     FutureProvider.family<List<SubtopicAttemptStat>, String>((ref, courseCode) {
-  final user = ref.watch(currentUserProvider);
-  if (user == null) return Future.value(const <SubtopicAttemptStat>[]);
-  return ref.watch(progressRepositoryProvider).fetchSubtopicAttemptStats(courseCode);
-});
+      final user = ref.watch(currentUserProvider);
+      if (user == null) return Future.value(const <SubtopicAttemptStat>[]);
+      return ref
+          .watch(progressRepositoryProvider)
+          .fetchSubtopicAttemptStats(courseCode);
+    });
+
+/// The (course, time window) selection behind
+/// [subtopicAttemptStatsRangeProvider] — a plain value type so Riverpod's
+/// family cache treats two identical selections as the same request.
+/// [since]/[until] null/null means "all time", same as
+/// [subtopicAttemptStatsProvider].
+class SubtopicStatsRangeFilter {
+  const SubtopicStatsRangeFilter({
+    required this.courseCode,
+    this.since,
+    this.until,
+  });
+
+  final String courseCode;
+  final DateTime? since;
+  final DateTime? until;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SubtopicStatsRangeFilter &&
+      other.courseCode == courseCode &&
+      other.since == since &&
+      other.until == until;
+
+  @override
+  int get hashCode => Object.hash(courseCode, since, until);
+}
+
+/// Same data as [subtopicAttemptStatsProvider], scoped to a time window --
+/// used only by the Progress Report page's date-range selector. Kept
+/// separate from [subtopicAttemptStatsProvider] rather than adding the
+/// range to that provider's own key: the practice test's tier picker and
+/// Improve both read that one expecting "this student's whole history",
+/// and folding a range in there would mean every one of those call sites
+/// has to remember to pass null/null to keep meaning what it already
+/// means.
+final subtopicAttemptStatsRangeProvider =
+    FutureProvider.family<List<SubtopicAttemptStat>, SubtopicStatsRangeFilter>((
+      ref,
+      filter,
+    ) {
+      final user = ref.watch(currentUserProvider);
+      if (user == null) return Future.value(const <SubtopicAttemptStat>[]);
+      return ref
+          .watch(progressRepositoryProvider)
+          .fetchSubtopicAttemptStats(
+            filter.courseCode,
+            since: filter.since,
+            until: filter.until,
+          );
+    });
 
 /// This subtopic's mastery record for the signed-in student, or null if
 /// they haven't completed a pass of it yet.
-final subtopicMasteryProvider =
-    Provider.family<SubtopicMastery?, String>((ref, subtopicId) {
+final subtopicMasteryProvider = Provider.family<SubtopicMastery?, String>((
+  ref,
+  subtopicId,
+) {
   return ref.watch(practiceMasteryProvider).value?[subtopicId];
 });
 
@@ -106,9 +162,7 @@ final subtopicScorePercentProvider = Provider<Map<String, double>>((ref) {
 /// completed a pass but earned nothing.
 final subtopicMedalProvider = Provider<Map<String, String>>((ref) {
   final bySubtopic = ref.watch(practiceMasteryProvider).value ?? const {};
-  return {
-    for (final entry in bySubtopic.entries) entry.key: entry.value.medal,
-  };
+  return {for (final entry in bySubtopic.entries) entry.key: entry.value.medal};
 });
 
 /// Aggregates a unit's overall status as the least-complete status among
@@ -121,8 +175,9 @@ ProgressStatus aggregateUnitStatus(
   Iterable<String> subtopicIds,
   Map<String, ProgressStatus> subtopicStatus,
 ) {
-  final statuses =
-      subtopicIds.map((id) => subtopicStatus[id]).whereType<ProgressStatus>();
+  final statuses = subtopicIds
+      .map((id) => subtopicStatus[id])
+      .whereType<ProgressStatus>();
   if (statuses.isEmpty) return ProgressStatus.notStarted;
   return statuses.reduce((a, b) => a.index < b.index ? a : b);
 }
@@ -164,6 +219,9 @@ double? aggregateUnitScorePercent(
 ) {
   final ids = subtopicIds.toList();
   if (ids.isEmpty || !ids.any(subtopicScorePercent.containsKey)) return null;
-  final total = ids.fold<double>(0, (sum, id) => sum + (subtopicScorePercent[id] ?? 0));
+  final total = ids.fold<double>(
+    0,
+    (sum, id) => sum + (subtopicScorePercent[id] ?? 0),
+  );
   return total / ids.length;
 }

@@ -11,6 +11,12 @@ import '../../models/unit.dart';
 import '../../state/curriculum_providers.dart';
 import '../../state/progress_providers.dart';
 
+/// The time window the report's charts and "topics mastered" count are
+/// scoped to -- see [_ProgressReportPageState._bounds]. [custom] covers any
+/// calendar range the student picks via [_RangeSelector]'s date picker,
+/// not just the two fixed presets.
+enum _RangePreset { allTime, lastWeek, lastMonth, custom }
+
 /// One difficulty's own chart gets its own bucket — 'Hard' and 'Challenge'
 /// share one (same rank, never both in the same course; see
 /// award_medal()'s own comment on this in schema_practice.sql), so a
@@ -73,13 +79,78 @@ const _config = MasteryConfig.standard;
 /// main pane the same way Profile & Preferences is (see
 /// mindmap_page.dart / classroom_view.dart) so the sidebar stays on
 /// screen.
-class ProgressReportPage extends ConsumerWidget {
+class ProgressReportPage extends ConsumerStatefulWidget {
   const ProgressReportPage({super.key, this.embedded = false});
 
   final bool embedded;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProgressReportPage> createState() => _ProgressReportPageState();
+}
+
+class _ProgressReportPageState extends ConsumerState<ProgressReportPage> {
+  _RangePreset _preset = _RangePreset.allTime;
+  DateTimeRange? _customRange;
+
+  /// The (since, until) bounds [_preset] (and, for [_RangePreset.custom],
+  /// [_customRange]) currently resolve to -- null/null means "all time",
+  /// same as before this selector existed. The presets are rolling windows
+  /// off "now" rather than calendar week/month boundaries, which is both
+  /// simpler and almost certainly what "last 7 days" reads as to a
+  /// student anyway.
+  (DateTime?, DateTime?) get _bounds {
+    final now = DateTime.now();
+    return switch (_preset) {
+      _RangePreset.allTime => (null, null),
+      _RangePreset.lastWeek => (now.subtract(const Duration(days: 7)), null),
+      _RangePreset.lastMonth => (now.subtract(const Duration(days: 30)), null),
+      _RangePreset.custom =>
+        _customRange == null
+            ? (null, null)
+            : (
+                _customRange!.start,
+                // Inclusive of the whole end day, not just the instant
+                // midnight starts it -- showDateRangePicker hands back
+                // midnight-of-day dates.
+                DateTime(
+                  _customRange!.end.year,
+                  _customRange!.end.month,
+                  _customRange!.end.day,
+                  23,
+                  59,
+                  59,
+                ),
+              ),
+    };
+  }
+
+  Future<void> _pickCustomRange() async {
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(now.year - 5),
+      lastDate: now,
+      initialDateRange:
+          _customRange ??
+          DateTimeRange(start: now.subtract(const Duration(days: 7)), end: now),
+    );
+    if (picked == null) return;
+    setState(() {
+      _preset = _RangePreset.custom;
+      _customRange = picked;
+    });
+  }
+
+  void _onSelectPreset(_RangePreset preset) {
+    if (preset == _RangePreset.custom) {
+      _pickCustomRange();
+    } else {
+      setState(() => _preset = preset);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final course = ref.watch(selectedCourseProvider);
 
     final Widget body;
@@ -89,7 +160,16 @@ class ProgressReportPage extends ConsumerWidget {
       final units = [...ref.watch(courseUnitsProvider)]
         ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
       final subtopics = ref.watch(courseSubtopicsProvider);
-      final statsAsync = ref.watch(subtopicAttemptStatsProvider(course.code));
+      final (since, until) = _bounds;
+      final statsAsync = ref.watch(
+        subtopicAttemptStatsRangeProvider(
+          SubtopicStatsRangeFilter(
+            courseCode: course.code,
+            since: since,
+            until: until,
+          ),
+        ),
+      );
 
       body = statsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -99,7 +179,24 @@ class ProgressReportPage extends ConsumerWidget {
       );
     }
 
-    if (embedded) return body;
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+          child: _RangeSelector(
+            preset: _preset,
+            customRange: _customRange,
+            onSelectPreset: _onSelectPreset,
+            onEditCustomRange: _pickCustomRange,
+          ),
+        ),
+        const Divider(height: 1),
+        Expanded(child: body),
+      ],
+    );
+
+    if (widget.embedded) return content;
 
     return Scaffold(
       appBar: AppBar(
@@ -112,7 +209,7 @@ class ProgressReportPage extends ConsumerWidget {
           ],
         ),
       ),
-      body: body,
+      body: content,
     );
   }
 
@@ -139,7 +236,9 @@ class ProgressReportPage extends ConsumerWidget {
     var nextGoal = _NextGoal.none;
 
     for (final unit in units) {
-      final unitSubtopics = subtopics.where((s) => s.unitId == unit.id).toList();
+      final unitSubtopics = subtopics
+          .where((s) => s.unitId == unit.id)
+          .toList();
       totalTopics += unitSubtopics.length;
 
       // Pool every subtopic's attempts in this unit into one set of
@@ -162,7 +261,8 @@ class ProgressReportPage extends ConsumerWidget {
           subtopicPooled.entries.map((e) => e.value.toStats(e.key)).toList(),
         );
         if (!subtopicResult.insufficientData &&
-            (subtopicResult.medal == 'Gold' || subtopicResult.medal == 'Diamond')) {
+            (subtopicResult.medal == 'Gold' ||
+                subtopicResult.medal == 'Diamond')) {
           topicsMastered++;
         }
       }
@@ -185,7 +285,10 @@ class ProgressReportPage extends ConsumerWidget {
       );
 
       if (!unitResult.insufficientData) {
-        final gap = _gapToNextMedal(unitResult.medal, unitResult.masteryPercent);
+        final gap = _gapToNextMedal(
+          unitResult.medal,
+          unitResult.masteryPercent,
+        );
         if (gap != null && gap.gap > 0 && gap.gap < nextGoal.gap) {
           nextGoal = _NextGoal(
             unitTitle: unit.title,
@@ -213,7 +316,9 @@ class ProgressReportPage extends ConsumerWidget {
           _Bar(
             unitTitle: unit.title,
             percent: stats.accuracyPercent,
-            medal: insufficient ? 'None' : bandForPercent(stats.accuracyPercent),
+            medal: insufficient
+                ? 'None'
+                : bandForPercent(stats.accuracyPercent),
             hasData: stats.attempted > 0 && !insufficient,
             detail: stats.attempted == 0
                 ? 'Not attempted yet.'
@@ -256,7 +361,8 @@ class _Pooled {
     firstTryCorrect += row.firstTryCorrect;
   }
 
-  double get accuracyPercent => attempted == 0 ? 0 : 100.0 * firstTryCorrect / attempted;
+  double get accuracyPercent =>
+      attempted == 0 ? 0 : 100.0 * firstTryCorrect / attempted;
 
   DifficultyStats toStats(String difficulty) => DifficultyStats(
     difficulty: difficulty,
@@ -269,7 +375,11 @@ class _Pooled {
 /// How far a medal is from the next one up, and what that next one is —
 /// used to find the unit closest to leveling up for the "Next Goal" card.
 class _MedalGap {
-  const _MedalGap({required this.gap, required this.target, required this.targetMedal});
+  const _MedalGap({
+    required this.gap,
+    required this.target,
+    required this.targetMedal,
+  });
   final double gap;
   final double target;
   final String targetMedal;
@@ -284,7 +394,11 @@ _MedalGap? _gapToNextMedal(String medal, double percent) {
     _ => (null, null), // Diamond — nothing higher to aim for
   };
   if (target == null || targetMedal == null) return null;
-  return _MedalGap(gap: target - percent, target: target, targetMedal: targetMedal);
+  return _MedalGap(
+    gap: target - percent,
+    target: target,
+    targetMedal: targetMedal,
+  );
 }
 
 class _NextGoal {
@@ -359,9 +473,9 @@ class _ProgressReportBody extends StatelessWidget {
             'Mastery % weighs harder questions more than easy ones, and needs a '
             'few attempts before it means anything — it\'s a different number '
             'from how much you\'ve practiced.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: 16),
           const _Legend(),
@@ -371,7 +485,10 @@ class _ProgressReportBody extends StatelessWidget {
             if (tierCharts[bucket] case final bars? when bars.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 28),
-                child: _ChartSection(title: '${bucket.label} accuracy', bars: bars),
+                child: _ChartSection(
+                  title: '${bucket.label} accuracy',
+                  bars: bars,
+                ),
               )
             else
               Padding(
@@ -414,13 +531,15 @@ class _OverallCard extends StatelessWidget {
         children: [
           Text(
             courseTitle,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(color: scheme.onSurfaceVariant),
+            style: Theme.of(context).textTheme.titleMedium
+                ?.copyWith(color: scheme.onSurfaceVariant),
           ),
           const SizedBox(height: 10),
           if (overall.insufficientData) ...[
             Text(
               'Keep practicing — we\'re still learning about your progress.',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              style: Theme.of(context).textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w700),
             ),
           ] else ...[
             Row(
@@ -428,17 +547,16 @@ class _OverallCard extends StatelessWidget {
               children: [
                 Text(
                   '${overall.masteryPercent.round()}%',
-                  style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: color,
-                  ),
+                  style: Theme.of(context).textTheme.displaySmall
+                      ?.copyWith(fontWeight: FontWeight.bold, color: color),
                 ),
                 const SizedBox(width: 10),
                 Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: Text(
                     'Overall Mastery',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
+                    style: Theme.of(context).textTheme.bodyMedium
+                        ?.copyWith(color: scheme.onSurfaceVariant),
                   ),
                 ),
               ],
@@ -448,7 +566,8 @@ class _OverallCard extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               '$topicsMastered / $totalTopics topics mastered',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+              style: Theme.of(context).textTheme.bodyMedium
+                  ?.copyWith(fontWeight: FontWeight.w600),
             ),
           ],
         ],
@@ -483,9 +602,10 @@ class _NextGoalCard extends StatelessWidget {
               children: [
                 Text(
                   '🎯 Your next goal',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, color: scheme.primary),
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: scheme.primary,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -523,7 +643,10 @@ class _MedalPill extends StatelessWidget {
         children: [
           MedalBadge(medal: medal, size: 18),
           const SizedBox(width: 6),
-          Text(medal, style: TextStyle(color: color, fontWeight: FontWeight.w800)),
+          Text(
+            medal,
+            style: TextStyle(color: color, fontWeight: FontWeight.w800),
+          ),
         ],
       ),
     );
@@ -545,9 +668,8 @@ class _MissingTierNote extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           'This course doesn\'t have a $label tier.',
-          style: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+          style: Theme.of(context).textTheme.bodySmall
+              ?.copyWith(color: scheme.onSurfaceVariant),
         ),
       ],
     );
@@ -607,7 +729,10 @@ class _Legend extends StatelessWidget {
               Container(
                 width: 10,
                 height: 10,
-                decoration: BoxDecoration(color: medalColor(medal), shape: BoxShape.circle),
+                decoration: BoxDecoration(
+                  color: medalColor(medal),
+                  shape: BoxShape.circle,
+                ),
               ),
               const SizedBox(width: 5),
               Text(medal, style: Theme.of(context).textTheme.bodySmall),
@@ -647,7 +772,8 @@ class _YAxis extends StatelessWidget {
 /// ProgressStatus.fromScorePercent's bands here since this page's numbers
 /// are scored against the medal thresholds directly, not that separate
 /// traffic-signal scale.
-Color _medalOrNeutralColor(String medal) => medal == 'None' ? const Color(0xFF9AA0A6) : medalColor(medal);
+Color _medalOrNeutralColor(String medal) =>
+    medal == 'None' ? const Color(0xFF9AA0A6) : medalColor(medal);
 
 class _BarColumn extends StatelessWidget {
   const _BarColumn({required this.bar});
@@ -657,8 +783,13 @@ class _BarColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final color = bar.hasData ? _medalOrNeutralColor(bar.medal) : const Color(0xFF9AA0A6);
-    final barHeight = (_chartHeight * (bar.percent / 100)).clamp(0.0, _chartHeight);
+    final color = bar.hasData
+        ? _medalOrNeutralColor(bar.medal)
+        : const Color(0xFF9AA0A6);
+    final barHeight = (_chartHeight * (bar.percent / 100)).clamp(
+      0.0,
+      _chartHeight,
+    );
 
     return SizedBox(
       width: _columnWidth,
@@ -720,6 +851,92 @@ class _BarColumn extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The report header's time-window control -- four segments (All time /
+/// Last 7 days / Last 30 days / Custom), plus, once Custom is active, the
+/// picked range shown as a tappable date underneath so the student can
+/// reopen the calendar to change it. Tapping the Custom segment itself
+/// always opens the picker (see [_ProgressReportPageState._onSelectPreset])
+/// rather than just selecting it, since re-tapping an already-selected
+/// segment doesn't fire SegmentedButton's own onSelectionChanged.
+class _RangeSelector extends StatelessWidget {
+  const _RangeSelector({
+    required this.preset,
+    required this.customRange,
+    required this.onSelectPreset,
+    required this.onEditCustomRange,
+  });
+
+  final _RangePreset preset;
+  final DateTimeRange? customRange;
+  final ValueChanged<_RangePreset> onSelectPreset;
+  final VoidCallback onEditCustomRange;
+
+  static String _fmt(DateTime d) => '${d.month}/${d.day}/${d.year}';
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 14,
+      runSpacing: 8,
+      children: [
+        SegmentedButton<_RangePreset>(
+          segments: const [
+            ButtonSegment(value: _RangePreset.allTime, label: Text('All time')),
+            ButtonSegment(
+              value: _RangePreset.lastWeek,
+              label: Text('Last 7 days'),
+            ),
+            ButtonSegment(
+              value: _RangePreset.lastMonth,
+              label: Text('Last 30 days'),
+            ),
+            ButtonSegment(
+              value: _RangePreset.custom,
+              icon: Icon(Icons.calendar_month_outlined, size: 16),
+              label: Text('Custom'),
+            ),
+          ],
+          selected: {preset},
+          showSelectedIcon: false,
+          onSelectionChanged: (selection) => onSelectPreset(selection.first),
+          style: const ButtonStyle(visualDensity: VisualDensity.compact),
+        ),
+        if (preset == _RangePreset.custom)
+          InkWell(
+            onTap: onEditCustomRange,
+            borderRadius: BorderRadius.circular(6),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.edit_calendar_outlined,
+                    size: 15,
+                    color: scheme.primary,
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    customRange == null
+                        ? 'Choose dates'
+                        : '${_fmt(customRange!.start)} – ${_fmt(customRange!.end)}',
+                    style: TextStyle(
+                      color: scheme.primary,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
