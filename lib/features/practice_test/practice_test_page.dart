@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/brand_badge.dart';
 import '../../domain/mastery_calculator.dart';
 import '../../models/practice_question.dart';
+import '../../models/progress_status.dart';
 import '../../models/subtopic_mastery.dart';
 import '../../state/auth_providers.dart';
 import '../../state/lesson_providers.dart';
@@ -246,11 +247,19 @@ class _PracticeTestPageState extends ConsumerState<PracticeTestPage> {
                         ),
                       )
                       .toList();
+              final subtopicMastery = calculateMastery(subtopicStats);
               final tierMedals = {
-                for (final entry in calculateMastery(
-                  subtopicStats,
-                ).byDifficulty.entries)
+                for (final entry in subtopicMastery.byDifficulty.entries)
                   entry.key: entry.value.medal,
+              };
+              // Only shown once a tier has enough attempts to mean
+              // anything (see MasteryConfig.minAttemptsForRating) -- a
+              // tier with one or two attempts just has no entry here,
+              // same gating the medal badge above already uses.
+              final tierAccuracy = {
+                for (final entry in subtopicMastery.byDifficulty.entries)
+                  if (!entry.value.insufficientData)
+                    entry.key: entry.value.stats.accuracyPercent,
               };
               return questionsAsync.when(
                 loading: () => const Center(child: CircularProgressIndicator()),
@@ -266,6 +275,7 @@ class _PracticeTestPageState extends ConsumerState<PracticeTestPage> {
                       questions: questions,
                       subtopicTitle: widget.subtopicTitle,
                       tierMedals: tierMedals,
+                      tierAccuracy: tierAccuracy,
                       onSelectTier: _selectTier,
                       onOpenLesson: lessonId == null
                           ? null
@@ -692,6 +702,7 @@ class _TierPickerView extends StatelessWidget {
     required this.questions,
     required this.subtopicTitle,
     required this.tierMedals,
+    required this.tierAccuracy,
     required this.onSelectTier,
     required this.onOpenLesson,
   });
@@ -704,6 +715,12 @@ class _TierPickerView extends StatelessWidget {
   /// topic (see subtopicTierMedalsProvider). A tier never attempted just
   /// has no entry.
   final Map<String, String> tierMedals;
+
+  /// difficulty -> first-try accuracy % on that tier so far, the same
+  /// mastery number the Progress Report page shows (see
+  /// mastery_calculator.dart) -- omitted for a tier with too few attempts
+  /// to mean anything yet, same gating as [tierMedals].
+  final Map<String, double> tierAccuracy;
   final void Function(String tier) onSelectTier;
 
   /// Null when this subtopic has no lesson (see lessonIdFor) -- the link
@@ -754,6 +771,7 @@ class _TierPickerView extends StatelessWidget {
             tier: tier,
             count: byTier[tier]!.length,
             medal: tierMedals[tier],
+            accuracy: tierAccuracy[tier],
             // Locking is per-tier, not per-question — a free student's
             // whole gated tier comes back with `locked: true` on every row
             // (see list_questions() in schema_subscriptions.sql), so the
@@ -831,6 +849,7 @@ class _TierTile extends StatelessWidget {
     required this.locked,
     required this.onTap,
     this.medal,
+    this.accuracy,
   });
 
   final String tier;
@@ -841,6 +860,10 @@ class _TierTile extends StatelessWidget {
   /// Best medal already earned on this specific tier ('None' · 'Bronze' ·
   /// 'Silver' · 'Gold' · 'Diamond'), or null if never attempted.
   final String? medal;
+
+  /// First-try accuracy % on this tier so far, or null if there's too
+  /// little evidence to show one yet (see [_TierPickerView.tierAccuracy]).
+  final double? accuracy;
 
   @override
   Widget build(BuildContext context) {
@@ -886,6 +909,10 @@ class _TierTile extends StatelessWidget {
                   ],
                 ),
               ),
+              if (accuracy != null) ...[
+                _TierMasteryPercent(percent: accuracy!),
+                const SizedBox(width: 12),
+              ],
               if (locked)
                 Row(
                   mainAxisSize: MainAxisSize.min,
@@ -912,6 +939,40 @@ class _TierTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// A tier tile's own mastery %, on the right side of the tile next to the
+/// chevron/lock -- colored with [ProgressStatus]'s traffic-signal palette
+/// like everywhere else the student's own progress is shown, since this
+/// is exactly that (not a difficulty color, which stars are used for
+/// instead -- see [tierRank]'s own doc comment on why the two can't share
+/// one color system).
+class _TierMasteryPercent extends StatelessWidget {
+  const _TierMasteryPercent({required this.percent});
+
+  final double percent;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = ProgressStatus.fromScorePercent(percent).color;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Text(
+          '${percent.round()}%',
+          style: TextStyle(fontWeight: FontWeight.w800, color: color),
+        ),
+        Text(
+          'mastery',
+          style: TextStyle(
+            fontSize: 11,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
     );
   }
 }
