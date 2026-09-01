@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/brand_badge.dart';
 import '../../models/profile.dart';
 import '../../state/auth_providers.dart';
+import '../../state/billing_providers.dart';
 import '../../state/profile_providers.dart';
 import '../../state/theme_providers.dart';
 
@@ -16,7 +18,7 @@ import '../../state/theme_providers.dart';
 /// resume-where-you-left-off dashboard, classroom_view.dart). Both views
 /// show the same curriculum and progress; that preference only decides
 /// what loads first.
-class SettingsPage extends ConsumerWidget {
+class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key, this.embedded = false});
 
   /// True when embedded in the mindmap/classroom main pane instead of
@@ -28,13 +30,46 @@ class SettingsPage extends ConsumerWidget {
   final bool embedded;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends ConsumerState<SettingsPage> {
+  bool _handledCheckoutReturn = false;
+
+  /// Stripe redirects back to /settings?checkout=success|cancel once the
+  /// student is done with Checkout (see create-checkout-session's
+  /// success_url/cancel_url). The webhook that actually flips
+  /// subscription_tier isn't guaranteed to have landed by the time this
+  /// redirect happens, so this just refetches the profile once (cheap,
+  /// harmless if the webhook already beat it there) rather than trusting
+  /// the query param itself to mean "you're Pro now". Only reachable via
+  /// the real route, never when [widget.embedded] -- an embedded push
+  /// never carries Stripe's redirect.
+  void _handleCheckoutReturn(String? checkout) {
+    if (_handledCheckoutReturn || checkout != 'success') return;
+    _handledCheckoutReturn = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.invalidate(profileProvider);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
     final isAdmin = ref.watch(profileProvider).value?.isAdmin ?? false;
+
+    final checkout = widget.embedded
+        ? null
+        : GoRouterState.of(context).uri.queryParameters['checkout'];
+    _handleCheckoutReturn(checkout);
 
     final body = ListView(
       padding: const EdgeInsets.all(20),
       children: [
+        if (checkout == 'success') ...[
+          const _CheckoutBanner(),
+          const SizedBox(height: 16),
+        ],
         if (user != null) ...[
           Text(
             user.email ?? 'Signed in',
@@ -61,7 +96,7 @@ class SettingsPage extends ConsumerWidget {
       ],
     );
 
-    if (embedded) return body;
+    if (widget.embedded) return body;
 
     return Scaffold(
       appBar: AppBar(
@@ -288,14 +323,74 @@ class _AppearanceSection extends ConsumerWidget {
   }
 }
 
-/// Shows whether the signed-in student is on Free or Pro. Read-only here —
-/// there's no self-serve upgrade yet, so this only ever reflects what an
-/// admin has set on the account (see supabase/schema_subscriptions.sql).
-class _PlanBadge extends ConsumerWidget {
+/// A one-line note shown after landing back on /settings from Stripe
+/// Checkout -- the webhook that actually flips subscription_tier may not
+/// have landed yet by the time this redirect happens, so this manages
+/// expectations rather than claiming Pro is active immediately. See
+/// _SettingsPageState._handleCheckoutReturn.
+class _CheckoutBanner extends StatelessWidget {
+  const _CheckoutBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: scheme.tertiary.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: scheme.tertiary.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.check_circle_outline, color: scheme.tertiary, size: 20),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              'Payment received — your Pro access activates within a minute.',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shows whether the signed-in student is on Free or Pro, plus the button
+/// to change it: "Upgrade to Pro" opens Stripe Checkout for a free
+/// student, "Manage subscription" opens Stripe's Billing Portal for a Pro
+/// one (see billing_repository.dart). e-Transfer + an admin hand-flipping
+/// the tier (schema_subscriptions.sql) still works exactly as before --
+/// this is the automated alternative, not a replacement.
+class _PlanBadge extends ConsumerStatefulWidget {
   const _PlanBadge();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_PlanBadge> createState() => _PlanBadgeState();
+}
+
+class _PlanBadgeState extends ConsumerState<_PlanBadge> {
+  bool _loading = false;
+  String? _error;
+
+  Future<void> _openBillingUrl(Future<String> Function() getUrl) async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final url = await getUrl();
+      if (!mounted) return;
+      await launchUrl(Uri.parse(url), webOnlyWindowName: '_self');
+    } catch (error) {
+      setState(() => _error = 'Could not open billing: $error');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final profileAsync = ref.watch(profileProvider);
 
@@ -307,39 +402,73 @@ class _PlanBadge extends ConsumerWidget {
         // Gold reads as "premium tier" more directly than teal ever did --
         // see theme.dart's tertiary role.
         final color = isPro ? scheme.tertiary : scheme.onSurfaceVariant;
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: color.withValues(alpha: 0.4)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                isPro ? Icons.workspace_premium : Icons.person_outline,
-                size: 16,
-                color: color,
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: color.withValues(alpha: 0.4)),
               ),
-              const SizedBox(width: 6),
-              Text(
-                isPro ? 'Pro plan' : 'Free plan',
-                style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    isPro ? Icons.workspace_premium : Icons.person_outline,
+                    size: 16,
+                    color: color,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    isPro ? 'Pro plan' : 'Free plan',
+                    style: TextStyle(
+                      color: color,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                  if (!isPro) ...[
+                    const SizedBox(width: 8),
+                    Text(
+                      '· Challenge & Advanced questions need Pro',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            if (isPro)
+              OutlinedButton.icon(
+                onPressed: _loading
+                    ? null
+                    : () => _openBillingUrl(
+                        ref.read(billingRepositoryProvider).createPortalSession,
+                      ),
+                icon: const Icon(Icons.settings_outlined, size: 16),
+                label: Text(_loading ? 'Opening…' : 'Manage subscription'),
+              )
+            else
+              FilledButton.icon(
+                onPressed: _loading
+                    ? null
+                    : () => _openBillingUrl(
+                        ref
+                            .read(billingRepositoryProvider)
+                            .createCheckoutSession,
+                      ),
+                icon: const Icon(Icons.workspace_premium, size: 16),
+                label: Text(
+                  _loading ? 'Opening…' : 'Upgrade to Pro — \$9.99/mo',
                 ),
               ),
-              if (!isPro) ...[
-                const SizedBox(width: 8),
-                Text(
-                  '· Challenge & Advanced questions need Pro',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
+            if (_error != null) ...[
+              const SizedBox(height: 6),
+              Text(_error!, style: TextStyle(color: scheme.error)),
             ],
-          ),
+          ],
         );
       },
     );

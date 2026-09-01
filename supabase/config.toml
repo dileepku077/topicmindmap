@@ -1,0 +1,7 @@
+project_id = "tgckqeviwpfstostefyo"
+
+# Stripe calls this directly with its own signature header, not a Supabase
+# JWT -- verify_jwt would reject every real webhook delivery at the gateway
+# before the function's own Stripe-Signature check ever ran.
+[functions.stripe-webhook]
+verify_jwt = false

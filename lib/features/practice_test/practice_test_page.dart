@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/brand_badge.dart';
 import '../../domain/mastery_calculator.dart';
@@ -8,6 +9,7 @@ import '../../models/practice_question.dart';
 import '../../models/progress_status.dart';
 import '../../models/subtopic_mastery.dart';
 import '../../state/auth_providers.dart';
+import '../../state/billing_providers.dart';
 import '../../state/lesson_providers.dart';
 import '../../state/practice_test_providers.dart';
 import '../../state/progress_providers.dart';
@@ -697,7 +699,7 @@ class _CompletionView extends StatelessWidget {
 /// and Advanced exist at all) but a locked one shows a lock icon instead of
 /// a chevron and explains the paywall on tap rather than starting a quiz —
 /// this is what replaced the old end-of-quiz upsell card.
-class _TierPickerView extends StatelessWidget {
+class _TierPickerView extends ConsumerWidget {
   const _TierPickerView({
     required this.questions,
     required this.subtopicTitle,
@@ -734,7 +736,7 @@ class _TierPickerView extends StatelessWidget {
   static const _tierOrder = ['Easy', 'Medium', 'Challenge', 'Hard', 'Advanced'];
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final byTier = <String, List<PracticeQuestion>>{};
     for (final q in questions) {
       byTier.putIfAbsent(q.difficulty, () => []).add(q);
@@ -779,7 +781,7 @@ class _TierPickerView extends StatelessWidget {
             locked: byTier[tier]!.first.locked,
             onTap: () {
               if (byTier[tier]!.first.locked) {
-                _showProDialog(context, tier);
+                _showProDialog(context, ref, tier);
               } else {
                 onSelectTier(tier);
               }
@@ -795,24 +797,50 @@ class _TierPickerView extends StatelessWidget {
     );
   }
 
-  void _showProDialog(BuildContext context, String tier) {
+  void _showProDialog(BuildContext context, WidgetRef ref, String tier) {
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
         icon: const Icon(Icons.workspace_premium),
         title: Text('$tier is a Pro feature'),
         content: const Text(
-          'Challenge and Advanced questions need a Pro subscription. Ask '
-          'a parent to contact us to upgrade your account.',
+          'Challenge and Advanced questions need a Pro subscription -- '
+          r'$9.99 CAD/month, cancel any time.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Got it'),
+            child: const Text('Not now'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _startCheckout(context, ref);
+            },
+            child: const Text('Upgrade to Pro'),
           ),
         ],
       ),
     );
+  }
+
+  /// Same Stripe Checkout flow as Settings' own "Upgrade to Pro" button
+  /// (see billing_repository.dart) -- offered here too since hitting a
+  /// locked tier mid-quiz is the moment a free student is most likely to
+  /// actually want Pro, not just when they happen to be in Settings.
+  Future<void> _startCheckout(BuildContext context, WidgetRef ref) async {
+    try {
+      final url = await ref
+          .read(billingRepositoryProvider)
+          .createCheckoutSession();
+      if (!context.mounted) return;
+      await launchUrl(Uri.parse(url), webOnlyWindowName: '_self');
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open checkout: $error')),
+      );
+    }
   }
 }
 

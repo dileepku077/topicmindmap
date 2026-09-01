@@ -53,6 +53,9 @@ app.env
 # Netlify CLI local state (site linkage)
 .netlify/
 
+# Supabase CLI local cache
+supabase/.temp/
+
 # wrangler files
 .wrangler
 .dev.vars*
