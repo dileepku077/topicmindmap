@@ -12,9 +12,9 @@ import '../../state/curriculum_providers.dart';
 import '../../state/progress_providers.dart';
 
 /// The time window the report's charts and "topics mastered" count are
-/// scoped to -- see [_ProgressReportPageState._bounds]. [custom] covers any
-/// calendar range the student picks via [_RangeSelector]'s date picker,
-/// not just the two fixed presets.
+/// scoped to -- see [_ProgressReportPageState._since]/[_ProgressReportPageState._until].
+/// [custom] covers any calendar range the student picks via
+/// [_RangeSelector]'s date picker, not just the two fixed presets.
 enum _RangePreset { allTime, lastWeek, lastMonth, custom }
 
 /// One difficulty's own chart gets its own bucket — 'Hard' and 'Challenge'
@@ -126,13 +126,18 @@ class _ProgressReportPageState extends ConsumerState<ProgressReportPage> {
 
   Future<void> _pickCustomRange() async {
     final now = DateTime.now();
-    final picked = await showDateRangePicker(
+    final picked = await showDialog<DateTimeRange>(
       context: context,
-      firstDate: DateTime(now.year - 5),
-      lastDate: now,
-      initialDateRange:
-          _customRange ??
-          DateTimeRange(start: now.subtract(const Duration(days: 7)), end: now),
+      builder: (context) => _CustomRangeDialog(
+        initialRange:
+            _customRange ??
+            DateTimeRange(
+              start: now.subtract(const Duration(days: 7)),
+              end: now,
+            ),
+        firstDate: DateTime(now.year - 5),
+        lastDate: now,
+      ),
     );
     if (picked == null) return;
     setState(() {
@@ -140,7 +145,8 @@ class _ProgressReportPageState extends ConsumerState<ProgressReportPage> {
       _customRange = picked;
       _since = picked.start;
       // Inclusive of the whole end day, not just the instant midnight
-      // starts it -- showDateRangePicker hands back midnight-of-day dates.
+      // starts it -- the dialog's two single-day pickers hand back
+      // midnight-of-day dates.
       _until = DateTime(
         picked.end.year,
         picked.end.month,
@@ -860,6 +866,113 @@ class _BarColumn extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+String _formatDate(DateTime d) => '${d.month}/${d.day}/${d.year}';
+
+/// A small popup for picking a custom (start, end) range -- two date
+/// fields, each opening Flutter's ordinary single-day [showDatePicker],
+/// rather than Material's built-in [showDateRangePicker], whose two-month
+/// calendar dialog renders full-screen at most window sizes. This stays a
+/// compact, fixed-size [AlertDialog] regardless.
+class _CustomRangeDialog extends StatefulWidget {
+  const _CustomRangeDialog({
+    required this.initialRange,
+    required this.firstDate,
+    required this.lastDate,
+  });
+
+  final DateTimeRange initialRange;
+  final DateTime firstDate;
+  final DateTime lastDate;
+
+  @override
+  State<_CustomRangeDialog> createState() => _CustomRangeDialogState();
+}
+
+class _CustomRangeDialogState extends State<_CustomRangeDialog> {
+  late DateTime _start = widget.initialRange.start;
+  late DateTime _end = widget.initialRange.end;
+
+  Future<void> _pickStart() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _start,
+      firstDate: widget.firstDate,
+      // Never past the current end date -- swapping to an inverted range
+      // would just confuse the "From"/"To" labels.
+      lastDate: _end.isBefore(widget.lastDate) ? _end : widget.lastDate,
+    );
+    if (picked != null) setState(() => _start = picked);
+  }
+
+  Future<void> _pickEnd() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _end,
+      firstDate: _start,
+      lastDate: widget.lastDate,
+    );
+    if (picked != null) setState(() => _end = picked);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Choose a date range'),
+      content: SizedBox(
+        width: 300,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _DateField(label: 'From', date: _start, onTap: _pickStart),
+            const SizedBox(height: 14),
+            _DateField(label: 'To', date: _end, onTap: _pickEnd),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () =>
+              Navigator.of(context)
+                  .pop(DateTimeRange(start: _start, end: _end)),
+          child: const Text('Apply'),
+        ),
+      ],
+    );
+  }
+}
+
+class _DateField extends StatelessWidget {
+  const _DateField({
+    required this.label,
+    required this.date,
+    required this.onTap,
+  });
+
+  final String label;
+  final DateTime date;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+          suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
+        ),
+        child: Text(_formatDate(date)),
       ),
     );
   }
